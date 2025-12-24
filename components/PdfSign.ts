@@ -784,7 +784,9 @@ export class PdfSign extends BaseComponent {
       this.updateProgress(100, "Complete!");
 
       const fileName = this.selectedFile.name.replace(".pdf", "_signed.pdf");
-      await this.recordJob("Sign", fileName, pdfBytes);
+      await this.recordJob("Sign", fileName, pdfBytes, {
+        pageNumber: this.sigPlacement.page,
+      });
 
       this.showSuccess(pdfBytes, this.selectedFile.name, "_signed");
       this.showSuccessDialog("Your signature has been embedded into the document.");

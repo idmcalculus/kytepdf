@@ -290,8 +290,12 @@ export class PdfMerge extends BaseComponent {
 
       this.updateProgress(100, "Finalizing...");
       const mergedPdfBytes = await mergedPdf.save();
+      const totalPages = mergedPdf.getPageCount();
 
-      await this.recordJob("Merge", "merged_document.pdf", mergedPdfBytes);
+      await this.recordJob("Merge", "merged_document.pdf", mergedPdfBytes, {
+        fileCount: this.files.length,
+        pageCount: totalPages,
+      });
       this.showSuccess(mergedPdfBytes, "merged_document.pdf", "");
       this.showSuccessDialog("All files have been merged successfully into a single document.");
     } catch (error: any) {

@@ -393,16 +393,22 @@ export class BaseComponent extends HTMLElement {
   /**
    * Records a completed job to IndexedDB history
    */
-  async recordJob(toolName: string, fileName: string, pdfBytes: Uint8Array) {
+  async recordJob(
+    toolName: string,
+    fileName: string,
+    pdfBytes: Uint8Array,
+    metadata?: Record<string, any>,
+  ) {
     try {
       const job = {
         tool: toolName,
         fileName: fileName,
         data: pdfBytes,
-        size: pdfBytes.length,
+        fileSize: pdfBytes.length,
+        metadata: metadata,
       };
       await persistence.addJob(job);
-      logger.info("Job recorded to history", { toolName, fileName });
+      logger.info("Job recorded to history", { toolName, fileName, metadata });
       this.checkStorageUsage();
     } catch (err) {
       logger.error("Failed to record job", err);

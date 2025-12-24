@@ -1168,6 +1168,16 @@ input[type="number"]:focus {
   text-overflow: ellipsis;
 }
 
+.job-metrics {
+  font-size: 0.8rem;
+  color: var(--accent);
+  font-weight: 500;
+  background: rgba(251, 191, 36, 0.05);
+  padding: 4px 8px;
+  border-radius: 6px;
+  width: fit-content;
+}
+
 .job-actions {
   display: flex;
   gap: 0.5rem;

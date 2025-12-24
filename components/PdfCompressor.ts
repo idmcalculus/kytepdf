@@ -302,7 +302,11 @@ export class PdfCompressor extends BaseComponent {
       (this.querySelector("#savedPercentValue") as HTMLElement).textContent = `${savedPercent}%`;
 
       const fileName = this.selectedFile.name.replace(".pdf", "_compressed.pdf");
-      await this.recordJob("Compress", fileName, compressedBytes);
+      await this.recordJob("Compress", fileName, compressedBytes, {
+        originalSize: this.selectedFile.size,
+        finalSize: compressedBytes.length,
+        savedPercent: savedPercent,
+      });
 
       this.showSuccess(compressedBytes, this.selectedFile.name, "_compressed");
       this.showSuccessDialog(`Compression complete! Your file was reduced by ${savedPercent}%.`);

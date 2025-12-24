@@ -1,6 +1,6 @@
 # KytePDF 🚀
 
-**KytePDF** is a lightweight, private, and high-performance PDF toolkit built with modern web technologies. Focus on speed and privacy—all processing happens directly in your browser. No servers, no uploads, no privacy compromises.
+**KytePDF** is a lightweight, private, and high-performance PDF toolkit built with modern web technologies. Focus on speed and privacy—all processing happens directly in your browser. Local-first architecture means your documents stay under your control.
 
 ![KytePDF Dashboard](/logo-icon.svg)
 
@@ -10,7 +10,7 @@
 - **Merge PDF**: Combine multiple documents into a single file with an intuitive drag-and-drop interface.
 - **Split PDF**: Extract specific pages or ranges with live thumbnails for precise selection.
 - **Sign PDF**: Draw, type, or upload your signature and place it anywhere on your document.
-- **Private by Design**: Your PDFs never leave your machine. We use IndexedDB to safely persist your session locally.
+- **Private by Design**: Your PDFs never leave your machine during processing. For your convenience, we're building optional, opt-in cloud sync for cross-device history—but your documents stay local by default.
 - **Modern UI**: A premium, "Hub & Spoke" dashboard with glassmorphic aesthetics and smooth micro-animations.
 
 ## 🛠 Tech Stack

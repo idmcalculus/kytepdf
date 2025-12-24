@@ -221,7 +221,9 @@ export class PdfSplit extends BaseComponent {
       const newPdfBytes = await newPdf.save();
 
       const fileName = this.selectedFile.name.replace(".pdf", "_extracted.pdf");
-      await this.recordJob("Split", fileName, newPdfBytes);
+      await this.recordJob("Split", fileName, newPdfBytes, {
+        pagesExtracted: pagesToExtract.length,
+      });
 
       this.showSuccess(newPdfBytes, this.selectedFile.name, "_split");
       this.showSuccessDialog(`Successfully extracted ${pagesToExtract.length} pages.`);

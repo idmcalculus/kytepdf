@@ -189,7 +189,7 @@ export class ToolDashboard extends HTMLElement {
       dialog.show({
         title: "User Account",
         message:
-          "User accounts, cloud sync, and cross-device history are coming soon! For now, all your data stays safely on this browser.",
+          "Optional cloud sync and cross-device history are coming soon! Your documents always stay local by default, but you'll be able to opt-in for sync later.",
         type: "info",
         confirmText: "Get Notified",
       });
@@ -253,6 +253,7 @@ export class ToolDashboard extends HTMLElement {
           <span class="job-time">${new Date(job.timestamp).toLocaleDateString()}</span>
         </div>
         <div class="job-filename" title="${job.fileName}">${job.fileName}</div>
+        <div class="job-metrics">${this.formatJobMetrics(job)}</div>
         <div class="job-actions">
           <button class="job-btn job-btn-download" data-id="${job.id}">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
@@ -293,6 +294,33 @@ export class ToolDashboard extends HTMLElement {
     a.download = job.fileName;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  formatJobMetrics(job: Job): string {
+    if (!job.metadata) return "";
+    const m = job.metadata;
+
+    switch (job.tool) {
+      case "Compress":
+        return `Reduced by ${m.savedPercent}% (${this.formatBytes(m.originalSize)} → ${this.formatBytes(m.finalSize)})`;
+      case "Merge":
+        return `${m.fileCount} files merged (${m.pageCount} pages total)`;
+      case "Split":
+        return `${m.pagesExtracted} pages extracted`;
+      case "Sign":
+        return `Signed on page ${m.pageNumber}`;
+      default:
+        return "";
+    }
+  }
+
+  formatBytes(bytes: number, decimals = 1): string {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / k ** i).toFixed(dm))} ${sizes[i]}`;
   }
 }
 

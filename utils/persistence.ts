@@ -6,6 +6,7 @@ export interface Job {
   fileName: string;
   fileSize: number;
   timestamp: number;
+  metadata?: Record<string, any>;
   [key: string]: any;
 }
 
