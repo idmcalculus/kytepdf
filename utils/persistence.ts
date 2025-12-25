@@ -155,7 +155,7 @@ class PersistenceManager {
   }
 
   /**
-   * Clear all session data
+   * Clear all session and job data
    */
   async clearAll(): Promise<void> {
     await this.init();
@@ -175,7 +175,65 @@ class PersistenceManager {
   }
 
   /**
-   * Estimate current storage usage
+   * Clear all session data (temporary working files) but keep job history
+   */
+  async clearSessions(): Promise<void> {
+    await this.init();
+    if (!this.db) throw new Error("Database not initialized");
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([this.storeName], "readwrite");
+      transaction.objectStore(this.storeName).clear();
+
+      transaction.oncomplete = () => {
+        logger.warn("All temporary session data cleared from IndexedDB");
+        resolve();
+      };
+      transaction.onerror = (e) => reject((e.target as IDBRequest).error);
+    });
+  }
+
+  /**
+   * Estimate current session storage usage in bytes
+   */
+  async estimateUsage(): Promise<number> {
+    await this.init();
+    if (!this.db) return 0;
+
+    return new Promise((resolve) => {
+      let totalSize = 0;
+      const transaction = this.db!.transaction([this.storeName], "readonly");
+      const store = transaction.objectStore(this.storeName);
+      const request = store.openCursor();
+
+      request.onsuccess = (e) => {
+        const cursor = (e.target as IDBRequest).result;
+        if (cursor) {
+          const value = cursor.value;
+          if (value && typeof value === "object") {
+            if ("size" in value && typeof value.size === "number") {
+              totalSize += value.size;
+            } else if ("data" in value && value.data && typeof value.data.size === "number") {
+              totalSize += value.data.size;
+            } else if (Array.isArray(value)) {
+              for (const item of value) {
+                if (item && typeof item === "object" && "size" in item) {
+                  totalSize += item.size;
+                }
+              }
+            }
+          }
+          cursor.continue();
+        } else {
+          resolve(totalSize);
+        }
+      };
+      request.onerror = () => resolve(0);
+    });
+  }
+
+  /**
+   * Get quota and usage from navigator.storage
    */
   async getStorageUsage(): Promise<StorageEstimate> {
     if (!navigator.storage || !navigator.storage.estimate) {

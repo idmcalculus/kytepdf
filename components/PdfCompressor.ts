@@ -6,6 +6,7 @@ import { BaseComponent } from "./BaseComponent.ts";
 
 export class PdfCompressor extends BaseComponent {
   private selectedRatio: number | null = 0.4;
+  protected toolKey = "pdf-compressor";
 
   render() {
     this.innerHTML = `
@@ -83,7 +84,7 @@ export class PdfCompressor extends BaseComponent {
               ${this.getProgressSection("Compressing...")}
 
               <div id="successMessage" class="success-message hidden">
-                <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">🎉 Compression Complete!</p>
+                <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">\ud83c\udf89 Compression Complete!</p>
                 <div id="statsInfo" style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1rem; line-height: 1.6;">
                   <div>Final Size: <span id="finalSizeValue" style="color: var(--text); font-weight: 600;">0 KB</span></div>
                   <div>Reduced by: <span id="savedPercentValue" style="color: var(--accent); font-weight: 700;">0%</span></div>
@@ -126,16 +127,40 @@ export class PdfCompressor extends BaseComponent {
       this.changePage(1),
     );
 
-    // Restore session
-    this.restoreSession();
+    // Resume session bind
+    const resumeBtn = this.querySelector("#resumeBtn") as HTMLButtonElement;
+    if (resumeBtn) {
+      resumeBtn.onclick = () => this.restoreSession();
+    }
+
+    // Check for existing session and show prompt if found
+    this.checkExistingSession();
+  }
+
+  async checkExistingSession() {
+    try {
+      const savedFile = await persistence.get<File>(this.toolKey);
+      if (savedFile) {
+        const resumeContainer = this.querySelector("#resumeContainer");
+        const resumeBtn = this.querySelector("#resumeBtn");
+        if (resumeContainer && resumeBtn) {
+          resumeContainer.classList.remove("hidden");
+          resumeBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
+            Resume ${savedFile.name} (${this.formatBytes(savedFile.size)})
+          `;
+        }
+      }
+    } catch (err) {
+      logger.error("Failed to check for existing session", err);
+    }
   }
 
   async restoreSession() {
     try {
-      const savedFile = await persistence.get<File>("pdf-compressor");
+      const savedFile = await persistence.get<File>(this.toolKey);
       if (savedFile) {
         logger.info("Restoring compressor session", { name: savedFile.name });
-        // Re-validate and handle
         this.handleFiles([savedFile] as unknown as FileList);
       }
     } catch (err) {
@@ -146,7 +171,7 @@ export class PdfCompressor extends BaseComponent {
   async saveSession() {
     try {
       if (this.selectedFile) {
-        await persistence.set("pdf-compressor", this.selectedFile);
+        await persistence.set(this.toolKey, this.selectedFile);
         this.checkStorageUsage();
       }
     } catch (err) {
