@@ -54,7 +54,9 @@ You'll need [Bun](https://bun.sh/) installed on your machine.
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+We love contributions! Please read our [Contributing Guidelines](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) before getting started.
+
+Feel free to open an issue or submit a Pull Request.
 
 ## 📄 License
 
