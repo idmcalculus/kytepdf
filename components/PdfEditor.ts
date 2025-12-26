@@ -22,30 +22,28 @@ export class PdfEditor extends BaseComponent {
         <!-- Editor Interface (Initially Hidden) -->
         <div id="editorInterface" class="editor-interface hidden">
           <div class="editor-toolbar">
-            <!-- Tools will go here -->
             <div class="toolbar-group">
               <button id="addTextBtn" class="tool-btn" title="Add Text">
-                <i data-lucide="type"></i>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>
               </button>
               <button id="addImageBtn" class="tool-btn" title="Add Image">
-                <i data-lucide="image"></i>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
               </button>
               <button id="addRectBtn" class="tool-btn" title="Add Rectangle">
-                <i data-lucide="square"></i>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></svg>
               </button>
             </div>
             
             <div class="toolbar-spacer"></div>
             
             <div class="toolbar-group">
-              <button id="saveBtn" class="btn btn-primary btn-sm">
-                Save & Download
+              <button id="saveBtn" class="btn btn-primary btn-sm" style="width: auto;">
+                Save PDF
               </button>
             </div>
           </div>
 
           <div class="editor-workspace">
-             <!-- PDF Canvas Container -->
              <div id="pdfContainer" class="pdf-container"></div>
           </div>
         </div>
@@ -53,15 +51,20 @@ export class PdfEditor extends BaseComponent {
         ${this.getProgressSection("Loading PDF...")}
       </div>
     `;
-    
-    // Initialize icons if Lucide is available
-    if ((window as any).lucide) {
-      (window as any).lucide.createIcons();
-    }
   }
 
   setupEventListeners() {
     this.setupBaseListeners("#dropZone", "#fileInput");
+
+    // Tool selection logic
+    const toolBtns = this.querySelectorAll(".tool-btn");
+    toolBtns.forEach(btn => {
+      btn.addEventListener("click", () => {
+        toolBtns.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        logger.debug("Tool selected", { id: btn.id });
+      });
+    });
   }
 
   async handleFiles(files: FileList) {
@@ -72,7 +75,6 @@ export class PdfEditor extends BaseComponent {
       this.selectedFile = file;
       logger.info("File loaded for editing", { name: file.name, size: file.size });
       
-      // Hide dropzone, show editor
       const dropZoneContainer = this.querySelector("#editorDropZoneContainer");
       const editorInterface = this.querySelector("#editorInterface");
       
@@ -90,7 +92,6 @@ export class PdfEditor extends BaseComponent {
       this.currentPdfDoc = await loadPdf(arrayBuffer);
       await this.renderPages();
       this.updateProgress(100, "Ready");
-      // Hide progress after short delay
       setTimeout(() => {
         const progressSection = this.querySelector("#progressSection");
         if (progressSection) progressSection.classList.add("hidden");
@@ -105,24 +106,25 @@ export class PdfEditor extends BaseComponent {
     const container = this.querySelector("#pdfContainer");
     if (!container || !this.currentPdfDoc) return;
     
-    container.innerHTML = ""; // Clear existing
+    container.innerHTML = ""; 
 
     for (let i = 1; i <= this.currentPdfDoc.numPages; i++) {
       const pageWrapper = document.createElement("div");
       pageWrapper.className = "pdf-page-wrapper";
-      pageWrapper.style.position = "relative";
-      pageWrapper.style.marginBottom = "20px";
-      pageWrapper.style.boxShadow = "var(--shadow-md)";
       
       const canvas = document.createElement("canvas");
       canvas.className = "pdf-page-canvas";
-      canvas.style.display = "block";
       
       pageWrapper.appendChild(canvas);
       container.appendChild(pageWrapper);
 
-      // Render page
-      await renderPage(this.currentPdfDoc, i, canvas);
+      // Render page with standard scale for 800px width
+      // We calculate scale based on viewport width vs 800px target
+      const page = await this.currentPdfDoc.getPage(i);
+      const viewport = page.getViewport({ scale: 1.0 });
+      const scale = 800 / viewport.width;
+
+      await renderPage(this.currentPdfDoc, i, canvas, scale);
     }
   }
 }

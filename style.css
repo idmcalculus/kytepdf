@@ -14,6 +14,7 @@
   --text-muted: #94a3b8;
   --font-family: "Inter", system-ui, -apple-system, sans-serif;
   --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-bg: rgba(255, 255, 255, 0.03);
 }
 
 * {
@@ -1251,4 +1252,98 @@ input[type="number"]:focus {
     align-items: stretch;
     gap: 1rem;
   }
+}
+
+/* PDF Editor Styles */
+.editor-interface {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 200px);
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 1.5rem;
+    overflow: hidden;
+    backdrop-filter: blur(12px);
+    margin-top: 1rem;
+}
+
+.editor-toolbar {
+    display: flex;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid var(--glass-border);
+    gap: 1rem;
+}
+
+.toolbar-group {
+    display: flex;
+    gap: 0.5rem;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 0.35rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--glass-border);
+}
+
+.tool-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+}
+
+.tool-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: white;
+}
+
+.tool-btn.active {
+    background: var(--primary);
+    color: white;
+    box-shadow: 0 0 15px var(--primary-glow);
+}
+
+.editor-workspace {
+    flex: 1;
+    overflow-y: auto;
+    padding: 2rem;
+    background: rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.pdf-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+
+.pdf-page-wrapper {
+    background: white;
+    margin-bottom: 2.5rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    border-radius: 2px;
+    transition: transform 0.3s ease;
+    max-width: 800px;
+    width: 100%;
+}
+
+.pdf-page-canvas {
+    width: 100% !important;
+    height: auto !important;
+    display: block;
+}
+
+.toolbar-spacer {
+    flex: 1;
 }

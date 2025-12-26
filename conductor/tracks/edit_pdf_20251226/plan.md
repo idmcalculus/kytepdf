@@ -5,9 +5,8 @@
     - [ ] Subtask: Create `components/PdfEditor.ts` with basic Web Component boilerplate.
     - [ ] Subtask: Update `main.ts` or router to handle navigation to the editor view when a file is selected.
 - [x] Task: Implement PDF Rendering with `pdf.js` 682a200
-    - [ ] Subtask: Write tests for a PDF rendering utility function in `utils/pdfUtils.ts`.
-    - [ ] Subtask: Implement the rendering logic to display PDF pages within the `PdfEditor` component.
-- [ ] Task: Conductor - User Manual Verification 'Foundation & Viewer' (Protocol in workflow.md)
+    - [x] Bug Fix: Fixed event listeners not working due to redundant render call 6911ddd
+- [x] Task: Conductor - User Manual Verification 'Foundation & Viewer' (Protocol in workflow.md) eda57d6
 
 ## Phase 2: Text Annotations
 - [ ] Task: Implement Annotation State Management
