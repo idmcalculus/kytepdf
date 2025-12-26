@@ -1,5 +1,6 @@
 import { BaseComponent } from "./BaseComponent.ts";
 import { logger } from "../utils/logger.ts";
+import { loadPdf, renderPage } from "../utils/pdfRenderer.ts";
 
 export class PdfEditor extends BaseComponent {
   protected toolKey = "edit-pdf";
@@ -64,7 +65,7 @@ export class PdfEditor extends BaseComponent {
     this.setupBaseListeners("#dropZone", "#fileInput");
   }
 
-  handleFiles(files: FileList) {
+  async handleFiles(files: FileList) {
     if (files.length === 0) return;
     const file = files[0];
     
@@ -79,7 +80,50 @@ export class PdfEditor extends BaseComponent {
       if (dropZoneContainer) dropZoneContainer.classList.add("hidden");
       if (editorInterface) editorInterface.classList.remove("hidden");
 
-      // TODO: Initialize PDF Rendering
+      await this.loadAndRender(file);
+    }
+  }
+
+  async loadAndRender(file: File) {
+    try {
+      this.updateProgress(10, "Loading PDF...");
+      const arrayBuffer = await file.arrayBuffer();
+      this.currentPdfDoc = await loadPdf(arrayBuffer);
+      await this.renderPages();
+      this.updateProgress(100, "Ready");
+      // Hide progress after short delay
+      setTimeout(() => {
+        const progressSection = this.querySelector("#progressSection");
+        if (progressSection) progressSection.classList.add("hidden");
+      }, 500);
+    } catch (err) {
+      logger.error("Failed to load PDF", err);
+      this.showErrorDialog("Failed to load PDF document.");
+    }
+  }
+
+  async renderPages() {
+    const container = this.querySelector("#pdfContainer");
+    if (!container || !this.currentPdfDoc) return;
+    
+    container.innerHTML = ""; // Clear existing
+
+    for (let i = 1; i <= this.currentPdfDoc.numPages; i++) {
+      const pageWrapper = document.createElement("div");
+      pageWrapper.className = "pdf-page-wrapper";
+      pageWrapper.style.position = "relative";
+      pageWrapper.style.marginBottom = "20px";
+      pageWrapper.style.boxShadow = "var(--shadow-md)";
+      
+      const canvas = document.createElement("canvas");
+      canvas.className = "pdf-page-canvas";
+      canvas.style.display = "block";
+      
+      pageWrapper.appendChild(canvas);
+      container.appendChild(pageWrapper);
+
+      // Render page
+      await renderPage(this.currentPdfDoc, i, canvas);
     }
   }
 }
