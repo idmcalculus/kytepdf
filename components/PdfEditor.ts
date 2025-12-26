@@ -7,7 +7,6 @@ export class PdfEditor extends BaseComponent {
 
   connectedCallback() {
     super.connectedCallback();
-    this.render();
   }
 
   render() {

@@ -60,4 +60,29 @@ describe("PdfEditor", () => {
     // We expect it to render 2 pages (from mock)
     expect(renderPage).toHaveBeenCalledTimes(2);
   });
+
+  it("should navigate back to dashboard when back button is clicked", async () => {
+    const dispatchSpy = vi.spyOn(editor, "dispatchEvent");
+    const backBtn = editor.querySelector("#backToDash") as HTMLElement;
+    expect(backBtn).toBeTruthy();
+
+    backBtn.click();
+    
+    const backEvents = dispatchSpy.mock.calls.filter(
+      call => call[0]?.type === "back-to-dashboard"
+    );
+    expect(backEvents.length).toBe(1);
+  });
+
+  it("should trigger file input when drop zone is clicked", async () => {
+    const fileInput = editor.querySelector("#fileInput") as HTMLInputElement;
+    const dropZone = editor.querySelector("#dropZone") as HTMLElement;
+    expect(fileInput).toBeTruthy();
+    expect(dropZone).toBeTruthy();
+
+    const clickSpy = vi.spyOn(fileInput, "click");
+    dropZone.click();
+    
+    expect(clickSpy).toHaveBeenCalled();
+  });
 });
