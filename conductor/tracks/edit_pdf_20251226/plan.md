@@ -1,6 +1,6 @@
 # Plan: Edit PDF Feature
 
-## Phase 1: Foundation & Viewer
+## Phase 1: Foundation & Viewer [checkpoint: 492ab97]
 - [x] Task: Create `PdfEditor` component structure and basic routing 92700ea
     - [ ] Subtask: Create `components/PdfEditor.ts` with basic Web Component boilerplate.
     - [ ] Subtask: Update `main.ts` or router to handle navigation to the editor view when a file is selected.
