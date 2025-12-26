@@ -32,7 +32,7 @@
     - [x] Subtask: Write tests for `embedImageAnnotations` in `utils/pdfEngine.ts` using `pdf-lib`.
 - [x] Task: Conductor - User Manual Verification 'Image & Shape Annotations' (Protocol in workflow.md) b35aa33
 
-## Phase 4: Architectural Refactor & Font Fix
+## Phase 4: Final Polish & Integration [checkpoint: d8985b1]
 - [x] Task: Modularize PdfEditor
     - [x] Subtask: Create `components/pdf-editor/` directory structure.
     - [x] Subtask: Implement `TextEditor`, `RectangleToolEditor`, and `ImageEditor` as separate logic modules.
