@@ -20,17 +20,17 @@
     - [x] Subtask: Connect the UI "Save/Download" button to this function.
 - [x] Task: Conductor - User Manual Verification 'Text Annotations' (Protocol in workflow.md) a2e348c
 
-## Phase 3: Image & Shape Annotations (Erasure & Masking)
-- [~] Task: Implement Shape Drawing (Rectangles/White-out)
-    - [ ] Subtask: Add a "Rectangle" tool to the toolbar.
-    - [ ] Subtask: Implement mouse drag logic to draw rectangles on the canvas.
-    - [ ] Subtask: Add properties panel for fill color, border, and opacity (for masking).
-    - [ ] Subtask: Write tests for `embedShapeAnnotations` in `utils/pdfEngine.ts`.
-- [~] Task: Implement Image Insertion
-    - [ ] Subtask: Add an "Upload Image" button to the toolbar.
-    - [ ] Subtask: Implement file reading (FileReader) to display the image on the canvas.
-    - [ ] Subtask: Write tests for `embedImageAnnotations` in `utils/pdfEngine.ts` using `pdf-lib`.
-- [ ] Task: Conductor - User Manual Verification 'Image & Shape Annotations' (Protocol in workflow.md)
+## Phase 3: Image & Shape Annotations (Erasure & Masking) [checkpoint: 089f886]
+- [x] Task: Implement Shape Drawing (Rectangles/White-out) 0bbe601
+    - [x] Subtask: Add a "Rectangle" tool to the toolbar.
+    - [x] Subtask: Implement mouse drag logic to draw rectangles on the canvas.
+    - [x] Subtask: Add properties panel for fill color, border, and opacity (for masking).
+    - [x] Subtask: Write tests for `embedShapeAnnotations` in `utils/pdfEngine.ts`.
+- [x] Task: Implement Image Insertion 089f886
+    - [x] Subtask: Add an "Upload Image" button to the toolbar.
+    - [x] Subtask: Implement file reading (FileReader) to display the image on the canvas.
+    - [x] Subtask: Write tests for `embedImageAnnotations` in `utils/pdfEngine.ts` using `pdf-lib`.
+- [x] Task: Conductor - User Manual Verification 'Image & Shape Annotations' (Protocol in workflow.md) 089f886
 
 ## Phase 4: Final Polish & Integration
 - [ ] Task: Advanced Text & Smart Match
