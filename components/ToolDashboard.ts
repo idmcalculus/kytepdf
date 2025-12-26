@@ -49,7 +49,7 @@ export class ToolDashboard extends HTMLElement {
         name: "Edit PDF",
         desc: "Add text, images, and shapes to your PDF.",
         icon: "edit-3",
-        active: false,
+        active: true,
       },
       {
         id: "pdf-ai",

@@ -4,6 +4,7 @@ import "./components/PdfCompressor.ts";
 import "./components/PdfMerge.ts";
 import "./components/PdfSplit.ts";
 import "./components/PdfSign.ts";
+import "./components/PdfEditor.ts";
 import "./components/KyteDialog.ts";
 import { mapError } from "./utils/errorMapper.ts";
 import { logger } from "./utils/logger.ts";
@@ -66,6 +67,10 @@ function showSign() {
   mainContainer.innerHTML = "<pdf-sign></pdf-sign>";
 }
 
+function showEdit() {
+  mainContainer.innerHTML = "<pdf-editor></pdf-editor>";
+}
+
 // Router logic - listening for custom events from our web components
 window.addEventListener("tool-select", (e: any) => {
   logger.info("Tool selected", { toolId: e.detail.toolId });
@@ -77,6 +82,8 @@ window.addEventListener("tool-select", (e: any) => {
     showSplit();
   } else if (e.detail.toolId === "sign") {
     showSign();
+  } else if (e.detail.toolId === "edit") {
+    showEdit();
   }
 });
 

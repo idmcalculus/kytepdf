@@ -56,6 +56,22 @@ describe("ToolDashboard", () => {
 	});
 
 	describe("tool selection", () => {
+		it("should emit tool-select event for edit tool", async () => {
+			const dispatchSpy = vi.spyOn(component, "dispatchEvent");
+			// Find the edit tool card
+			const editCard = component.querySelector('.tool-card[data-id="edit"]') as HTMLElement;
+			expect(editCard).toBeTruthy();
+
+			// It should not have 'Coming Soon' badge (implied by checking if it emits event)
+			editCard.click();
+			await new Promise(resolve => setTimeout(resolve, 0));
+
+			const selectEvents = dispatchSpy.mock.calls.filter(
+				call => call[0]?.type === "tool-select" && (call[0] as CustomEvent).detail.toolId === "edit"
+			);
+			expect(selectEvents.length).toBe(1);
+		});
+
 		it("should emit tool-select event when card is clicked", async () => {
 			const dispatchSpy = vi.spyOn(component, "dispatchEvent");
 			const cards = component.querySelectorAll(".tool-card");
