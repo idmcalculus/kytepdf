@@ -114,4 +114,28 @@ describe("PdfEditor", () => {
     expect(annotations.length).toBe(1);
     expect(annotations[0].type).toBe('text');
   });
+
+  it("should create a rectangle annotation when clicking page with Rectangle tool active", async () => {
+    const file = new File(["dummy"], "test.pdf", { type: "application/pdf" });
+    await editor.handleFiles({ 0: file, length: 1, item: () => file } as any);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    // Select Rectangle tool
+    const addRectBtn = editor.querySelector("#addRectBtn") as HTMLElement;
+    addRectBtn.click();
+
+    // Simulate click on a page
+    const pdfContainer = editor.querySelector("#pdfContainer") as HTMLElement;
+    const pageWrapper = pdfContainer.querySelector(".pdf-page-wrapper") as HTMLElement;
+    
+    const clickEvent = new MouseEvent("click", {
+      bubbles: true,
+      clientX: 50,
+      clientY: 50
+    });
+    pageWrapper.dispatchEvent(clickEvent);
+
+    const annotations = (editor as any).annotationManager.getAllAnnotations();
+    expect(annotations.find((a: any) => a.type === 'rectangle')).toBeDefined();
+  });
 });

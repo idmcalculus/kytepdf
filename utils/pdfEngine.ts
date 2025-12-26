@@ -2,6 +2,81 @@ import { logger } from "./logger.ts";
 import { PDFDocument, StandardFonts, pdfjsLib, rgb } from "./pdfConfig.ts";
 import type { Annotation } from "./AnnotationManager.ts";
 
+export async function embedAllAnnotations(
+  pdfData: Uint8Array,
+  annotations: Annotation[],
+): Promise<Uint8Array> {
+  try {
+    const pdfDoc = await PDFDocument.load(pdfData);
+    const pages = pdfDoc.getPages();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+    // Annotations are processed in the order they exist in the array (creation order)
+    for (const ann of annotations) {
+      const page = pages[ann.pageIndex];
+      if (!page) continue;
+
+      const { height } = page.getSize();
+
+      // Convert HEX to RGB
+      const hex = ann.style?.color || (ann.type === "text" ? "#000000" : "#ffffff");
+      const r = parseInt(hex.slice(1, 3), 16) / 255 || 0;
+      const g = parseInt(hex.slice(3, 5), 16) / 255 || 0;
+      const b = parseInt(hex.slice(5, 7), 16) / 255 || 0;
+
+      if (ann.type === "text" && ann.content) {
+        const pdfX = ann.x;
+        const pdfY = height - ann.y - (ann.style?.fontSize || 16) * 0.8;
+
+        page.drawText(ann.content, {
+          x: pdfX,
+          y: pdfY,
+          size: ann.style?.fontSize || 16,
+          font: font,
+          color: rgb(r, g, b),
+        });
+      } else if (ann.type === "rectangle") {
+        const pdfX = ann.x;
+        const pdfY = height - ann.y - (ann.height || 0);
+
+        page.drawRectangle({
+          x: pdfX,
+          y: pdfY,
+          width: ann.width || 100,
+          height: ann.height || 50,
+          color: rgb(r, g, b),
+          borderWidth: ann.style?.strokeWidth || 0,
+          opacity: 1.0,
+        });
+      } else if (ann.type === "image" && ann.content) {
+        const pdfX = ann.x;
+        const pdfY = height - ann.y - (ann.height || 0);
+
+        // Convert Data URL to Bytes
+        const imageBytes = await fetch(ann.content).then((res) => res.arrayBuffer());
+        let embeddedImage;
+        if (ann.content.includes("image/png")) {
+          embeddedImage = await pdfDoc.embedPng(imageBytes);
+        } else {
+          embeddedImage = await pdfDoc.embedJpg(imageBytes);
+        }
+
+        page.drawImage(embeddedImage, {
+          x: pdfX,
+          y: pdfY,
+          width: ann.width || 150,
+          height: ann.height || 150,
+        });
+      }
+    }
+
+    return await pdfDoc.save();
+  } catch (err) {
+    logger.error("Failed to embed all annotations", err);
+    throw err;
+  }
+}
+
 export async function embedTextAnnotations(
   pdfData: Uint8Array,
   annotations: Annotation[],
@@ -42,6 +117,49 @@ export async function embedTextAnnotations(
     return await pdfDoc.save();
   } catch (err) {
     logger.error("Failed to embed text annotations", err);
+    throw err;
+  }
+}
+
+export async function embedShapeAnnotations(
+  pdfData: Uint8Array,
+  annotations: Annotation[],
+): Promise<Uint8Array> {
+  try {
+    const pdfDoc = await PDFDocument.load(pdfData);
+    const pages = pdfDoc.getPages();
+
+    for (const ann of annotations) {
+      if (ann.type !== "rectangle") continue;
+
+      const page = pages[ann.pageIndex];
+      if (!page) continue;
+
+      const { height } = page.getSize();
+
+      // Convert HEX to RGB
+      const hex = ann.style?.color || "#ffffff";
+      const r = parseInt(hex.slice(1, 3), 16) / 255 || 0;
+      const g = parseInt(hex.slice(3, 5), 16) / 255 || 0;
+      const b = parseInt(hex.slice(5, 7), 16) / 255 || 0;
+
+      const pdfX = ann.x;
+      const pdfY = height - ann.y - (ann.height || 0);
+
+      page.drawRectangle({
+        x: pdfX,
+        y: pdfY,
+        width: ann.width || 100,
+        height: ann.height || 50,
+        color: rgb(r, g, b),
+        borderWidth: ann.style?.strokeWidth || 0,
+        opacity: 1.0, // We can add opacity support later
+      });
+    }
+
+    return await pdfDoc.save();
+  } catch (err) {
+    logger.error("Failed to embed shape annotations", err);
     throw err;
   }
 }

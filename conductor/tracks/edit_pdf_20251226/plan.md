@@ -21,21 +21,22 @@
 - [x] Task: Conductor - User Manual Verification 'Text Annotations' (Protocol in workflow.md) a2e348c
 
 ## Phase 3: Image & Shape Annotations (Erasure & Masking)
-- [ ] Task: Implement Shape Drawing (Rectangles/White-out)
+- [~] Task: Implement Shape Drawing (Rectangles/White-out)
     - [ ] Subtask: Add a "Rectangle" tool to the toolbar.
     - [ ] Subtask: Implement mouse drag logic to draw rectangles on the canvas.
     - [ ] Subtask: Add properties panel for fill color, border, and opacity (for masking).
     - [ ] Subtask: Write tests for `embedShapeAnnotations` in `utils/pdfEngine.ts`.
-- [ ] Task: Implement Image Insertion
+- [~] Task: Implement Image Insertion
     - [ ] Subtask: Add an "Upload Image" button to the toolbar.
     - [ ] Subtask: Implement file reading (FileReader) to display the image on the canvas.
     - [ ] Subtask: Write tests for `embedImageAnnotations` in `utils/pdfEngine.ts` using `pdf-lib`.
 - [ ] Task: Conductor - User Manual Verification 'Image & Shape Annotations' (Protocol in workflow.md)
 
 ## Phase 4: Final Polish & Integration
-- [ ] Task: Advanced Text & Color Matching
-    - [ ] Subtask: Add Font Family and Color selection to the text annotation UI.
-    - [ ] Subtask: Support 'Eyedropper' behavior or precise HEX input for background matching.
+- [ ] Task: Advanced Text & Smart Match
+    - [ ] Subtask: Implement a "Properties Panel" that appears when an annotation is selected.
+    - [ ] Subtask: Add UI controls for Font Family, Size, and Color.
+    - [ ] Subtask: Implement "Smart Match" - use `pdf.js` text content analysis to auto-detect font properties on click.
 - [ ] Task: Update Tool Dashboard
     - [ ] Subtask: Update `components/ToolDashboard.ts` to set the "Edit PDF" tool to `active: true`.
 - [ ] Task: Coordinate System Refinement & Testing

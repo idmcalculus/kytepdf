@@ -36,9 +36,10 @@ The "Edit PDF" feature allows users to modify existing PDF documents by adding n
 - Support "White-out" mode (no border, fill matches background) for seamless erasure.
 
 ### 3.7 Advanced Text Properties (Matching)
-- Allow users to choose from standard PDF fonts (Helvetica, Times Roman, Courier).
-- Provide a precise color picker to match document text/background colors.
-- Support font size adjustments down to 1pt precision.
+- **Manual Controls:** Allow users to choose from standard PDF fonts (Helvetica, Times Roman, Courier), adjust font size, and pick precise colors.
+- **Smart Match (Auto-detect):** When adding text near existing document text, attempt to infer the font size and color from the underlying PDF layer using `pdf.js` text content analysis.
+- **Real-time Preview:** Changes to font properties should reflect immediately on the canvas.
+- **Property Presets:** Save recently used font settings for quick reuse.
 
 ### 3.6 PDF Generation (Save)
 - Use `pdf-lib` to load the original PDF.
