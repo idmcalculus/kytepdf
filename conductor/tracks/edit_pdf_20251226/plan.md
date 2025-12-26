@@ -9,9 +9,9 @@
 - [x] Task: Conductor - User Manual Verification 'Foundation & Viewer' (Protocol in workflow.md) eda57d6
 
 ## Phase 2: Text Annotations
-- [~] Task: Implement Annotation State Management
-    - [ ] Subtask: Write unit tests for an `AnnotationManager` class (or internal logic) that adds/removes/updates annotations.
-    - [ ] Subtask: Implement the logic to store annotation data (x, y, content, style) in memory.
+- [x] Task: Implement Annotation State Management 2bdfe53
+    - [x] Subtask: Write unit tests for an `AnnotationManager` class (or internal logic) that adds/removes/updates annotations.
+    - [x] Subtask: Implement the logic to store annotation data (x, y, content, style) in memory.
 - [ ] Task: Build Text Annotation UI (Drag & Drop)
     - [ ] Subtask: Create the UI toolbar with a "Add Text" button.
     - [ ] Subtask: Implement drag-and-drop functionality for text elements over the PDF canvas using Vanilla JS events.
