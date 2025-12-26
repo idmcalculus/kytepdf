@@ -88,4 +88,23 @@ describe("pdfEngine", () => {
 
 		await expect(compressPdf(mockFile, 100, onProgress)).rejects.toThrow("Failed to create PDF");
 	});
+
+	it("should call progress callback multiple times", async () => {
+		const mockFile = new File([""], "test.pdf", { type: "application/pdf" });
+		const onProgress = vi.fn();
+
+		await compressPdf(mockFile, 100, onProgress);
+
+		expect(onProgress).toHaveBeenCalled();
+	});
+
+	it("should handle file with arrayBuffer", async () => {
+		const buffer = new ArrayBuffer(10);
+		const mockFile = new File([buffer], "buffer.pdf", { type: "application/pdf" });
+		const onProgress = vi.fn();
+
+		const result = await compressPdf(mockFile, 100, onProgress);
+
+		expect(result).toBeInstanceOf(Uint8Array);
+	});
 });

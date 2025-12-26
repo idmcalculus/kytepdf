@@ -326,4 +326,54 @@ describe("PdfSign", () => {
 			expect(PDFDocument.load).toHaveBeenCalled();
 		});
 	});
+
+	describe("signature clearing", () => {
+		it("should hide signature preview on clear", async () => {
+			const clearBtn = component.querySelector("#clearSigBtn") as HTMLButtonElement;
+			clearBtn.click();
+			await new Promise(resolve => setTimeout(resolve, 0));
+
+			expect(component.querySelector("#signaturePreview")?.classList.contains("hidden")).toBe(true);
+		});
+
+		it("should disable finalize button on clear", async () => {
+			const clearBtn = component.querySelector("#clearSigBtn") as HTMLButtonElement;
+			clearBtn.click();
+			await new Promise(resolve => setTimeout(resolve, 0));
+
+			const finalizeBtn = component.querySelector("#finalizeBtn") as HTMLButtonElement;
+			expect(finalizeBtn.disabled).toBe(true);
+		});
+	});
+
+	describe("canvas elements", () => {
+		it("should have signature canvas with correct attributes", () => {
+			const sigCanvas = component.querySelector("#sigCanvas") as HTMLCanvasElement;
+			expect(sigCanvas).toBeTruthy();
+			expect(sigCanvas.width).toBeGreaterThan(0);
+		});
+
+		it("should have PDF canvas", () => {
+			const pdfCanvas = component.querySelector("#pdfCanvas") as HTMLCanvasElement;
+			expect(pdfCanvas).toBeTruthy();
+		});
+	});
+
+	describe("methods", () => {
+		it("should have startDrawing method", () => {
+			expect(typeof (component as any).startDrawing).toBe("function");
+		});
+
+		it("should have stopDrawing method", () => {
+			expect(typeof (component as any).stopDrawing).toBe("function");
+		});
+
+		it("should have renderPage method", () => {
+			expect(typeof (component as any).renderPage).toBe("function");
+		});
+
+		it("should have handleFiles method", () => {
+			expect(typeof component.handleFiles).toBe("function");
+		});
+	});
 });

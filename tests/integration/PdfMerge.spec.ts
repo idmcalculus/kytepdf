@@ -204,5 +204,47 @@ describe("PdfMerge", () => {
 
 			expect(persistence.addJob).toHaveBeenCalled();
 		});
+
+		it("should show success message after merge", async () => {
+			const files = [
+				new File(["f1"], "f1.pdf", { type: "application/pdf" }),
+				new File(["f2"], "f2.pdf", { type: "application/pdf" }),
+			];
+			await component.handleFiles(files as unknown as FileList);
+			await new Promise(resolve => setTimeout(resolve, 0));
+
+			await component.startMerge();
+			await new Promise(resolve => setTimeout(resolve, 50));
+
+			expect(component.querySelector("#successMessage")?.classList.contains("hidden")).toBe(false);
+		});
+	});
+
+	describe("file list UI", () => {
+		it("should display file names in list", async () => {
+			const files = [
+				new File(["f1"], "document1.pdf", { type: "application/pdf" }),
+				new File(["f2"], "document2.pdf", { type: "application/pdf" }),
+			];
+			await component.handleFiles(files as unknown as FileList);
+			await new Promise(resolve => setTimeout(resolve, 0));
+
+			const fileNames = component.querySelectorAll(".file-name");
+			expect(fileNames.length).toBe(2);
+			expect(fileNames[0].textContent).toBe("document1.pdf");
+			expect(fileNames[1].textContent).toBe("document2.pdf");
+		});
+
+		it("should display file list items", async () => {
+			const files = [
+				new File(["f1"], "f1.pdf", { type: "application/pdf" }),
+				new File(["f2"], "f2.pdf", { type: "application/pdf" }),
+			];
+			await component.handleFiles(files as unknown as FileList);
+			await new Promise(resolve => setTimeout(resolve, 0));
+
+			const listItems = component.querySelectorAll(".file-list-item");
+			expect(listItems.length).toBe(2);
+		});
 	});
 });

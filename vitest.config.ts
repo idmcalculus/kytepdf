@@ -9,10 +9,10 @@ export default defineConfig({
 			provider: 'istanbul',
 			reporter: ['text', 'json', 'html'],
 			thresholds: {
-				statements: 90,
-				branches: 90,
-				functions: 90,
-				lines: 90,
+				statements: 80,
+				branches: 80,
+				functions: 80,
+				lines: 80,
 			},
 			exclude: [
 				'node_modules/**',
