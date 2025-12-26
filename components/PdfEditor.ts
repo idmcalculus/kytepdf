@@ -78,13 +78,21 @@ export class PdfEditor extends BaseComponent {
       saveBtn.addEventListener("click", () => this.handleSave());
     }
 
+    // Keyboard support for deletion
+    window.addEventListener("keydown", (e) => {
+      if ((e.key === "Delete" || e.key === "Backspace") && this.selectedAnnotationId) {
+        const activeEl = document.activeElement as HTMLElement;
+        if (activeEl.isContentEditable) return;
+        this.removeAnnotation(this.selectedAnnotationId);
+      }
+    });
+
     // Delegate clicks on pages to create annotations
     this.addEventListener("click", (e) => {
       const target = e.target as HTMLElement;
       const pageWrapper = target.closest(".pdf-page-wrapper") as HTMLElement;
       
       if (pageWrapper && this.activeTool === "addTextBtn") {
-        // Only add if we clicked on the canvas or the wrapper itself, not an existing annotation
         if (target.classList.contains("pdf-page-canvas") || target.classList.contains("pdf-page-wrapper")) {
           const rect = pageWrapper.getBoundingClientRect();
           const x = e.clientX - rect.left;
@@ -95,6 +103,14 @@ export class PdfEditor extends BaseComponent {
         }
       }
     });
+  }
+
+  private removeAnnotation(id: string) {
+    const el = this.querySelector(`.annotation[data-id="${id}"]`);
+    if (el) el.remove();
+    this.annotationManager.removeAnnotation(id);
+    if (this.selectedAnnotationId === id) this.selectedAnnotationId = null;
+    logger.info("Annotation removed", { id });
   }
 
   private addTextAnnotation(pageIndex: number, x: number, y: number) {
@@ -121,56 +137,86 @@ export class PdfEditor extends BaseComponent {
     const el = document.createElement("div");
     el.className = "annotation annotation-text";
     el.dataset.id = id;
-    el.contentEditable = "true";
-    el.innerText = ann.content || "";
     el.style.position = "absolute";
     el.style.left = `${ann.x}px`;
     el.style.top = `${ann.y}px`;
-    el.style.color = ann.style?.color || "black";
-    el.style.fontSize = `${ann.style?.fontSize || 16}px`;
-    el.style.cursor = "move";
-    el.style.border = "1px dashed transparent";
-    el.style.padding = "2px 4px";
-    el.style.minWidth = "20px";
     el.style.zIndex = "100";
-    el.style.backgroundColor = "rgba(255, 255, 255, 0.1)";
-    el.style.borderRadius = "4px";
 
-    el.addEventListener("mousedown", (e) => this.startDragging(e, id));
-    el.addEventListener("input", () => {
-      this.annotationManager.updateAnnotation(id, { content: el.innerText });
+    const textEl = document.createElement("div");
+    textEl.contentEditable = "true";
+    textEl.innerText = ann.content || "";
+    textEl.style.color = ann.style?.color || "black";
+    textEl.style.fontSize = `${ann.style?.fontSize || 16}px`;
+    textEl.style.cursor = "move";
+    textEl.style.padding = "2px 4px";
+    textEl.style.minWidth = "20px";
+    textEl.style.outline = "none";
+    textEl.style.backgroundColor = "rgba(255, 255, 255, 0.1)";
+    textEl.style.borderRadius = "4px";
+    textEl.style.border = "1px solid transparent";
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.innerHTML = "&times;";
+    deleteBtn.className = "ann-delete-btn";
+    deleteBtn.style.position = "absolute";
+    deleteBtn.style.top = "-10px";
+    deleteBtn.style.right = "-10px";
+    deleteBtn.style.width = "20px";
+    deleteBtn.style.height = "20px";
+    deleteBtn.style.borderRadius = "50%";
+    deleteBtn.style.backgroundColor = "#ef4444";
+    deleteBtn.style.color = "white";
+    deleteBtn.style.border = "none";
+    deleteBtn.style.display = "none";
+    deleteBtn.style.cursor = "pointer";
+    deleteBtn.style.fontSize = "14px";
+    deleteBtn.style.lineHeight = "1";
+    deleteBtn.style.alignItems = "center";
+    deleteBtn.style.justifyContent = "center";
+
+    el.appendChild(textEl);
+    el.appendChild(deleteBtn);
+
+    textEl.addEventListener("mousedown", (e) => this.startDragging(e, id));
+    textEl.addEventListener("input", () => {
+      this.annotationManager.updateAnnotation(id, { content: textEl.innerText });
     });
-    el.addEventListener("focus", () => {
-      el.style.borderColor = "var(--primary)";
-      el.style.backgroundColor = "rgba(255, 255, 255, 0.8)";
-      el.style.color = "black";
+    
+    textEl.addEventListener("focus", () => {
+      this.selectedAnnotationId = id;
+      textEl.style.borderColor = "var(--primary)";
+      textEl.style.backgroundColor = "rgba(255, 255, 255, 0.8)";
+      textEl.style.color = "black";
+      deleteBtn.style.display = "flex";
     });
-    el.addEventListener("blur", () => {
-      el.style.borderColor = "transparent";
-      el.style.backgroundColor = "rgba(255, 255, 255, 0.1)";
-      el.style.color = ann.style?.color || "black";
+
+    textEl.addEventListener("blur", () => {
+      setTimeout(() => {
+        if (document.activeElement !== textEl) {
+          deleteBtn.style.display = "none";
+          textEl.style.borderColor = "transparent";
+          textEl.style.backgroundColor = "rgba(255, 255, 255, 0.1)";
+          textEl.style.color = ann.style?.color || "black";
+        }
+      }, 200);
+    });
+
+    deleteBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.removeAnnotation(id);
     });
 
     pageWrapper.appendChild(el);
-    
-    // Focus immediately if new
-    setTimeout(() => el.focus(), 50);
+    setTimeout(() => textEl.focus(), 50);
   }
 
   private startDragging(e: MouseEvent, id: string) {
-    // Only drag if not editing? Or drag by edge? 
-    // For now, let's allow dragging if Ctrl is held or just if we move enough.
-    // Simpler: if we are in a tool that is NOT addTextBtn, or just always.
-    if (this.activeTool !== null && this.activeTool !== "addTextBtn") {
-       // Maybe dragging is disabled when another tool is active?
-    }
-
     e.stopPropagation();
-    const el = e.currentTarget as HTMLElement;
+    const annElement = (e.currentTarget as HTMLElement).parentElement as HTMLElement;
     const startX = e.clientX;
     const startY = e.clientY;
-    const initialLeft = parseFloat(el.style.left);
-    const initialTop = parseFloat(el.style.top);
+    const initialLeft = parseFloat(annElement.style.left);
+    const initialTop = parseFloat(annElement.style.top);
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const dx = moveEvent.clientX - startX;
@@ -178,8 +224,8 @@ export class PdfEditor extends BaseComponent {
       const newX = initialLeft + dx;
       const newY = initialTop + dy;
       
-      el.style.left = `${newX}px`;
-      el.style.top = `${newY}px`;
+      annElement.style.left = `${newX}px`;
+      annElement.style.top = `${newY}px`;
       this.annotationManager.updateAnnotation(id, { x: newX, y: newY });
     };
 
@@ -292,6 +338,7 @@ export class PdfEditor extends BaseComponent {
       const pageWrapper = document.createElement("div");
       pageWrapper.className = "pdf-page-wrapper";
       pageWrapper.dataset.index = (i - 1).toString();
+      pageWrapper.style.position = "relative";
       
       const canvas = document.createElement("canvas");
       canvas.className = "pdf-page-canvas";
@@ -299,8 +346,6 @@ export class PdfEditor extends BaseComponent {
       pageWrapper.appendChild(canvas);
       container.appendChild(pageWrapper);
 
-      // Render page with standard scale for 800px width
-      // We calculate scale based on viewport width vs 800px target
       const page = await this.currentPdfDoc.getPage(i);
       const viewport = page.getViewport({ scale: 1.0 });
       const scale = 800 / viewport.width;

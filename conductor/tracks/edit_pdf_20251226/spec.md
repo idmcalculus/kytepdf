@@ -30,9 +30,15 @@ The "Edit PDF" feature allows users to modify existing PDF documents by adding n
 - Render the image on the UI.
 - Allow resizing and dragging of the image.
 
-### 3.5 Shape Drawing
+### 3.5 Shape Drawing (White-out / Redaction)
 - Provide a tool to draw rectangles.
-- Allow customization of stroke color, fill color, and stroke width.
+- Allow customization of stroke color, fill color, and transparency.
+- Support "White-out" mode (no border, fill matches background) for seamless erasure.
+
+### 3.7 Advanced Text Properties (Matching)
+- Allow users to choose from standard PDF fonts (Helvetica, Times Roman, Courier).
+- Provide a precise color picker to match document text/background colors.
+- Support font size adjustments down to 1pt precision.
 
 ### 3.6 PDF Generation (Save)
 - Use `pdf-lib` to load the original PDF.
