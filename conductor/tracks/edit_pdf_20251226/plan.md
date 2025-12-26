@@ -15,9 +15,9 @@
 - [x] Task: Build Text Annotation UI (Drag & Drop) c62280e
     - [x] Subtask: Create the UI toolbar with a "Add Text" button.
     - [x] Subtask: Implement drag-and-drop functionality for text elements over the PDF canvas using Vanilla JS events.
-- [~] Task: Integrate `pdf-lib` for Text Saving
-    - [ ] Subtask: Write tests for a function `embedTextAnnotations` in `utils/pdfEngine.ts` that takes a PDF and a list of text annotations and returns a modified PDF.
-    - [ ] Subtask: Connect the UI "Save/Download" button to this function.
+- [x] Task: Integrate `pdf-lib` for Text Saving 80635bd
+    - [x] Subtask: Write tests for a function `embedTextAnnotations` in `utils/pdfEngine.ts` that takes a PDF and a list of text annotations and returns a modified PDF.
+    - [x] Subtask: Connect the UI "Save/Download" button to this function.
 - [ ] Task: Conductor - User Manual Verification 'Text Annotations' (Protocol in workflow.md)
 
 ## Phase 3: Image & Shape Annotations
