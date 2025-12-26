@@ -9,7 +9,7 @@
 - [x] Task: Conductor - User Manual Verification 'Foundation & Viewer' (Protocol in workflow.md) eda57d6
 
 ## Phase 2: Text Annotations
-- [ ] Task: Implement Annotation State Management
+- [~] Task: Implement Annotation State Management
     - [ ] Subtask: Write unit tests for an `AnnotationManager` class (or internal logic) that adds/removes/updates annotations.
     - [ ] Subtask: Implement the logic to store annotation data (x, y, content, style) in memory.
 - [ ] Task: Build Text Annotation UI (Drag & Drop)
