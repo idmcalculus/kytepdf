@@ -4,7 +4,7 @@
 - [x] Task: Create `PdfEditor` component structure and basic routing 92700ea
     - [ ] Subtask: Create `components/PdfEditor.ts` with basic Web Component boilerplate.
     - [ ] Subtask: Update `main.ts` or router to handle navigation to the editor view when a file is selected.
-- [~] Task: Implement PDF Rendering with `pdf.js`
+- [x] Task: Implement PDF Rendering with `pdf.js` 682a200
     - [ ] Subtask: Write tests for a PDF rendering utility function in `utils/pdfUtils.ts`.
     - [ ] Subtask: Implement the rendering logic to display PDF pages within the `PdfEditor` component.
 - [ ] Task: Conductor - User Manual Verification 'Foundation & Viewer' (Protocol in workflow.md)
