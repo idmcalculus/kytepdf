@@ -85,4 +85,33 @@ describe("PdfEditor", () => {
     
     expect(clickSpy).toHaveBeenCalled();
   });
+
+  it("should create a text annotation when clicking page with Add Text tool active", async () => {
+    // 1. Load file to show editor interface
+    const file = new File(["dummy"], "test.pdf", { type: "application/pdf" });
+    await editor.handleFiles({ 0: file, length: 1, item: () => file } as any);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    // 2. Select Add Text tool
+    const addTextBtn = editor.querySelector("#addTextBtn") as HTMLElement;
+    addTextBtn.click();
+
+    // 3. Simulate click on a page
+    const pdfContainer = editor.querySelector("#pdfContainer") as HTMLElement;
+    const pageWrapper = pdfContainer.querySelector(".pdf-page-wrapper") as HTMLElement;
+    expect(pageWrapper).toBeTruthy();
+
+    const clickEvent = new MouseEvent("click", {
+      bubbles: true,
+      clientX: 100,
+      clientY: 100
+    });
+    pageWrapper.dispatchEvent(clickEvent);
+
+    // 4. Verify annotation was added to manager
+    // We need to check if the component has an annotationManager property
+    const annotations = (editor as any).annotationManager.getAllAnnotations();
+    expect(annotations.length).toBe(1);
+    expect(annotations[0].type).toBe('text');
+  });
 });

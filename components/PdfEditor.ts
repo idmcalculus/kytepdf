@@ -1,9 +1,13 @@
 import { BaseComponent } from "./BaseComponent.ts";
 import { logger } from "../utils/logger.ts";
 import { loadPdf, renderPage } from "../utils/pdfRenderer.ts";
+import { AnnotationManager, type Annotation } from "../utils/AnnotationManager.ts";
 
 export class PdfEditor extends BaseComponent {
   protected toolKey = "edit-pdf";
+  private annotationManager: AnnotationManager = new AnnotationManager();
+  private activeTool: string | null = null;
+  private selectedAnnotationId: string | null = null;
 
   connectedCallback() {
     super.connectedCallback();
@@ -62,9 +66,123 @@ export class PdfEditor extends BaseComponent {
       btn.addEventListener("click", () => {
         toolBtns.forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
+        this.activeTool = btn.id;
         logger.debug("Tool selected", { id: btn.id });
       });
     });
+
+    // Delegate clicks on pages to create annotations
+    this.addEventListener("click", (e) => {
+      const target = e.target as HTMLElement;
+      const pageWrapper = target.closest(".pdf-page-wrapper") as HTMLElement;
+      
+      if (pageWrapper && this.activeTool === "addTextBtn") {
+        // Only add if we clicked on the canvas or the wrapper itself, not an existing annotation
+        if (target.classList.contains("pdf-page-canvas") || target.classList.contains("pdf-page-wrapper")) {
+          const rect = pageWrapper.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const y = e.clientY - rect.top;
+          const pageIndex = parseInt(pageWrapper.dataset.index || "0", 10);
+          
+          this.addTextAnnotation(pageIndex, x, y);
+        }
+      }
+    });
+  }
+
+  private addTextAnnotation(pageIndex: number, x: number, y: number) {
+    const id = this.annotationManager.addAnnotation({
+      type: "text",
+      pageIndex,
+      x,
+      y,
+      content: "New Text",
+      style: { fontSize: 16, color: "#000000" }
+    });
+    
+    this.renderAnnotation(id);
+    logger.info("Text annotation added", { id, pageIndex, x, y });
+  }
+
+  private renderAnnotation(id: string) {
+    const ann = this.annotationManager.getAnnotation(id);
+    if (!ann) return;
+
+    const pageWrapper = this.querySelector(`.pdf-page-wrapper[data-index="${ann.pageIndex}"]`);
+    if (!pageWrapper) return;
+
+    const el = document.createElement("div");
+    el.className = "annotation annotation-text";
+    el.dataset.id = id;
+    el.contentEditable = "true";
+    el.innerText = ann.content || "";
+    el.style.position = "absolute";
+    el.style.left = `${ann.x}px`;
+    el.style.top = `${ann.y}px`;
+    el.style.color = ann.style?.color || "black";
+    el.style.fontSize = `${ann.style?.fontSize || 16}px`;
+    el.style.cursor = "move";
+    el.style.border = "1px dashed transparent";
+    el.style.padding = "2px 4px";
+    el.style.minWidth = "20px";
+    el.style.zIndex = "100";
+    el.style.backgroundColor = "rgba(255, 255, 255, 0.1)";
+    el.style.borderRadius = "4px";
+
+    el.addEventListener("mousedown", (e) => this.startDragging(e, id));
+    el.addEventListener("input", () => {
+      this.annotationManager.updateAnnotation(id, { content: el.innerText });
+    });
+    el.addEventListener("focus", () => {
+      el.style.borderColor = "var(--primary)";
+      el.style.backgroundColor = "rgba(255, 255, 255, 0.8)";
+      el.style.color = "black";
+    });
+    el.addEventListener("blur", () => {
+      el.style.borderColor = "transparent";
+      el.style.backgroundColor = "rgba(255, 255, 255, 0.1)";
+      el.style.color = ann.style?.color || "black";
+    });
+
+    pageWrapper.appendChild(el);
+    
+    // Focus immediately if new
+    setTimeout(() => el.focus(), 50);
+  }
+
+  private startDragging(e: MouseEvent, id: string) {
+    // Only drag if not editing? Or drag by edge? 
+    // For now, let's allow dragging if Ctrl is held or just if we move enough.
+    // Simpler: if we are in a tool that is NOT addTextBtn, or just always.
+    if (this.activeTool !== null && this.activeTool !== "addTextBtn") {
+       // Maybe dragging is disabled when another tool is active?
+    }
+
+    e.stopPropagation();
+    const el = e.currentTarget as HTMLElement;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const initialLeft = parseFloat(el.style.left);
+    const initialTop = parseFloat(el.style.top);
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+      const newX = initialLeft + dx;
+      const newY = initialTop + dy;
+      
+      el.style.left = `${newX}px`;
+      el.style.top = `${newY}px`;
+      this.annotationManager.updateAnnotation(id, { x: newX, y: newY });
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
   }
 
   async handleFiles(files: FileList) {
@@ -111,6 +229,7 @@ export class PdfEditor extends BaseComponent {
     for (let i = 1; i <= this.currentPdfDoc.numPages; i++) {
       const pageWrapper = document.createElement("div");
       pageWrapper.className = "pdf-page-wrapper";
+      pageWrapper.dataset.index = (i - 1).toString();
       
       const canvas = document.createElement("canvas");
       canvas.className = "pdf-page-canvas";
