@@ -1,6 +1,7 @@
 import { logger } from "./logger.ts";
-import { PDFDocument, StandardFonts, pdfjsLib, rgb } from "./pdfConfig.ts";
+import { PDFDocument, StandardFonts, pdfjsLib, rgb, degrees } from "./pdfConfig.ts";
 import type { Annotation } from "./AnnotationManager.ts";
+import { adjustYForTextBaseline } from "./coordinates.ts";
 
 export async function embedAllAnnotations(
   pdfData: Uint8Array,
@@ -9,29 +10,43 @@ export async function embedAllAnnotations(
   try {
     const pdfDoc = await PDFDocument.load(pdfData);
     const pages = pdfDoc.getPages();
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    
+    // Cache for embedded fonts to avoid redundant embedding
+    const fontCache: Record<string, any> = {};
+    const getFont = async (fontName: string) => {
+      if (fontCache[fontName]) return fontCache[fontName];
+      
+      let font;
+      switch (fontName) {
+        case "Times-Roman": font = await pdfDoc.embedFont(StandardFonts.TimesRoman); break;
+        case "Courier": font = await pdfDoc.embedFont(StandardFonts.Courier); break;
+        default: font = await pdfDoc.embedFont(StandardFonts.Helvetica); break;
+      }
+      fontCache[fontName] = font;
+      return font;
+    };
 
-    // Annotations are processed in the order they exist in the array (creation order)
     for (const ann of annotations) {
       const page = pages[ann.pageIndex];
       if (!page) continue;
 
       const { height } = page.getSize();
 
-      // Convert HEX to RGB
       const hex = ann.style?.color || (ann.type === "text" ? "#000000" : "#ffffff");
       const r = parseInt(hex.slice(1, 3), 16) / 255 || 0;
       const g = parseInt(hex.slice(3, 5), 16) / 255 || 0;
       const b = parseInt(hex.slice(5, 7), 16) / 255 || 0;
 
       if (ann.type === "text" && ann.content) {
+        const font = await getFont(ann.style?.font || "Helvetica");
         const pdfX = ann.x;
-        const pdfY = height - ann.y - (ann.style?.fontSize || 16) * 0.8;
+        const fontSize = ann.style?.fontSize || 16;
+        const pdfY = adjustYForTextBaseline(height - ann.y, fontSize);
 
         page.drawText(ann.content, {
           x: pdfX,
           y: pdfY,
-          size: ann.style?.fontSize || 16,
+          size: fontSize,
           font: font,
           color: rgb(r, g, b),
         });
@@ -46,7 +61,7 @@ export async function embedAllAnnotations(
           height: ann.height || 50,
           color: rgb(r, g, b),
           borderWidth: ann.style?.strokeWidth || 0,
-          opacity: 1.0,
+          opacity: ann.style?.opacity ?? 1.0,
         });
       } else if (ann.type === "image" && ann.content) {
         const pdfX = ann.x;
@@ -66,6 +81,8 @@ export async function embedAllAnnotations(
           y: pdfY,
           width: ann.width || 150,
           height: ann.height || 150,
+          rotate: degrees(ann.style?.rotation || 0),
+          opacity: ann.style?.opacity ?? 1.0,
         });
       }
     }

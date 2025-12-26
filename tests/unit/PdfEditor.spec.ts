@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 // @ts-ignore
-import { PdfEditor } from "../../components/PdfEditor";
+import { PdfEditor } from "../../components/pdf-editor/PdfEditor";
 
 // Mock persistence
 vi.mock("../../utils/persistence", () => ({
@@ -18,6 +18,7 @@ vi.mock("../../utils/pdfRenderer", () => ({
     getPage: vi.fn().mockResolvedValue({
       getViewport: vi.fn().mockReturnValue({ width: 100, height: 100 }),
       render: vi.fn().mockReturnValue({ promise: Promise.resolve() }),
+      getTextContent: vi.fn().mockResolvedValue({ items: [] }),
     }),
   }),
   renderPage: vi.fn(),
@@ -107,6 +108,9 @@ describe("PdfEditor", () => {
       clientY: 100
     });
     pageWrapper.dispatchEvent(clickEvent);
+
+    // handleSmartMatch is async
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     // 4. Verify annotation was added to manager
     // We need to check if the component has an annotationManager property

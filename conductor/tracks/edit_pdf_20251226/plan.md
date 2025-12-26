@@ -30,16 +30,22 @@
     - [x] Subtask: Add an "Upload Image" button to the toolbar.
     - [x] Subtask: Implement file reading (FileReader) to display the image on the canvas.
     - [x] Subtask: Write tests for `embedImageAnnotations` in `utils/pdfEngine.ts` using `pdf-lib`.
-- [x] Task: Conductor - User Manual Verification 'Image & Shape Annotations' (Protocol in workflow.md) 089f886
+- [x] Task: Conductor - User Manual Verification 'Image & Shape Annotations' (Protocol in workflow.md) b35aa33
 
-## Phase 4: Final Polish & Integration
-- [ ] Task: Advanced Text & Smart Match
-    - [ ] Subtask: Implement a "Properties Panel" that appears when an annotation is selected.
-    - [ ] Subtask: Add UI controls for Font Family, Size, and Color.
-    - [ ] Subtask: Implement "Smart Match" - use `pdf.js` text content analysis to auto-detect font properties on click.
-- [ ] Task: Update Tool Dashboard
-    - [ ] Subtask: Update `components/ToolDashboard.ts` to set the "Edit PDF" tool to `active: true`.
-- [ ] Task: Coordinate System Refinement & Testing
-    - [ ] Subtask: Verify strict alignment between DOM coordinates and PDF points across different page sizes and zoom levels.
-    - [ ] Subtask: Adjust math util functions if necessary and add regression tests.
-- [ ] Task: Conductor - User Manual Verification 'Final Polish & Integration' (Protocol in workflow.md)
+## Phase 4: Architectural Refactor & Font Fix
+- [x] Task: Modularize PdfEditor
+    - [x] Subtask: Create `components/pdf-editor/` directory structure.
+    - [x] Subtask: Implement `TextEditor`, `RectangleToolEditor`, and `ImageEditor` as separate logic modules.
+    - [x] Subtask: Refactor `PdfEditor.ts` to orchestrate these modules.
+- [x] Task: Fix Font Embedding Bug
+    - [x] Subtask: Update `utils/pdfEngine.ts` to dynamically embed and apply selected fonts (Helvetica, Times, Courier).
+    - [x] Subtask: Add unit tests for multi-font rendering.
+- [x] Task: Advanced Text & Smart Match
+    - [x] Subtask: Implement a "Properties Panel" that appears when an annotation is selected.
+    - [x] Subtask: Add UI controls for Font Family, Size, and Color.
+    - [x] Subtask: Implement "Smart Match" - use `pdf.js` text content analysis to auto-detect font properties on click.
+- [x] Task: Update Tool Dashboard de79d5c
+- [x] Task: Coordinate System Refinement & Testing de79d5c
+    - [x] Subtask: Verify strict alignment between DOM coordinates and PDF points across different page sizes and zoom levels.
+    - [x] Subtask: Adjust math util functions if necessary and add regression tests.
+- [x] Task: Conductor - User Manual Verification 'Final Polish & Integration' (Protocol in workflow.md) de79d5c

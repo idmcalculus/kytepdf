@@ -1,4 +1,4 @@
-import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { PDFDocument, rgb, StandardFonts, degrees } from "pdf-lib";
 import * as pdfjsLib from "pdfjs-dist";
 import { config } from "./config.ts";
 
@@ -6,4 +6,4 @@ import { config } from "./config.ts";
 pdfjsLib.GlobalWorkerOptions.workerSrc = config.pdf.workerSrc;
 
 export { pdfjsLib };
-export { PDFDocument, rgb, StandardFonts };
+export { PDFDocument, rgb, StandardFonts, degrees };

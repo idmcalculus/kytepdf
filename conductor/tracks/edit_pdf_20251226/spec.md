@@ -47,10 +47,18 @@ The "Edit PDF" feature allows users to modify existing PDF documents by adding n
 - Export the modified PDF as a Blob for download.
 
 ## 4. Technical Design
-### 4.1 Architecture
-- **Component:** `PdfEditor.ts` (new component).
-- **State Management:** Local state within the component to track the list of annotations (type, x, y, content, style) per page.
-- **Coordinate Conversion:** A utility function is needed to convert DOM coordinates (where the user clicks/drops) to PDF coordinates (points). PDF coordinates usually start from the bottom-left, while DOM starts from top-left.
+### 4.1 Architecture (Modular)
+- **PdfEditor (Orchestrator):** Main entry point managing the PDF rendering and layout.
+- **Tool Modules:**
+    - `TextTool.ts`: Logic for text insertion, editing, and font matching.
+    - `ShapeTool.ts`: Logic for rectangle drawing, resizing, and masking.
+    - `ImageTool.ts`: Logic for image upload, rotation, and scaling.
+- **State Management:** `AnnotationManager.ts` (Core state).
+- **Coordinate Conversion:** Shared utilities for DOM -> PDF point mapping.
+
+### 4.2 Font Management
+- Support embedding multiple standard PDF fonts (Helvetica, Times-Roman, Courier).
+- Ensure the PDF engine dynamically loads and applies the correct font based on annotation properties.
 
 ### 4.2 Data Model
 ```typescript

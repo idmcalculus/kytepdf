@@ -11,6 +11,9 @@ export interface Annotation {
     color?: string;
     fontSize?: number;
     strokeWidth?: number;
+    opacity?: number;
+    rotation?: number; // In degrees
+    font?: string;
   };
 }
 
