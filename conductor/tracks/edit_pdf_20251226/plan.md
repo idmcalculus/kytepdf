@@ -8,7 +8,7 @@
     - [x] Bug Fix: Fixed event listeners not working due to redundant render call 6911ddd
 - [x] Task: Conductor - User Manual Verification 'Foundation & Viewer' (Protocol in workflow.md) eda57d6
 
-## Phase 2: Text Annotations
+## Phase 2: Text Annotations [checkpoint: 0bbe601]
 - [x] Task: Implement Annotation State Management 2bdfe53
     - [x] Subtask: Write unit tests for an `AnnotationManager` class (or internal logic) that adds/removes/updates annotations.
     - [x] Subtask: Implement the logic to store annotation data (x, y, content, style) in memory.
