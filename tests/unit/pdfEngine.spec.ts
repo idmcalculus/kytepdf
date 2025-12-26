@@ -31,6 +31,20 @@ vi.mock("../../utils/pdfConfig", () => {
 				}),
 				save: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
 			}),
+			load: vi.fn().mockResolvedValue({
+				getPages: vi.fn().mockReturnValue([
+					{
+						drawText: vi.fn(),
+						getSize: vi.fn().mockReturnValue({ width: 600, height: 800 }),
+					},
+				]),
+				embedFont: vi.fn().mockResolvedValue({}),
+				save: vi.fn().mockResolvedValue(new Uint8Array([4, 5, 6])),
+			}),
+		},
+		rgb: vi.fn().mockReturnValue({}),
+		StandardFonts: {
+			Helvetica: "Helvetica",
 		},
 	};
 });
@@ -106,5 +120,26 @@ describe("pdfEngine", () => {
 		const result = await compressPdf(mockFile, 100, onProgress);
 
 		expect(result).toBeInstanceOf(Uint8Array);
+	});
+
+	it("should embed text annotations into a PDF", async () => {
+		const pdfData = new Uint8Array([1, 2, 3]);
+		const annotations = [
+			{
+				id: "1",
+				type: "text" as const,
+				pageIndex: 0,
+				x: 100,
+				y: 100,
+				content: "Hello PDF",
+				style: { fontSize: 12, color: "#000000" },
+			},
+		];
+
+		const { embedTextAnnotations } = await import("../../utils/pdfEngine");
+		const result = await embedTextAnnotations(pdfData, annotations);
+
+		expect(result).toBeInstanceOf(Uint8Array);
+		expect(result).toEqual(new Uint8Array([4, 5, 6])); // Value from mock
 	});
 });

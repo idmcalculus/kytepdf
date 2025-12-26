@@ -1,5 +1,50 @@
 import { logger } from "./logger.ts";
-import { PDFDocument, pdfjsLib } from "./pdfConfig.ts";
+import { PDFDocument, StandardFonts, pdfjsLib, rgb } from "./pdfConfig.ts";
+import type { Annotation } from "./AnnotationManager.ts";
+
+export async function embedTextAnnotations(
+  pdfData: Uint8Array,
+  annotations: Annotation[],
+): Promise<Uint8Array> {
+  try {
+    const pdfDoc = await PDFDocument.load(pdfData);
+    const pages = pdfDoc.getPages();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+    for (const ann of annotations) {
+      if (ann.type !== "text" || !ann.content) continue;
+
+      const page = pages[ann.pageIndex];
+      if (!page) continue;
+
+      const { height } = page.getSize();
+
+      // Convert HEX to RGB
+      const hex = ann.style?.color || "#000000";
+      const r = parseInt(hex.slice(1, 3), 16) / 255 || 0;
+      const g = parseInt(hex.slice(3, 5), 16) / 255 || 0;
+      const b = parseInt(hex.slice(5, 7), 16) / 255 || 0;
+
+      // Convert DOM Y (top-left) to PDF Y (bottom-left)
+      // Note: ann.x and ann.y should be in PDF points
+      const pdfX = ann.x;
+      const pdfY = height - ann.y - (ann.style?.fontSize || 16) * 0.8; // Rough baseline adjustment
+
+      page.drawText(ann.content, {
+        x: pdfX,
+        y: pdfY,
+        size: ann.style?.fontSize || 16,
+        font: font,
+        color: rgb(r, g, b),
+      });
+    }
+
+    return await pdfDoc.save();
+  } catch (err) {
+    logger.error("Failed to embed text annotations", err);
+    throw err;
+  }
+}
 
 export async function compressPdf(
   file: File,

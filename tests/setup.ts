@@ -12,6 +12,18 @@ if (typeof Blob !== "undefined" && !Blob.prototype.arrayBuffer) {
 	};
 }
 
+// Polyfill for DOMMatrix (needed by pdfjs-dist in jsdom)
+if (typeof window !== "undefined" && !window.DOMMatrix) {
+	(window as any).DOMMatrix = class DOMMatrix {
+		constructor() { }
+		multiply() { return this; }
+		inverse() { return this; }
+		translate() { return this; }
+		scale() { return this; }
+		rotate() { return this; }
+	};
+}
+
 // Global mocks
 (window as any).lucide = {
 	createIcons: vi.fn(),

@@ -2,6 +2,7 @@ import { BaseComponent } from "./BaseComponent.ts";
 import { logger } from "../utils/logger.ts";
 import { loadPdf, renderPage } from "../utils/pdfRenderer.ts";
 import { AnnotationManager, type Annotation } from "../utils/AnnotationManager.ts";
+import { embedTextAnnotations } from "../utils/pdfEngine.ts";
 
 export class PdfEditor extends BaseComponent {
   protected toolKey = "edit-pdf";
@@ -70,6 +71,12 @@ export class PdfEditor extends BaseComponent {
         logger.debug("Tool selected", { id: btn.id });
       });
     });
+
+    // Save button logic
+    const saveBtn = this.querySelector("#saveBtn");
+    if (saveBtn) {
+      saveBtn.addEventListener("click", () => this.handleSave());
+    }
 
     // Delegate clicks on pages to create annotations
     this.addEventListener("click", (e) => {
@@ -183,6 +190,61 @@ export class PdfEditor extends BaseComponent {
 
     document.addEventListener("mousemove", handleMouseMove);
     document.addEventListener("mouseup", handleMouseUp);
+  }
+
+  async handleSave() {
+    if (!this.selectedFile || !this.currentPdfDoc) return;
+
+    try {
+      this.updateProgress(10, "Preparing PDF...");
+      const arrayBuffer = await this.selectedFile.arrayBuffer();
+      const pdfBytes = new Uint8Array(arrayBuffer);
+
+      // Convert annotations to PDF points
+      const annotations = this.annotationManager.getAllAnnotations();
+      const scaledAnnotations: Annotation[] = [];
+
+      for (const ann of annotations) {
+        const page = await this.currentPdfDoc.getPage(ann.pageIndex + 1);
+        const viewport = page.getViewport({ scale: 1.0 });
+        const scale = 800 / viewport.width;
+
+        scaledAnnotations.push({
+          ...ann,
+          x: ann.x / scale,
+          y: ann.y / scale,
+          style: {
+            ...ann.style,
+            fontSize: (ann.style?.fontSize || 16) / scale,
+          }
+        });
+      }
+
+      this.updateProgress(50, "Embedding annotations...");
+      const modifiedPdfBytes = await embedTextAnnotations(pdfBytes, scaledAnnotations);
+
+      this.updateProgress(90, "Saving...");
+      const success = await this.savePdf(modifiedPdfBytes, this.selectedFile.name, "_edited");
+      
+      if (success) {
+        await this.recordJob("Edit", this.selectedFile.name, modifiedPdfBytes, {
+          annotationCount: annotations.length
+        });
+        this.updateProgress(100, "Saved!");
+      } else {
+        this.updateProgress(0, "Save cancelled");
+      }
+
+      setTimeout(() => {
+        const progressSection = this.querySelector("#progressSection");
+        if (progressSection) progressSection.classList.add("hidden");
+      }, 1500);
+
+    } catch (err) {
+      logger.error("Failed to save edited PDF", err);
+      this.showErrorDialog("An error occurred while saving the PDF.");
+      this.updateProgress(0, "Error");
+    }
   }
 
   async handleFiles(files: FileList) {
