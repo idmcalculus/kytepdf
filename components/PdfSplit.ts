@@ -1,6 +1,7 @@
 import { logger } from "../utils/logger.ts";
 import { PDFDocument, pdfjsLib } from "../utils/pdfConfig.ts";
 import { persistence } from "../utils/persistence.ts";
+import { formatSelectionInfo } from "../utils/pdfUtils.ts";
 import { BaseComponent } from "./BaseComponent.ts";
 
 export class PdfSplit extends BaseComponent {
@@ -210,8 +211,7 @@ export class PdfSplit extends BaseComponent {
 
   updateSelectionInfo() {
     const count = this.selectedPages.size;
-    (this.querySelector("#selectionInfo") as HTMLElement).textContent =
-      `${count} page${count === 1 ? "" : "s"} selected`;
+    (this.querySelector("#selectionInfo") as HTMLElement).textContent = formatSelectionInfo(count);
     (this.querySelector("#splitBtn") as HTMLButtonElement).disabled = count === 0;
   }
 

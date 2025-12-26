@@ -1,6 +1,7 @@
 import { logger } from "../utils/logger.ts";
 import { PDFDocument, pdfjsLib } from "../utils/pdfConfig.ts";
 import { persistence } from "../utils/persistence.ts";
+import { calculateSignaturePlacement } from "../utils/pdfUtils.ts";
 import { BaseComponent } from "./BaseComponent.ts";
 
 interface SigPlacement {
@@ -762,12 +763,10 @@ export class PdfSign extends BaseComponent {
     preview.style.backgroundPosition = "center";
     preview.classList.remove("hidden");
 
+    const placement = calculateSignaturePlacement(x, y, rect.width, rect.height, width, height);
     this.sigPlacement = {
       page: this.currentPageNum,
-      x: (x - width / 2) / rect.width,
-      y: (y - height / 2) / rect.height,
-      w: width / rect.width,
-      h: height / rect.height,
+      ...placement,
     };
 
     (this.querySelector("#finalizeBtn") as HTMLButtonElement).disabled = false;

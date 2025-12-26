@@ -1,6 +1,7 @@
 import { logger } from "../utils/logger.ts";
 import { PDFDocument } from "../utils/pdfConfig.ts";
 import { persistence } from "../utils/persistence.ts";
+import { swapArrayItems, moveArrayItem } from "../utils/pdfUtils.ts";
 import { BaseComponent } from "./BaseComponent.ts";
 
 export class PdfMerge extends BaseComponent {
@@ -256,18 +257,15 @@ export class PdfMerge extends BaseComponent {
   }
 
   swapFiles(fromIndex: number, toIndex: number) {
-    const movedFile = this.files.splice(fromIndex, 1)[0];
-    this.files.splice(toIndex, 0, movedFile);
+    this.files = swapArrayItems(this.files, fromIndex, toIndex);
     this.updateFileList();
     this.saveSession();
   }
 
   moveFile(index: number, direction: number) {
-    const newIndex = index + direction;
-    if (newIndex >= 0 && newIndex < this.files.length) {
-      const temp = this.files[index];
-      this.files[index] = this.files[newIndex];
-      this.files[newIndex] = temp;
+    const moved = moveArrayItem(this.files, index, direction);
+    if (moved !== this.files) {
+      this.files = moved;
       this.updateFileList();
       this.saveSession();
     }

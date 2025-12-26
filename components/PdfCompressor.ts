@@ -2,6 +2,7 @@ import { logger } from "../utils/logger.ts";
 import { pdfjsLib } from "../utils/pdfConfig.ts";
 import { compressPdf } from "../utils/pdfEngine.ts";
 import { persistence } from "../utils/persistence.ts";
+import { calculateSavingsPercent, generateOutputFilename } from "../utils/pdfUtils.ts";
 import { BaseComponent } from "./BaseComponent.ts";
 
 export class PdfCompressor extends BaseComponent {
@@ -320,13 +321,13 @@ export class PdfCompressor extends BaseComponent {
 
       const finalSizeKb = compressedBytes.length / 1024;
       const originalSizeKb = this.selectedFile.size / 1024;
-      const savedPercent = Math.max(0, Math.round((1 - finalSizeKb / originalSizeKb) * 100));
+      const savedPercent = calculateSavingsPercent(this.selectedFile.size, compressedBytes.length);
 
       (this.querySelector("#finalSizeValue") as HTMLElement).textContent =
         `${finalSizeKb.toFixed(1)} KB`;
       (this.querySelector("#savedPercentValue") as HTMLElement).textContent = `${savedPercent}%`;
 
-      const fileName = this.selectedFile.name.replace(".pdf", "_compressed.pdf");
+      const fileName = generateOutputFilename(this.selectedFile.name, "_compressed");
       await this.recordJob("Compress", fileName, compressedBytes, {
         originalSize: this.selectedFile.size,
         finalSize: compressedBytes.length,
