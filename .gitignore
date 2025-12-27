@@ -24,4 +24,7 @@ dist-ssr
 *.sw?
 
 # coverage
-coverageconductor/
+coverage/
+
+# gemini conductor
+conductor/
