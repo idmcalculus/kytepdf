@@ -7,6 +7,7 @@ import "./components/PdfSign.ts";
 import "./components/pdf-editor/PdfEditor.ts";
 import "./components/KyteDialog.ts";
 import "./components/AboutModal.ts";
+import "./components/EmailCollectionModal.ts";
 import "./components/KyteFooter.ts";
 import { mapError } from "./utils/errorMapper.ts";
 import { logger } from "./utils/logger.ts";

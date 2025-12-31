@@ -386,6 +386,9 @@ export class BaseComponent extends HTMLElement {
 	// Standard PDF Saving Logic
 	async savePdf(pdfBytes: Uint8Array | null, originalName: string, suffix = "_modified") {
 		try {
+			// Trigger email collection before download if not already done
+			await this.ensureEmailCollected();
+
 			const suggestedName = (originalName || "document.pdf").replace(".pdf", `${suffix}.pdf`);
 			logger.info("Attempting to save PDF", { suggestedName, size: pdfBytes?.length });
 
@@ -437,6 +440,8 @@ export class BaseComponent extends HTMLElement {
 		if (downloadLink && pdfBytes) {
 			downloadLink.onclick = async (e) => {
 				e.preventDefault();
+				// Intercept download to trigger email collection if not already done
+				await this.ensureEmailCollected();
 				await this.savePdf(pdfBytes, originalName, suffix);
 			};
 		}
@@ -470,6 +475,30 @@ export class BaseComponent extends HTMLElement {
 			confirmText: "Yes",
 			cancelText: "No",
 		});
+	}
+
+	/**
+	 * Ensures we've asked for an email at least once.
+	 * Returns true if we should proceed with the next action.
+	 */
+	async ensureEmailCollected() {
+		const alreadyCollected = localStorage.getItem("kyte_email_collected");
+		if (alreadyCollected) return true;
+
+		const emailModal = document.getElementById("emailModal") as any;
+		if (emailModal) {
+			const result = await emailModal.show();
+			if (result) {
+				localStorage.setItem("kyte_email_collected", "true");
+				logger.info("User provided email", { email: result });
+			} else {
+				// We don't set the flag if they skip, so we can ask again later or after next job
+				// User preference: maybe we SHOULD set it to true anyway to not be annoying?
+				// Spec says "Privacy-first/Non-coercive". I'll let them skip and ask again in future sessions.
+				logger.info("User skipped email collection");
+			}
+		}
+		return true; // Always allow proceeding to download
 	}
 
 	/**
