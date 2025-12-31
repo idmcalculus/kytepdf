@@ -29,13 +29,105 @@ body {
   color: var(--text);
   min-height: 100vh;
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
   /* Center vertically */
-  padding: 4rem 1rem;
-  /* Generous padding to prevent clipping on overflow */
+  padding: 4rem 1rem 8rem 1rem;
+  /* Extra bottom padding for footer */
   overflow-x: hidden;
   position: relative;
+}
+
+/* Footer Styles */
+footer {
+  width: 100%;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  padding: 2rem 1rem;
+  background: linear-gradient(to top, var(--bg-dark) 40%, transparent);
+  border-top: 1px solid var(--border);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 50;
+}
+
+.footer-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.footer-branding a,
+.footer-credits a {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.footer-branding a:hover,
+.footer-credits a:hover {
+  color: white;
+  text-shadow: 0 0 8px var(--primary-glow);
+}
+
+.footer-credits .social-links {
+  margin-left: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.footer-credits .social-links a {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.footer-credits .social-links a:hover {
+  color: var(--primary);
+}
+
+.coffee-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  background: var(--accent);
+  color: #000 !important;
+  border-radius: 99px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(251, 191, 36, 0.3);
+}
+
+.coffee-btn:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 8px 20px rgba(251, 191, 36, 0.4);
+  background: white;
+}
+
+.footer-legal {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+@media (max-width: 768px) {
+  footer {
+    padding: 1.5rem 1rem;
+  }
+
+  .footer-content {
+    flex-direction: column;
+    text-align: center;
+    gap: 1rem;
+  }
 }
 
 #bg-canvas {
