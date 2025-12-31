@@ -147,6 +147,7 @@ export class ToolDashboard extends HTMLElement {
             <h1 style="text-align: left; font-size: 3rem; margin: 0; background: linear-gradient(135deg, #fff 0%, var(--primary) 50%, var(--secondary) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;">Kyte</h1>
           </div>
           <div class="user-account-header">
+            <button id="aboutBtn" class="header-link">About</button>
             <button id="userAccountBtn" class="account-pill">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
               <span>Account</span>
@@ -183,6 +184,13 @@ export class ToolDashboard extends HTMLElement {
     `;
 
     // Account btn logic
+    const aboutBtn = this.querySelector("#aboutBtn") as HTMLElement;
+    if (aboutBtn) {
+      aboutBtn.onclick = () => {
+        if ((window as any).showAbout) (window as any).showAbout();
+      };
+    }
+
     const accountBtn = this.querySelector("#userAccountBtn") as HTMLElement;
     accountBtn.onclick = () => {
       const dialog = document.getElementById("globalDialog") as any;

@@ -6,11 +6,18 @@ import "./components/PdfSplit.ts";
 import "./components/PdfSign.ts";
 import "./components/pdf-editor/PdfEditor.ts";
 import "./components/KyteDialog.ts";
+import "./components/AboutModal.ts";
 import "./components/KyteFooter.ts";
 import { mapError } from "./utils/errorMapper.ts";
 import { logger } from "./utils/logger.ts";
 
 logger.info("KytePDF Application Starting");
+
+// Global functions for component access
+(window as any).showAbout = () => {
+  const aboutModal = document.getElementById("aboutModal") as any;
+  if (aboutModal) aboutModal.show();
+};
 
 // Global Safety Nets (Production-Grade Error Handling)
 window.onerror = (message, source, lineno, colno, error) => {
