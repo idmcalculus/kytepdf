@@ -384,56 +384,129 @@ export class BaseComponent extends HTMLElement {
 		if (statusEl && status) statusEl.textContent = status;
 	}
 
-	// Standard PDF Saving Logic
-	async savePdf(pdfBytes: Uint8Array | null, originalName: string, suffix = "_modified") {
-		try {
-			const suggestedName = (originalName || "document.pdf").replace(".pdf", `${suffix}.pdf`);
-			logger.info("Attempting to save PDF", { suggestedName, size: pdfBytes?.length });
+	        // Standard Saving Logic
 
-			if (!pdfBytes || pdfBytes.length === 0) {
-				throw new Error("No PDF content to save");
-			}
+	        async savePdf(bytes: Uint8Array | null, originalName: string, suffix = "_modified", extension = ".pdf") {
 
-			if ("showSaveFilePicker" in window) {
-				try {
-					const handle = await (window as any).showSaveFilePicker({
-						suggestedName,
-						types: [{ description: "PDF Document", accept: { "application/pdf": [".pdf"] } }],
-					});
-					const writable = await handle.createWritable();
-					await writable.write(pdfBytes);
-					await writable.close();
-					logger.info("File saved successfully via File System Access API");
-					telemetry.logEvent("document", "save_pdf_success", {
-						method: "FileSystemAccess",
-						fileName: suggestedName,
-						tool: (this as any).toolKey,
-					});
-					return true;
-				} catch (err: any) {
-					if (err.name === "AbortError") {
-						logger.info("Save operation aborted by user");
-						telemetry.logEvent("document", "save_pdf_aborted", { tool: (this as any).toolKey });
-						return false;
-					}
-					throw err;
-				}
-			} else {
-				const blob = new Blob([pdfBytes as any], { type: "application/pdf" });
-				const url = URL.createObjectURL(blob);
-				const link = document.createElement("a");
-				link.href = url;
-				link.download = suggestedName;
-				link.click();
-				setTimeout(() => URL.revokeObjectURL(url), 100);
-				logger.info("File download triggered via anchor link");
-				telemetry.logEvent("document", "save_pdf_success", {
-					method: "AnchorLink",
-					fileName: suggestedName,
-					tool: (this as any).toolKey,
-				});
-				return true;
-			}
+	                try {
+
+	                        let suggestedName = originalName || `document${extension}`;
+
+	                        if (suggestedName.endsWith(".pdf")) {
+
+	                                suggestedName = suggestedName.replace(".pdf", `${suffix}${extension}`);
+
+	                        } else if (!suggestedName.endsWith(extension)) {
+
+	                                suggestedName = suggestedName + extension;
+
+	                        }
+
+	
+
+	                        logger.info("Attempting to save file", { suggestedName, size: bytes?.length });
+
+	
+
+	                        if (!bytes || bytes.length === 0) {
+
+	                                throw new Error("No content to save");
+
+	                        }
+
+	
+
+	                        if ("showSaveFilePicker" in window) {
+
+	                                try {
+
+	                                        const mimeType = extension === ".zip" ? "application/zip" : "application/pdf";
+
+	                                        const handle = await (window as any).showSaveFilePicker({
+
+	                                                suggestedName,
+
+	                                                types: [{ 
+
+	                                                        description: extension === ".zip" ? "ZIP Archive" : "PDF Document", 
+
+	                                                        accept: { [mimeType]: [extension] } 
+
+	                                                }],
+
+	                                        });
+
+	                                        const writable = await handle.createWritable();
+
+	                                        await writable.write(bytes);
+
+	                                        await writable.close();
+
+	                                        logger.info("File saved successfully via File System Access API");
+
+	                                        telemetry.logEvent("document", "save_file_success", {
+
+	                                                method: "FileSystemAccess",
+
+	                                                fileName: suggestedName,
+
+	                                                tool: (this as any).toolKey,
+
+	                                        });
+
+	                                        return true;
+
+	                                } catch (err: any) {
+
+	                                        if (err.name === "AbortError") {
+
+	                                                logger.info("Save operation aborted by user");
+
+	                                                telemetry.logEvent("document", "save_file_aborted", { tool: (this as any).toolKey });
+
+	                                                return false;
+
+	                                        }
+
+	                                        throw err;
+
+	                                }
+
+	                        } else {
+
+	                                const mimeType = extension === ".zip" ? "application/zip" : "application/pdf";
+
+	                                const blob = new Blob([bytes as any], { type: mimeType });
+
+	                                const url = URL.createObjectURL(blob);
+
+	                                const link = document.createElement("a");
+
+	                                link.href = url;
+
+	                                link.download = suggestedName;
+
+	                                link.click();
+
+	                                setTimeout(() => URL.revokeObjectURL(url), 100);
+
+	                                logger.info("File download triggered via anchor link");
+
+	                                telemetry.logEvent("document", "save_file_success", {
+
+	                                        method: "AnchorLink",
+
+	                                        fileName: suggestedName,
+
+	                                        tool: (this as any).toolKey,
+
+	                                });
+
+	                                return true;
+
+	                        }
+
+	
 		} catch (err: any) {
 			logger.error("Save error:", err);
 			this.showErrorDialog(`Failed to save PDF: ${err.message}`);
@@ -441,22 +514,21 @@ export class BaseComponent extends HTMLElement {
 		}
 	}
 
-	// Show success and bind download
-	showSuccess(pdfBytes: Uint8Array | null, originalName: string, suffix: string) {
-		const successMsg = this.querySelector("#successMessage");
-		const downloadLink = this.querySelector("#downloadLink") as HTMLElement | null;
-		if (successMsg) successMsg.classList.remove("hidden");
-		if (downloadLink && pdfBytes) {
-			downloadLink.onclick = async (e) => {
-				e.preventDefault();
-				// Intercept download to trigger email collection if not already done
-				await this.ensureEmailCollected();
-				await this.savePdf(pdfBytes, originalName, suffix);
-			};
-		}
-	}
-
-	// Reusable Dialog Methods
+	        // Show success and bind download
+	        showSuccess(bytes: Uint8Array | null, originalName: string, suffix: string, extension = ".pdf") {
+	                const successMsg = this.querySelector("#successMessage");
+	                const downloadLink = this.querySelector("#downloadLink") as HTMLElement | null;
+	                if (successMsg) successMsg.classList.remove("hidden");
+	                if (downloadLink && bytes) {
+	                        downloadLink.onclick = async (e) => {
+	                                e.preventDefault();
+	                                // Intercept download to trigger email collection if not already done
+	                                await this.ensureEmailCollected();
+	                                await this.savePdf(bytes, originalName, suffix, extension);
+	                        };
+	                }
+	        }
+		// Reusable Dialog Methods
 	get dialog(): any {
 		return document.getElementById("globalDialog");
 	}

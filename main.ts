@@ -6,6 +6,8 @@ import "./components/PdfSplit.ts";
 import "./components/PdfSign.ts";
 import "./components/PdfToImage.ts";
 import "./components/ImageToPdf.ts";
+import "./components/PdfToOffice.ts";
+import "./components/OfficeToPdf.ts";
 import "./components/pdf-editor/PdfEditor.ts";
 import "./components/KyteDialog.ts";
 import "./components/AboutModal.ts";
@@ -102,6 +104,22 @@ function showImageToPdf() {
   mainContainer.innerHTML = "<image-to-pdf></image-to-pdf>";
 }
 
+function showPdfToWord() {
+  mainContainer.innerHTML = '<pdf-to-office format="docx"></pdf-to-office>';
+}
+
+function showPdfToPPT() {
+  mainContainer.innerHTML = '<pdf-to-office format="pptx"></pdf-to-office>';
+}
+
+function showPdfToExcel() {
+  mainContainer.innerHTML = '<pdf-to-office format="xlsx"></pdf-to-office>';
+}
+
+function showOfficeToPdf() {
+  mainContainer.innerHTML = '<office-to-pdf></office-to-pdf>';
+}
+
 function showEdit() {
   mainContainer.innerHTML = "<pdf-editor></pdf-editor>";
 }
@@ -121,6 +139,14 @@ window.addEventListener("tool-select", (e: any) => {
     showPdfToImage();
   } else if (e.detail.toolId === "img-to-pdf") {
     showImageToPdf();
+  } else if (e.detail.toolId === "pdf-to-word") {
+    showPdfToWord();
+  } else if (e.detail.toolId === "pdf-to-pp") {
+    showPdfToPPT();
+  } else if (e.detail.toolId === "pdf-to-excel") {
+    showPdfToExcel();
+  } else if (e.detail.toolId === "word-to-pdf") {
+    showOfficeToPdf();
   } else if (e.detail.toolId === "edit") {
     showEdit();
   }

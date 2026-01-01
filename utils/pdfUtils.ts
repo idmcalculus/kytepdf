@@ -82,12 +82,11 @@ export function calculateSignaturePlacement(
 }
 
 /**
- * Generate output filename with suffix
+ * Generate output filename with suffix and optional custom extension
  */
-export function generateOutputFilename(originalName: string, suffix: string): string {
-	return originalName.replace(/\.pdf$/i, `${suffix}.pdf`);
+export function generateOutputFilename(originalName: string, suffix: string, extension = ".pdf"): string {
+        return originalName.replace(/\.pdf$/i, "") + suffix + extension;
 }
-
 /**
  * Calculate compression savings percentage
  */

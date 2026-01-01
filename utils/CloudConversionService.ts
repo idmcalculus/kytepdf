@@ -19,39 +19,51 @@ class CloudConversionService {
   }
 
   /**
-   * Converts a file via the Cloud API.
-   * NOTE: This is a high-level abstraction. The actual implementation
-   * will vary depending on the chosen provider (CloudConvert, ConvertAPI, etc.)
+   * Converts a file via a custom Serverless Gateway (GCP/Azure).
+   * Expected API: POST [endpoint] with multipart/form-data (file, format, ocr)
    */
   async convertFile(
     file: File,
     targetFormat: ConversionFormat,
     options: ConversionOptions = {}
   ): Promise<Uint8Array> {
-    if (!this.apiKey) {
-      throw new Error("Cloud API key not configured. Please check your environment variables.");
+    
+    // In development, if no endpoint is provided, use mock
+    if (!this.endpoint || this.endpoint.includes("api.cloudconvert.com")) {
+      if (!config.isProd) {
+        logger.warn("Custom Cloud Gateway not configured. Using mock mode.");
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return new Uint8Array([0, 1, 2, 3]);
+      }
+      throw new Error("Cloud Gateway URL not configured. Please add VITE_CLOUD_GATEWAY_URL to your .env file.");
     }
 
-    logger.info(`Starting cloud conversion: ${file.name} -> ${targetFormat}`, { options });
+    logger.info(`Sending to Cloud Gateway: ${file.name} -> ${targetFormat}`);
 
     try {
-      // 1. In a real implementation, you'd create a job/task
-      // 2. Upload the file
-      // 3. Poll for completion or use webhooks
-      // 4. Download the resulting bytes
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("targetFormat", targetFormat);
+      formData.append("ocr", options.ocr ? "true" : "false");
 
-      // Mock implementation for development/integration testing
-      if (!config.isProd) {
-        logger.warn("CloudConversionService is in mock mode (dev/test).");
-        await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate latency
-        return new Uint8Array([0, 1, 2, 3]); // Return mock bytes
+      const response = await fetch(this.endpoint, {
+        method: "POST",
+        headers: {
+          "X-Api-Key": this.apiKey // Optional security header
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Cloud Gateway Error (${response.status}): ${errorText}`);
       }
 
-      // Placeholder for real fetch logic
-      throw new Error("Cloud API implementation pending specific provider integration.");
+      const arrayBuffer = await response.arrayBuffer();
+      return new Uint8Array(arrayBuffer);
 
     } catch (err: any) {
-      logger.error("Cloud conversion failed", err);
+      logger.error("Cloud Gateway Conversion Failed", err);
       throw err;
     }
   }

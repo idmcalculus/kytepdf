@@ -1,4 +1,3 @@
-import type { AnnotationManager } from "../../utils/AnnotationManager";
 import type { ToolContext, EditorTool } from "./types";
 
 export abstract class BaseTool implements EditorTool {

@@ -27,4 +27,7 @@ dist-ssr
 coverage/
 
 # gemini conductor
+conductor
 conductor/*
+conductor/**/*
+conductor/**/.*

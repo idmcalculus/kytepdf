@@ -11,6 +11,7 @@ export class PdfToImage extends BaseComponent {
   private selectedPages: Set<number> = new Set();
   private format: "png" | "jpeg" = "png";
   private scale = 2.0;
+  private downloadMode: "selected-individual" | "selected-zip" | "all-individual" | "all-zip" = "all-zip";
 
   render() {
     this.innerHTML = `
@@ -31,7 +32,7 @@ export class PdfToImage extends BaseComponent {
 
         <div id="mainLayout" class="layout-grid hidden">
           <div class="layout-left">
-            <div class="preview-container" style="max-height: 500px; overflow-y: auto; padding: 1rem;">
+            <div class="preview-container" style="max-height: 600px; overflow-y: auto; padding: 1rem;">
               <div id="thumbnailGrid" class="page-grid">
                 <!-- Thumbnails will be injected here -->
               </div>
@@ -41,36 +42,75 @@ export class PdfToImage extends BaseComponent {
           <div class="layout-right">
             <div class="controls">
               <div class="control-group">
-                <label>Image Format</label>
+                <label>1. Image Format</label>
                 <div class="presets-grid">
                   <button class="preset-btn active" id="pngBtn">
                     <span class="preset-name">PNG</span>
-                    <span class="preset-desc">Lossless, transparent</span>
+                    <span class="preset-desc">Lossless</span>
                   </button>
                   <button class="preset-btn" id="jpgBtn">
                     <span class="preset-name">JPG</span>
-                    <span class="preset-desc">Compressed, smaller</span>
+                    <span class="preset-desc">Compressed</span>
                   </button>
                 </div>
               </div>
 
               <div class="control-group">
-                <label for="scaleInput">Quality (Scale)</label>
+                <label for="scaleInput">2. Quality (Scale)</label>
                 <input type="number" id="scaleInput" value="2" min="1" max="5" step="0.5" />
-                <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">Higher scale means higher resolution but larger file size.</p>
               </div>
 
-              <div class="actions-row" style="flex-direction: column; align-items: stretch; gap: 1rem;">
+              <div class="control-group">
+                <label>3. Download Mode</label>
+                <div class="mode-selection">
+                  <label class="mode-option">
+                    <input type="radio" name="downloadMode" value="selected-individual" />
+                    <span class="mode-card">
+                      <span class="mode-title">Selected Pages</span>
+                      <span class="mode-desc">Individual Files</span>
+                    </span>
+                  </label>
+                  <label class="mode-option">
+                    <input type="radio" name="downloadMode" value="selected-zip" />
+                    <span class="mode-card">
+                      <span class="mode-title">Selected Pages</span>
+                      <span class="mode-desc">Single ZIP</span>
+                    </span>
+                  </label>
+                  <label class="mode-option">
+                    <input type="radio" name="downloadMode" value="all-individual" />
+                    <span class="mode-card">
+                      <span class="mode-title">All Pages</span>
+                      <span class="mode-desc">Individual Files</span>
+                    </span>
+                  </label>
+                  <label class="mode-option">
+                    <input type="radio" name="downloadMode" value="all-zip" checked />
+                    <span class="mode-card">
+                      <span class="mode-title">All Pages</span>
+                      <span class="mode-desc">Single ZIP</span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="actions-row">
                 <button id="convertBtn" class="btn btn-primary">
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                  Convert & Download ZIP
-                </button>
-                <button id="downloadSelectedBtn" class="btn btn-secondary" disabled>
-                  Download Selected
+                  Convert & Download
                 </button>
               </div>
 
+              <p id="selectionWarning" class="warning hidden" style="margin-top: 1rem;">
+                Please select at least one page from the gallery.
+              </p>
+
               ${this.getProgressSection("Converting pages...")}
+
+              <div id="successMessage" class="success-message hidden">
+                <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">🎉 Conversion Complete!</p>
+                <button id="downloadLink" class="btn btn-primary">Download ZIP Archive</button>
+              </div>
             </div>
           </div>
         </div>
@@ -85,7 +125,7 @@ export class PdfToImage extends BaseComponent {
     const jpgBtn = this.querySelector("#jpgBtn") as HTMLElement;
     const scaleInput = this.querySelector("#scaleInput") as HTMLInputElement;
     const convertBtn = this.querySelector("#convertBtn") as HTMLButtonElement;
-    const downloadSelectedBtn = this.querySelector("#downloadSelectedBtn") as HTMLButtonElement;
+    const modeRadios = this.querySelectorAll('input[name="downloadMode"]');
 
     pngBtn.onclick = () => {
       this.format = "png";
@@ -103,8 +143,14 @@ export class PdfToImage extends BaseComponent {
       this.scale = parseFloat(scaleInput.value) || 2.0;
     };
 
-    convertBtn.onclick = () => this.handleConvert(false);
-    downloadSelectedBtn.onclick = () => this.handleConvert(true);
+    modeRadios.forEach(radio => {
+      radio.addEventListener("change", (e) => {
+        this.downloadMode = (e.target as HTMLInputElement).value as any;
+        this.checkSelectionWarning();
+      });
+    });
+
+    convertBtn.onclick = () => this.handleConvert();
 
     // Resume session bind
     const resumeBtn = this.querySelector("#resumeBtn") as HTMLButtonElement;
@@ -113,6 +159,16 @@ export class PdfToImage extends BaseComponent {
     }
 
     this.checkExistingSession();
+  }
+
+  private checkSelectionWarning() {
+    const warning = this.querySelector("#selectionWarning") as HTMLElement;
+    const isSelectedMode = this.downloadMode.startsWith("selected");
+    if (isSelectedMode && this.selectedPages.size === 0) {
+      warning.classList.remove("hidden");
+    } else {
+      warning.classList.add("hidden");
+    }
   }
 
   async checkExistingSession() {
@@ -186,7 +242,7 @@ export class PdfToImage extends BaseComponent {
         const viewport = page.getViewport({ scale: 0.3 });
         canvas.height = viewport.height;
         canvas.width = viewport.width;
-        await page.render({ canvasContext: canvas.getContext("2d") as any, viewport }).promise;
+        await page.render({ canvasContext: canvas.getContext("2d") as any, viewport, canvas }).promise;
 
         pageItem.onclick = () => {
           if (this.selectedPages.has(i)) {
@@ -196,7 +252,7 @@ export class PdfToImage extends BaseComponent {
             this.selectedPages.add(i);
             pageItem.classList.add("selected");
           }
-          (this.querySelector("#downloadSelectedBtn") as HTMLButtonElement).disabled = this.selectedPages.size === 0;
+          this.checkSelectionWarning();
         };
       }
     } catch (err) {
@@ -205,56 +261,91 @@ export class PdfToImage extends BaseComponent {
     }
   }
 
-  async handleConvert(onlySelected: boolean) {
+  async handleConvert() {
     if (!this.selectedFile) return;
+
+    const isSelectedMode = this.downloadMode.startsWith("selected");
+    if (isSelectedMode && this.selectedPages.size === 0) {
+      this.showErrorDialog("Please select at least one page from the gallery.");
+      return;
+    }
 
     const convertBtn = this.querySelector("#convertBtn") as HTMLButtonElement;
     const progressSection = this.querySelector("#progressSection") as HTMLElement;
+    const successMsg = this.querySelector("#successMessage") as HTMLElement;
     
     convertBtn.disabled = true;
     progressSection.classList.remove("hidden");
+    successMsg.classList.add("hidden");
     this.updateProgress(10, "Converting pages to images...");
 
     try {
       const pdfData = new Uint8Array(await this.selectedFile.arrayBuffer());
       const allImages = await convertPdfToImages(pdfData, { format: this.format, scale: this.scale });
       
-      const imagesToExport = onlySelected 
-        ? allImages.filter((_, i) => this.selectedPages.has(i + 1))
-        : allImages;
+      const indicesToExport = isSelectedMode 
+        ? Array.from(this.selectedPages).map(p => p - 1).sort((a,b) => a - b)
+        : allImages.map((_, i) => i);
+
+      const imagesToExport = indicesToExport.map(i => allImages[i]);
 
       if (imagesToExport.length === 0) {
-        throw new Error("No pages selected for export");
+        throw new Error("No pages found for export");
       }
 
-      this.updateProgress(80, "Creating ZIP file...");
+      const isZip = this.downloadMode.endsWith("zip");
 
-      const zip = new JSZip();
-      const baseName = this.selectedFile.name.replace(".pdf", "");
-      
-      imagesToExport.forEach((blob, i) => {
-        const pageNum = onlySelected ? Array.from(this.selectedPages)[i] : i + 1;
-        zip.file(`${baseName}_page_${pageNum}.${this.format}`, blob);
-      });
+      if (isZip) {
+        this.updateProgress(80, "Creating ZIP file...");
+        const zip = new JSZip();
+        const baseName = this.selectedFile.name.replace(".pdf", "");
+        
+        imagesToExport.forEach((blob, i) => {
+          const pageNum = indicesToExport[i] + 1;
+          const ext = this.format === "jpeg" ? "jpg" : "png";
+          zip.file(`${baseName}_page_${pageNum}.${ext}`, blob);
+        });
 
-      const zipBlob = await zip.generateAsync({ type: "blob" });
-      const outputName = generateOutputFilename(this.selectedFile.name, "_images.zip");
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        const outputName = generateOutputFilename(this.selectedFile.name, isSelectedMode ? "_selected_images" : "_images", ".zip");
+        const zipData = new Uint8Array(await zipBlob.arrayBuffer());
 
-      // We use simple download for ZIP
-      const url = URL.createObjectURL(zipBlob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = outputName;
-      link.click();
-      URL.revokeObjectURL(url);
+        this.updateProgress(100, "Done!");
+        this.showSuccess(zipData, outputName, "", ".zip");
+        this.showSuccessDialog(`Successfully converted ${imagesToExport.length} pages to ZIP.`);
+        
+        await this.recordJob("PDF to Image", outputName, zipData, {
+          pageCount: imagesToExport.length,
+          format: this.format,
+          mode: this.downloadMode
+        });
+      } else {
+        // Individual Files
+        this.updateProgress(80, "Downloading files...");
+        const baseName = this.selectedFile.name.replace(".pdf", "");
+        const ext = this.format === "jpeg" ? "jpg" : "png";
 
-      this.updateProgress(100, "Done!");
-      this.showSuccessDialog(`Successfully converted ${imagesToExport.length} pages.`);
-      
-      await this.recordJob("PDF to Image", outputName, new Uint8Array(await zipBlob.arrayBuffer()), {
-        pageCount: imagesToExport.length,
-        format: this.format
-      });
+        for (let i = 0; i < imagesToExport.length; i++) {
+          const pageNum = indicesToExport[i] + 1;
+          const blob = imagesToExport[i];
+          const fileName = `${baseName}_page_${pageNum}${ext}`;
+          
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = fileName;
+          link.click();
+          URL.revokeObjectURL(url);
+          
+          // Small delay to prevent browser download throttling
+          if (imagesToExport.length > 1) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        }
+
+        this.updateProgress(100, "Done!");
+        this.showSuccessDialog(`Successfully triggered download for ${imagesToExport.length} images.`);
+      }
 
     } catch (err: any) {
       logger.error("Conversion failed", err);

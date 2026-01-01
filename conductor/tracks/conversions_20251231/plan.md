@@ -31,6 +31,14 @@ Focus: Implementing the complex document conversions and OCR.
 ## Phase 4: Polish & Dashboard Integration
 Focus: Finalizing the user experience and ensuring all tools are live.
 
-- [~] Task: Update `main.ts` router to handle all new conversion tool IDs
-- [ ] Task: Conduct final E2E tests for the entire conversion suite
-- [ ] Task: Conductor - User Manual Verification 'Phase 4: Polish & Dashboard Integration' (Protocol in workflow.md)
+- [x] Task: Update `main.ts` router to handle all new conversion tool IDs 30c6775
+- [x] Task: Conduct final E2E tests for the entire conversion suite d550fcb
+- [x] Task: Conductor - User Manual Verification 'Phase 4: Polish & Dashboard Integration' (Protocol in workflow.md)
+
+## Phase 5: Live Cloud API Integration
+Focus: Replacing mock logic with real CloudConvert API communication.
+
+- [ ] Task: Implement real CloudConvert job/upload/poll logic in `CloudConversionService.ts`
+- [ ] Task: Add robust error handling for API failures and timeouts
+- [ ] Task: Verify live conversion flow with a real PDF document
+- [ ] Task: Conductor - User Manual Verification 'Phase 5: Live Cloud Integration' (Protocol in workflow.md)

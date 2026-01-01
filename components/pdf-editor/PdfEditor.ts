@@ -3,7 +3,6 @@ import { logger } from "../../utils/logger.ts";
 import { loadPdf, renderPage } from "../../utils/pdfRenderer.ts";
 import { AnnotationManager, type Annotation } from "../../utils/AnnotationManager.ts";
 import { embedAllAnnotations } from "../../utils/pdfEngine.ts";
-import { domToPdfPoint } from "../../utils/coordinates.ts";
 
 import { TextEditor } from "./TextEditor";
 import { RectangleToolEditor } from "./RectangleToolEditor";

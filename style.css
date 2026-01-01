@@ -915,8 +915,11 @@ input[type="number"]:focus {
   background: var(--primary-glow);
   color: var(--primary);
   border: 1px solid var(--primary);
-  top: 2.8rem;
-  font-size: 0.65rem;
+  font-size: 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0.15rem 0.5rem;
 }
 
 .back-btn {

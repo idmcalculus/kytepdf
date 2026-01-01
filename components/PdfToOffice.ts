@@ -15,6 +15,15 @@ export class PdfToOffice extends BaseComponent {
     this.toolKey = `pdf-to-${format}`;
   }
 
+  connectedCallback() {
+    const attrFormat = this.getAttribute("format") as ConversionFormat;
+    if (attrFormat) {
+      this.targetFormat = attrFormat;
+      this.toolKey = `pdf-to-${attrFormat}`;
+    }
+    super.connectedCallback();
+  }
+
   get formatLabel() {
     switch (this.targetFormat) {
       case "docx": return "Word";

@@ -67,6 +67,38 @@ export class ToolDashboard extends HTMLElement {
         active: true,
       },
       {
+        id: "pdf-to-word",
+        name: "PDF to Word",
+        desc: "Convert PDF documents into editable Word files.",
+        icon: "file-text",
+        active: true,
+        isCloud: true,
+      },
+      {
+        id: "word-to-pdf",
+        name: "Word to PDF",
+        desc: "Transform DOCX files into professional PDFs.",
+        icon: "file-up",
+        active: true,
+        isCloud: true,
+      },
+      {
+        id: "pdf-to-excel",
+        name: "PDF to Sheets",
+        desc: "Extract PDF tables into Excel or Google Sheets.",
+        icon: "file-spreadsheet",
+        active: true,
+        isCloud: true,
+      },
+      {
+        id: "pdf-to-pp",
+        name: "PDF to PPT",
+        desc: "Convert PDF pages into PowerPoint slides.",
+        icon: "presentation",
+        active: true,
+        isCloud: true,
+      },
+      {
         id: "pdf-ai",
         name: "AI Analyzer",
         desc: "Chat with your PDF and extract insights using AI.",
@@ -87,38 +119,6 @@ export class ToolDashboard extends HTMLElement {
         desc: "Add text or image watermarks to your document.",
         icon: "stamp",
         active: false,
-      },
-      {
-        id: "pdf-to-word",
-        name: "PDF to Word",
-        desc: "Convert PDF documents into editable Word files.",
-        icon: "file-text",
-        active: false,
-        isCloud: true,
-      },
-      {
-        id: "word-to-pdf",
-        name: "Word to PDF",
-        desc: "Transform DOCX files into professional PDFs.",
-        icon: "file-up",
-        active: false,
-        isCloud: true,
-      },
-      {
-        id: "pdf-to-excel",
-        name: "PDF to Sheets",
-        desc: "Extract PDF tables into Excel or Google Sheets.",
-        icon: "file-spreadsheet",
-        active: false,
-        isCloud: true,
-      },
-      {
-        id: "pdf-to-pp",
-        name: "PDF to PPT",
-        desc: "Convert PDF pages into PowerPoint slides.",
-        icon: "presentation",
-        active: false,
-        isCloud: true,
       },
       {
         id: "protect",
@@ -167,8 +167,18 @@ export class ToolDashboard extends HTMLElement {
             .map(
               (tool) => `
             <div class="tool-card" data-id="${tool.id}">
-              ${tool.active ? "" : '<span class="badge">Coming Soon</span>'}
-              ${tool.isCloud ? '<span class="badge cloud-badge" style="background: var(--primary); top: 2.5rem;">Cloud</span>' : ""}
+              ${
+                !tool.active
+                  ? '<span class="badge">Coming Soon</span>'
+                  : tool.isCloud
+                    ? `
+                <span class="badge cloud-badge">
+                  <i data-lucide="cloud" style="width: 12px; height: 12px;"></i>
+                  Cloud
+                </span>
+              `
+                    : ""
+              }
               <div class="icon-wrapper">
                 <i data-lucide="${tool.icon}"></i>
               </div>

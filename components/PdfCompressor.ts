@@ -320,7 +320,6 @@ export class PdfCompressor extends BaseComponent {
       if (!compressedBytes) throw new Error("Compression failed to produce output");
 
       const finalSizeKb = compressedBytes.length / 1024;
-      const originalSizeKb = this.selectedFile.size / 1024;
       const savedPercent = calculateSavingsPercent(this.selectedFile.size, compressedBytes.length);
 
       (this.querySelector("#finalSizeValue") as HTMLElement).textContent =

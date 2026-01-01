@@ -1,4 +1,5 @@
 import { vi, beforeEach } from "vitest";
+import "fake-indexeddb/auto";
 
 // Polyfill File/Blob.arrayBuffer for jsdom
 if (typeof File !== "undefined" && !File.prototype.arrayBuffer) {

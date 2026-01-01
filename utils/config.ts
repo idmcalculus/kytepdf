@@ -59,10 +59,10 @@ export const config: KyteConfig = {
     workerSrc: "/pdf.worker.min.js",
   },
 
-  // Cloud Conversion API (e.g., CloudConvert or ConvertAPI)
+  // Cloud Conversion Gateway (e.g., Google Cloud Function or Azure Function)
   cloud: {
-    apiKey: import.meta.env.VITE_CLOUD_CONVERT_API_KEY || "",
-    apiEndpoint: import.meta.env.VITE_CLOUD_CONVERT_API_ENDPOINT || "https://api.cloudconvert.com/v2",
+    apiKey: import.meta.env.VITE_CLOUD_GATEWAY_API_KEY || "",
+    apiEndpoint: import.meta.env.VITE_CLOUD_GATEWAY_URL || "",
   },
 
   // App Metadata
