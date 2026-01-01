@@ -908,6 +908,15 @@ input[type="number"]:focus {
   padding: 0.2rem 0.6rem;
   border-radius: 20px;
   text-transform: uppercase;
+  z-index: 5;
+}
+
+.tool-card .badge.cloud-badge {
+  background: var(--primary-glow);
+  color: var(--primary);
+  border: 1px solid var(--primary);
+  top: 2.8rem;
+  font-size: 0.65rem;
 }
 
 .back-btn {
@@ -1264,7 +1273,94 @@ input[type="number"]:focus {
   transform: scale(1);
 }
 
-/* KyteDialog Styles */
+.individual-download {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  width: 28px;
+  height: 28px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  opacity: 0;
+  transform: translateY(-5px);
+}
+
+.page-item:hover .individual-download {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.individual-download:hover {
+  background: var(--primary);
+  border-color: var(--primary);
+  transform: scale(1.1);
+}
+
+/* Mode Selection Styles (PDF to Image) */
+.mode-selection {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.mode-option {
+  cursor: pointer;
+  position: relative;
+}
+
+.mode-option input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+}
+
+.mode-card {
+  display: flex;
+  flex-direction: column;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  transition: all 0.2s ease;
+  text-align: center;
+  height: 100%;
+  justify-content: center;
+}
+
+.mode-option:hover .mode-card {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.mode-option input[type="radio"]:checked + .mode-card {
+  background: rgba(6, 182, 212, 0.1);
+  border-color: var(--primary);
+  box-shadow: 0 0 15px var(--primary-glow);
+}
+
+.mode-title {
+  display: block;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--text);
+  margin-bottom: 0.1rem;
+}
+
+.mode-desc {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+/* Mobile Responsiveness */
+
 .kyte-overlay {
   position: fixed;
   inset: 0;

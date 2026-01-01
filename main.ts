@@ -4,10 +4,13 @@ import "./components/PdfCompressor.ts";
 import "./components/PdfMerge.ts";
 import "./components/PdfSplit.ts";
 import "./components/PdfSign.ts";
+import "./components/PdfToImage.ts";
+import "./components/ImageToPdf.ts";
 import "./components/pdf-editor/PdfEditor.ts";
 import "./components/KyteDialog.ts";
 import "./components/AboutModal.ts";
 import "./components/EmailCollectionModal.ts";
+import "./components/CloudConsentModal.ts";
 import "./components/KyteFooter.ts";
 import { mapError } from "./utils/errorMapper.ts";
 import { logger } from "./utils/logger.ts";
@@ -18,6 +21,21 @@ logger.info("KytePDF Application Starting");
 (window as any).showAbout = () => {
   const aboutModal = document.getElementById("aboutModal") as any;
   if (aboutModal) aboutModal.show();
+};
+
+(window as any).ensureCloudConsent = async () => {
+  const hasConsent = sessionStorage.getItem("kyte_cloud_consent") === "true";
+  if (hasConsent) return true;
+
+  const modal = document.getElementById("cloudConsentModal") as any;
+  if (modal) {
+    const confirmed = await modal.show();
+    if (confirmed) {
+      sessionStorage.setItem("kyte_cloud_consent", "true");
+    }
+    return confirmed;
+  }
+  return false;
 };
 
 // Global Safety Nets (Production-Grade Error Handling)
@@ -76,6 +94,14 @@ function showSign() {
   mainContainer.innerHTML = "<pdf-sign></pdf-sign>";
 }
 
+function showPdfToImage() {
+  mainContainer.innerHTML = "<pdf-to-image></pdf-to-image>";
+}
+
+function showImageToPdf() {
+  mainContainer.innerHTML = "<image-to-pdf></image-to-pdf>";
+}
+
 function showEdit() {
   mainContainer.innerHTML = "<pdf-editor></pdf-editor>";
 }
@@ -91,6 +117,10 @@ window.addEventListener("tool-select", (e: any) => {
     showSplit();
   } else if (e.detail.toolId === "sign") {
     showSign();
+  } else if (e.detail.toolId === "pdf-to-img") {
+    showPdfToImage();
+  } else if (e.detail.toolId === "img-to-pdf") {
+    showImageToPdf();
   } else if (e.detail.toolId === "edit") {
     showEdit();
   }

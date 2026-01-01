@@ -7,6 +7,7 @@ interface Tool {
   desc: string;
   icon: string;
   active: boolean;
+  isCloud?: boolean;
 }
 
 export class ToolDashboard extends HTMLElement {
@@ -71,6 +72,7 @@ export class ToolDashboard extends HTMLElement {
         desc: "Chat with your PDF and extract insights using AI.",
         icon: "sparkles",
         active: false,
+        isCloud: true,
       },
       {
         id: "create-pdf",
@@ -92,6 +94,7 @@ export class ToolDashboard extends HTMLElement {
         desc: "Convert PDF documents into editable Word files.",
         icon: "file-text",
         active: false,
+        isCloud: true,
       },
       {
         id: "word-to-pdf",
@@ -99,6 +102,7 @@ export class ToolDashboard extends HTMLElement {
         desc: "Transform DOCX files into professional PDFs.",
         icon: "file-up",
         active: false,
+        isCloud: true,
       },
       {
         id: "pdf-to-excel",
@@ -106,6 +110,7 @@ export class ToolDashboard extends HTMLElement {
         desc: "Extract PDF tables into Excel or Google Sheets.",
         icon: "file-spreadsheet",
         active: false,
+        isCloud: true,
       },
       {
         id: "pdf-to-pp",
@@ -113,6 +118,7 @@ export class ToolDashboard extends HTMLElement {
         desc: "Convert PDF pages into PowerPoint slides.",
         icon: "presentation",
         active: false,
+        isCloud: true,
       },
       {
         id: "protect",
@@ -162,6 +168,7 @@ export class ToolDashboard extends HTMLElement {
               (tool) => `
             <div class="tool-card" data-id="${tool.id}">
               ${tool.active ? "" : '<span class="badge">Coming Soon</span>'}
+              ${tool.isCloud ? '<span class="badge cloud-badge" style="background: var(--primary); top: 2.5rem;">Cloud</span>' : ""}
               <div class="icon-wrapper">
                 <i data-lucide="${tool.icon}"></i>
               </div>
@@ -210,10 +217,16 @@ export class ToolDashboard extends HTMLElement {
 
     // Add click listeners
     this.querySelectorAll(".tool-card").forEach((card) => {
-      card.addEventListener("click", () => {
+      card.addEventListener("click", async () => {
         const toolId = card.getAttribute("data-id");
         const tool = this.tools.find((t) => t.id === toolId);
         if (tool?.active) {
+          // Check for cloud consent if necessary
+          if (tool.isCloud) {
+            const consented = await (window as any).ensureCloudConsent();
+            if (!consented) return;
+          }
+
           this.dispatchEvent(
             new CustomEvent("tool-select", {
               detail: { toolId },
