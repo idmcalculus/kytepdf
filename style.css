@@ -89,7 +89,7 @@ footer {
 .about-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 1.5rem;
   border-bottom: 1px solid var(--border);
   padding-bottom: 1rem;
@@ -101,6 +101,11 @@ footer {
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+.about-header .btn-close {
+  margin-top: 0;
+  flex-shrink: 0;
 }
 
 .about-copy {
@@ -115,11 +120,16 @@ footer {
   border: 1px solid var(--border);
   border-radius: 1rem;
   padding: 1.25rem;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .about-credits p {
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.75rem !important;
   font-weight: 600;
 }
 
@@ -131,16 +141,56 @@ footer {
 .social-icons {
   display: flex;
   gap: 1rem;
+  align-items: center;
+  justify-content: center;
 }
 
 .social-icons a {
-  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--text-muted);
-  transition: color 0.2s;
+  transition: color 0.2s, transform 0.2s;
 }
 
 .social-icons a:hover {
-  color: white;
+  color: var(--primary);
+  transform: scale(1.1);
+}
+
+.social-icons svg {
+  width: 20px;
+  height: 20px;
+}
+
+.about-contribute {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.about-contribute p {
+  margin: 0 !important;
+  padding: 0;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.about-contribute a {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.about-contribute a:hover {
+  text-decoration: underline;
 }
 
 .about-support {

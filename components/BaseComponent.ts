@@ -400,7 +400,7 @@ export class BaseComponent extends HTMLElement {
 						suggestedName,
 						types: [{ description: "PDF Document", accept: { "application/pdf": [".pdf"] } }],
 					});
-					await handle.createWritable();
+					const writable = await handle.createWritable();
 					await writable.write(pdfBytes);
 					await writable.close();
 					logger.info("File saved successfully via File System Access API");
