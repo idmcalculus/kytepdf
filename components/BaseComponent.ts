@@ -1,6 +1,7 @@
 import { mapError } from "../utils/errorMapper.ts";
 import { logger } from "../utils/logger.ts";
 import { persistence } from "../utils/persistence.ts";
+import { telemetry } from "../utils/telemetry.ts";
 
 export interface DialogOptions {
 	title: string;
@@ -386,9 +387,6 @@ export class BaseComponent extends HTMLElement {
 	// Standard PDF Saving Logic
 	async savePdf(pdfBytes: Uint8Array | null, originalName: string, suffix = "_modified") {
 		try {
-			// Trigger email collection before download if not already done
-			await this.ensureEmailCollected();
-
 			const suggestedName = (originalName || "document.pdf").replace(".pdf", `${suffix}.pdf`);
 			logger.info("Attempting to save PDF", { suggestedName, size: pdfBytes?.length });
 
@@ -402,14 +400,20 @@ export class BaseComponent extends HTMLElement {
 						suggestedName,
 						types: [{ description: "PDF Document", accept: { "application/pdf": [".pdf"] } }],
 					});
-					const writable = await handle.createWritable();
+					await handle.createWritable();
 					await writable.write(pdfBytes);
 					await writable.close();
 					logger.info("File saved successfully via File System Access API");
+					telemetry.logEvent("document", "save_pdf_success", {
+						method: "FileSystemAccess",
+						fileName: suggestedName,
+						tool: (this as any).toolKey,
+					});
 					return true;
 				} catch (err: any) {
 					if (err.name === "AbortError") {
 						logger.info("Save operation aborted by user");
+						telemetry.logEvent("document", "save_pdf_aborted", { tool: (this as any).toolKey });
 						return false;
 					}
 					throw err;
@@ -423,6 +427,11 @@ export class BaseComponent extends HTMLElement {
 				link.click();
 				setTimeout(() => URL.revokeObjectURL(url), 100);
 				logger.info("File download triggered via anchor link");
+				telemetry.logEvent("document", "save_pdf_success", {
+					method: "AnchorLink",
+					fileName: suggestedName,
+					tool: (this as any).toolKey,
+				});
 				return true;
 			}
 		} catch (err: any) {
@@ -477,14 +486,17 @@ export class BaseComponent extends HTMLElement {
 		});
 	}
 
+	private hasAskedForEmail = false;
+
 	/**
 	 * Ensures we've asked for an email at least once.
 	 * Returns true if we should proceed with the next action.
 	 */
 	async ensureEmailCollected() {
 		const alreadyCollected = localStorage.getItem("kyte_email_collected");
-		if (alreadyCollected) return true;
+		if (alreadyCollected || this.hasAskedForEmail) return true;
 
+		this.hasAskedForEmail = true;
 		const emailModal = document.getElementById("emailModal") as any;
 		if (emailModal) {
 			const result = await emailModal.show();

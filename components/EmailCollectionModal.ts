@@ -1,3 +1,5 @@
+import { telemetry } from "../utils/telemetry.ts";
+
 export class EmailCollectionModal extends HTMLElement {
 	private activeResolve: ((value: string | null) => void) | null = null;
 
@@ -25,13 +27,25 @@ export class EmailCollectionModal extends HTMLElement {
             </div>
           </form>
           
-          <p class="privacy-note">Privacy first: We only use your email for product updates and account features.</p>
+          <p class="privacy-note">Privacy first: We only use your email for product updates and account features. Read our <a href="#" id="privacyPolicyLink">Privacy Policy</a>.</p>
         </div>
       </div>
     `;
 
 		const form = this.querySelector("#emailForm") as HTMLFormElement;
 		const skipBtn = this.querySelector("#skipEmail") as HTMLElement;
+		const privacyLink = this.querySelector("#privacyPolicyLink") as HTMLElement;
+
+		privacyLink.onclick = (e) => {
+			e.preventDefault();
+			const dialog = document.getElementById("globalDialog") as any;
+			dialog.show({
+				title: "Privacy Policy",
+				message:
+					"KytePDF is built with a privacy-first mindset. Your documents are processed locally in your browser and are never uploaded to our servers. Email addresses are stored securely and used only for the purposes you opt into.",
+				type: "info",
+			});
+		};
 
 		form.onsubmit = (e) => {
 			e.preventDefault();
@@ -58,11 +72,13 @@ export class EmailCollectionModal extends HTMLElement {
 	}
 
 	private handleSubmit(email: string) {
+		telemetry.logEvent("growth", "email_signup", { email_provided: true });
 		this.dispatchEvent(new CustomEvent("email-submitted", { detail: { email }, bubbles: true }));
 		this.close(email);
 	}
 
 	private handleSkip() {
+		telemetry.logEvent("growth", "email_signup_skipped", { email_provided: false });
 		this.dispatchEvent(new CustomEvent("modal-dismissed", { bubbles: true }));
 		this.close(null);
 	}
