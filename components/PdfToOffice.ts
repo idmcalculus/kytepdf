@@ -1,13 +1,24 @@
 import { type ConversionFormat, cloudConversionService } from "../utils/CloudConversionService.ts";
+import {
+  type ConversionQuality,
+  type ConversionResult,
+  localConverter,
+} from "../utils/LocalConverter.ts";
 import { logger } from "../utils/logger.ts";
 import { generateOutputFilename } from "../utils/pdfUtils.ts";
+import { PdfPreviewController } from "../utils/pdfPreview.ts";
 import { persistence } from "../utils/persistence.ts";
 import { BaseComponent } from "./BaseComponent.ts";
+
+type ConversionMode = "local" | "cloud";
 
 export class PdfToOffice extends BaseComponent {
   protected toolKey = "pdf-to-office";
   private targetFormat: ConversionFormat = "docx";
   private ocrEnabled = false;
+  private conversionMode: ConversionMode = "local";
+  private lastLocalQuality: ConversionQuality | null = null;
+  private previewController: PdfPreviewController | null = null;
 
   constructor(format: ConversionFormat = "docx") {
     super();
@@ -21,6 +32,7 @@ export class PdfToOffice extends BaseComponent {
       this.targetFormat = attrFormat;
       this.toolKey = `pdf-to-${attrFormat}`;
     }
+    this.conversionMode = this.supportsLocal ? "local" : "cloud";
     super.connectedCallback();
   }
 
@@ -35,6 +47,10 @@ export class PdfToOffice extends BaseComponent {
       default:
         return this.targetFormat.toUpperCase();
     }
+  }
+
+  get supportsLocal() {
+    return this.targetFormat === "docx" || this.targetFormat === "xlsx";
   }
 
   render() {
@@ -56,16 +72,46 @@ export class PdfToOffice extends BaseComponent {
 
         <div id="mainLayout" class="layout-grid hidden">
           <div class="layout-left">
-             <div class="preview-container" style="display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.2); border-radius: 1rem; min-height: 300px;">
-                <div style="text-align: center; color: var(--text-muted);">
-                  <i data-lucide="file-text" style="width: 64px; height: 64px; margin-bottom: 1rem; opacity: 0.5;"></i>
-                  <p>Ready to convert to ${this.formatLabel}</p>
-                </div>
-             </div>
+            <div id="previewSection" class="preview-container">
+              <div class="preview-viewport">
+                <canvas id="previewCanvas"></canvas>
+                <button id="prevPage" class="nav-btn prev">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
+                <button id="nextPage" class="nav-btn next">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
+              </div>
+              <div class="preview-info">
+                <span id="pageIndicator">Page 1 of 1</span>
+              </div>
+            </div>
           </div>
 
           <div class="layout-right">
             <div class="controls">
+              <div class="control-group">
+                <label>Conversion Mode</label>
+                <div class="presets-grid" id="modeToggle">
+                  <button id="modeLocalBtn" class="preset-btn">
+                    <span class="preset-name">Local</span>
+                    <span class="preset-desc">Runs in your browser</span>
+                  </button>
+                  <button id="modeCloudBtn" class="preset-btn">
+                    <span class="preset-name">Cloud</span>
+                    <span class="preset-desc">Best quality</span>
+                  </button>
+                </div>
+                <div id="localWarning" class="warning hidden">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+                  <span>Local conversion is best-effort and may miss complex layouts. Try cloud mode for higher fidelity.</span>
+                </div>
+                <div id="qualityWarning" class="warning hidden" style="align-items: center; justify-content: space-between;">
+                  <span>Local results look limited. For higher fidelity, switch to cloud conversion.</span>
+                  <button id="tryCloudBtn" class="btn btn-secondary btn-sm" style="width: auto;">Try Cloud</button>
+                </div>
+              </div>
+
               <div class="control-group">
                 <label>Options</label>
                 <div class="preset-btn active" style="flex-direction: row; justify-content: space-between; align-items: center; padding: 1rem; cursor: default;">
@@ -80,7 +126,7 @@ export class PdfToOffice extends BaseComponent {
               <div class="actions-row">
                 <button id="convertBtn" class="btn btn-primary">
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a3.5 3.5 0 0 0 .5-6.91V11a5 5 0 0 0-10 0v1.09a3.5 3.5 0 0 0 .5 6.91Z"/><path d="M12 13v4"/><path d="m10 15 2 2 2-2"/></svg>
-                  Start Cloud Conversion
+                  <span id="convertLabel">Start Conversion</span>
                 </button>
               </div>
 
@@ -104,14 +150,23 @@ export class PdfToOffice extends BaseComponent {
 
     const convertBtn = this.querySelector("#convertBtn") as HTMLButtonElement;
     const ocrToggle = this.querySelector("#ocrToggle") as HTMLInputElement;
+    const modeLocalBtn = this.querySelector("#modeLocalBtn") as HTMLButtonElement;
+    const modeCloudBtn = this.querySelector("#modeCloudBtn") as HTMLButtonElement;
+    const tryCloudBtn = this.querySelector("#tryCloudBtn") as HTMLButtonElement;
 
     ocrToggle.onchange = () => {
       this.ocrEnabled = ocrToggle.checked;
     };
 
     convertBtn.onclick = () => this.handleConvert();
+    modeLocalBtn.onclick = () => this.setConversionMode("local");
+    modeCloudBtn.onclick = () => this.setConversionMode("cloud");
+    tryCloudBtn.onclick = () => this.setConversionMode("cloud");
+
+    this.previewController = this.createPreviewController();
 
     this.checkExistingSession();
+    this.updateModeUI();
   }
 
   async handleFiles(files: FileList) {
@@ -121,11 +176,100 @@ export class PdfToOffice extends BaseComponent {
     this.selectedFile = file;
     await persistence.set(this.toolKey, file);
 
+    if (!this.previewController) {
+      this.previewController = this.createPreviewController();
+    }
+
     (this.querySelector("#fileName") as HTMLElement).textContent = file.name;
     (this.querySelector("#fileSize") as HTMLElement).textContent = this.formatBytes(file.size);
     (this.querySelector("#fileInfo") as HTMLElement).classList.remove("hidden");
     (this.querySelector("#dropZone") as HTMLElement).classList.add("hidden");
     (this.querySelector("#mainLayout") as HTMLElement).classList.remove("hidden");
+
+    try {
+      await this.previewController?.load(this.selectedFile);
+    } catch (err) {
+      logger.error("Preview load error", err);
+      this.showErrorDialog(
+        "Could not load PDF preview. The file might be corrupted, protected, or too complex for the browser.",
+      );
+    }
+
+    this.updateModeUI();
+  }
+
+  private createPreviewController() {
+    const canvas = this.querySelector("#previewCanvas") as HTMLCanvasElement | null;
+    if (!canvas) return null;
+    const pageIndicator = this.querySelector("#pageIndicator") as HTMLElement | null;
+    const prevButton = this.querySelector("#prevPage") as HTMLButtonElement | null;
+    const nextButton = this.querySelector("#nextPage") as HTMLButtonElement | null;
+
+    const controller = new PdfPreviewController({
+      canvas,
+      pageIndicator,
+      prevButton,
+      nextButton,
+      scale: 0.8,
+    });
+
+    prevButton?.addEventListener("click", () => controller.prev());
+    nextButton?.addEventListener("click", () => controller.next());
+    return controller;
+  }
+
+  private setConversionMode(mode: ConversionMode) {
+    if (mode === "local" && !this.supportsLocal) {
+      this.showErrorDialog("Local conversion is not available for PPT yet.");
+      return;
+    }
+    this.conversionMode = mode;
+    if (mode === "local") {
+      this.ocrEnabled = false;
+    }
+    this.lastLocalQuality = null;
+    this.updateModeUI();
+  }
+
+  private updateModeUI() {
+    const modeLocalBtn = this.querySelector("#modeLocalBtn") as HTMLButtonElement | null;
+    const modeCloudBtn = this.querySelector("#modeCloudBtn") as HTMLButtonElement | null;
+    const localWarning = this.querySelector("#localWarning") as HTMLElement | null;
+    const qualityWarning = this.querySelector("#qualityWarning") as HTMLElement | null;
+    const convertLabel = this.querySelector("#convertLabel") as HTMLElement | null;
+    const ocrToggle = this.querySelector("#ocrToggle") as HTMLInputElement | null;
+
+    if (modeLocalBtn) {
+      modeLocalBtn.disabled = !this.supportsLocal;
+      modeLocalBtn.classList.toggle("active", this.conversionMode === "local");
+      if (!this.supportsLocal) {
+        modeLocalBtn.title = "Local mode is not available for this format.";
+      } else {
+        modeLocalBtn.title = "";
+      }
+    }
+    if (modeCloudBtn) {
+      modeCloudBtn.classList.toggle("active", this.conversionMode === "cloud");
+    }
+    if (localWarning) {
+      localWarning.classList.toggle("hidden", this.conversionMode !== "local");
+    }
+    if (qualityWarning) {
+      qualityWarning.classList.toggle(
+        "hidden",
+        this.conversionMode !== "local" || this.lastLocalQuality !== "poor",
+      );
+    }
+    if (convertLabel) {
+      convertLabel.textContent =
+        this.conversionMode === "local" ? "Start Local Conversion" : "Start Cloud Conversion";
+    }
+    if (ocrToggle) {
+      ocrToggle.disabled = this.conversionMode === "local";
+      if (this.conversionMode === "local") {
+        ocrToggle.checked = false;
+      }
+    }
   }
 
   async checkExistingSession() {
@@ -165,33 +309,101 @@ export class PdfToOffice extends BaseComponent {
       convertBtn.disabled = true;
       progressSection.classList.remove("hidden");
       successMsg.classList.add("hidden");
-      this.updateProgress(20, "Uploading to secure cloud...");
-
-      const resultBytes = await cloudConversionService.convertFile(
-        this.selectedFile,
-        this.targetFormat,
-        { ocr: this.ocrEnabled },
-      );
-
-      this.updateProgress(100, "Conversion complete!");
-
-      const ext = `.${this.targetFormat}`;
-      const outputName = generateOutputFilename(this.selectedFile.name, "_converted", ext);
-
-      this.showSuccess(resultBytes, outputName, "", ext);
-      this.showSuccessDialog(`Your ${this.formatLabel} file is ready.`);
-
-      await this.recordJob(`PDF to ${this.formatLabel}`, outputName, resultBytes, {
-        ocr: this.ocrEnabled,
-        format: this.targetFormat,
-      });
+      if (this.conversionMode === "local") {
+        await this.handleLocalConvert();
+      } else {
+        await this.handleCloudConvert();
+      }
     } catch (err: any) {
-      logger.error("Cloud conversion failed", err);
+      logger.error("Conversion failed", err);
       this.showErrorDialog(`Conversion failed: ${err.message}`);
     } finally {
       convertBtn.disabled = false;
       progressSection.classList.add("hidden");
     }
+  }
+
+  private async handleCloudConvert() {
+    if ((window as any).ensureCloudConsent) {
+      const consented = await (window as any).ensureCloudConsent();
+      if (!consented) return;
+    }
+
+    this.lastLocalQuality = null;
+    this.updateModeUI();
+    this.updateProgress(20, "Uploading to secure cloud...");
+
+    const resultBytes = await cloudConversionService.convertFile(
+      this.selectedFile as File,
+      this.targetFormat,
+      { ocr: this.ocrEnabled },
+    );
+
+    this.updateProgress(100, "Conversion complete!");
+
+    const ext = `.${this.targetFormat}`;
+    const outputName = generateOutputFilename(
+      this.selectedFile?.name || "document.pdf",
+      "_converted",
+      ext,
+    );
+
+    this.showSuccess(resultBytes, outputName, "", ext);
+    this.showSuccessDialog(`Your ${this.formatLabel} file is ready.`);
+
+    await this.recordJob(`PDF to ${this.formatLabel}`, outputName, resultBytes, {
+      ocr: this.ocrEnabled,
+      format: this.targetFormat,
+      mode: "cloud",
+    });
+  }
+
+  private async handleLocalConvert() {
+    if (!this.supportsLocal) {
+      this.showErrorDialog("Local conversion is not available for this format.");
+      return;
+    }
+
+    this.updateProgress(10, "Preparing local conversion...");
+    const arrayBuffer = await (this.selectedFile as File).arrayBuffer();
+    const pdfBytes = new Uint8Array(arrayBuffer);
+
+    let result: ConversionResult;
+    if (this.targetFormat === "docx") {
+      this.updateProgress(30, "Extracting text locally...");
+      result = await localConverter.pdfToWord(pdfBytes);
+    } else if (this.targetFormat === "xlsx") {
+      this.updateProgress(30, "Extracting tables locally...");
+      result = await localConverter.pdfToExcel(pdfBytes);
+    } else {
+      throw new Error("Local conversion is only available for Word or Excel.");
+    }
+
+    if (!result.success || !result.data) {
+      throw new Error("Local conversion failed.");
+    }
+
+    this.lastLocalQuality = result.quality;
+    this.updateModeUI();
+    this.updateProgress(100, "Conversion complete!");
+
+    const ext = `.${this.targetFormat}`;
+    const outputName = generateOutputFilename(
+      this.selectedFile?.name || "document.pdf",
+      "_converted",
+      ext,
+    );
+
+    this.showSuccess(result.data, outputName, "", ext);
+    this.showSuccessDialog(`Your ${this.formatLabel} file is ready.`);
+
+    await this.recordJob(`PDF to ${this.formatLabel}`, outputName, result.data, {
+      ocr: false,
+      format: this.targetFormat,
+      mode: "local",
+      quality: result.quality,
+      warnings: result.warnings,
+    });
   }
 }
 

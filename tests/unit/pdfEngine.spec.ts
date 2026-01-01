@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const pageMock = vi.hoisted(() => ({
+  drawText: vi.fn(),
+  drawRectangle: vi.fn(),
+  drawLine: vi.fn(),
+  drawImage: vi.fn(),
+  getSize: vi.fn().mockReturnValue({ width: 600, height: 800 }),
+}));
+
 // Mock dependency modules before importing they are used
 vi.mock("../../utils/logger", () => ({
   logger: {
@@ -32,13 +40,10 @@ vi.mock("../../utils/pdfConfig", () => {
         save: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
       }),
       load: vi.fn().mockResolvedValue({
-        getPages: vi.fn().mockReturnValue([
-          {
-            drawText: vi.fn(),
-            getSize: vi.fn().mockReturnValue({ width: 600, height: 800 }),
-          },
-        ]),
+        getPages: vi.fn().mockReturnValue([pageMock]),
         embedFont: vi.fn().mockResolvedValue({}),
+        embedPng: vi.fn().mockResolvedValue({}),
+        embedJpg: vi.fn().mockResolvedValue({}),
         save: vi.fn().mockResolvedValue(new Uint8Array([4, 5, 6])),
       }),
     },
@@ -137,5 +142,61 @@ describe("pdfEngine", () => {
 
     expect(result).toBeInstanceOf(Uint8Array);
     expect(result).toEqual(new Uint8Array([4, 5, 6])); // Value from mock
+  });
+
+  it("should embed highlight and line annotations into a PDF", async () => {
+    const pdfData = new Uint8Array([1, 2, 3]);
+    const annotations = [
+      {
+        id: "highlight-1",
+        type: "highlight" as const,
+        pageIndex: 0,
+        x: 10,
+        y: 20,
+        width: 120,
+        height: 24,
+        style: { color: "#ffff00", opacity: 0.3 },
+      },
+      {
+        id: "freehand-1",
+        type: "freehand" as const,
+        pageIndex: 0,
+        x: 50,
+        y: 60,
+        points: [
+          { x: 0, y: 0 },
+          { x: 30, y: 10 },
+          { x: 60, y: 20 },
+        ],
+        style: { color: "#111827", strokeWidth: 2, opacity: 1 },
+      },
+      {
+        id: "strike-1",
+        type: "strikethrough" as const,
+        pageIndex: 0,
+        x: 40,
+        y: 100,
+        width: 80,
+        height: 12,
+        style: { color: "#111827", strokeWidth: 2 },
+      },
+      {
+        id: "underline-1",
+        type: "underline" as const,
+        pageIndex: 0,
+        x: 40,
+        y: 140,
+        width: 90,
+        height: 12,
+        style: { color: "#111827", strokeWidth: 2 },
+      },
+    ];
+
+    const { embedAllAnnotations } = await import("../../utils/pdfEngine");
+    const result = await embedAllAnnotations(pdfData, annotations);
+
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(pageMock.drawRectangle).toHaveBeenCalled();
+    expect(pageMock.drawLine).toHaveBeenCalled();
   });
 });

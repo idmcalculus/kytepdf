@@ -1,11 +1,14 @@
+import type { HistoryAction, HistoryManager } from "./HistoryManager";
+
 export interface Annotation {
   id: string;
-  type: "text" | "image" | "rectangle";
+  type: "text" | "image" | "rectangle" | "freehand" | "highlight" | "strikethrough" | "underline";
   pageIndex: number;
   x: number; // PDF coordinates
   y: number; // PDF coordinates
   width?: number;
   height?: number;
+  points?: Array<{ x: number; y: number }>;
   content?: string; // For text or image data URL
   style?: {
     color?: string;
@@ -19,33 +22,98 @@ export interface Annotation {
 
 export class AnnotationManager {
   private annotations: Map<string, Annotation> = new Map();
+  private historyManager: HistoryManager | null;
+
+  constructor(historyManager: HistoryManager | null = null) {
+    this.historyManager = historyManager;
+  }
+
+  setHistoryManager(historyManager: HistoryManager | null) {
+    this.historyManager = historyManager;
+  }
+
+  private cloneAnnotation(annotation: Annotation): Annotation {
+    return {
+      ...annotation,
+      style: annotation.style ? { ...annotation.style } : undefined,
+      points: annotation.points ? annotation.points.map((point) => ({ ...point })) : undefined,
+    };
+  }
+
+  private recordHistory(action: HistoryAction, recordHistory: boolean) {
+    if (!recordHistory || !this.historyManager) return;
+    this.historyManager.push(action);
+  }
 
   /**
    * Adds a new annotation and returns its unique ID
    */
-  addAnnotation(ann: Omit<Annotation, "id">): string {
-    const id = crypto.randomUUID();
+  addAnnotation(
+    ann: Omit<Annotation, "id">,
+    options: { id?: string; recordHistory?: boolean } = {},
+  ): string {
+    const id = options.id ?? crypto.randomUUID();
     const newAnnotation: Annotation = { ...ann, id };
     this.annotations.set(id, newAnnotation);
+    this.recordHistory(
+      {
+        type: "add",
+        annotationId: id,
+        previousState: null,
+        newState: this.cloneAnnotation(newAnnotation),
+        timestamp: Date.now(),
+      },
+      options.recordHistory !== false,
+    );
     return id;
   }
 
   /**
    * Updates an existing annotation
    */
-  updateAnnotation(id: string, updates: Partial<Omit<Annotation, "id" | "pageIndex">>): boolean {
+  updateAnnotation(
+    id: string,
+    updates: Partial<Omit<Annotation, "id" | "pageIndex">>,
+    options: { recordHistory?: boolean } = {},
+  ): boolean {
     const existing = this.annotations.get(id);
     if (!existing) return false;
 
-    this.annotations.set(id, { ...existing, ...updates });
+    const previousState = this.cloneAnnotation(existing);
+    const updated = { ...existing, ...updates };
+    this.annotations.set(id, updated);
+    this.recordHistory(
+      {
+        type: "update",
+        annotationId: id,
+        previousState,
+        newState: this.cloneAnnotation(updated),
+        timestamp: Date.now(),
+      },
+      options.recordHistory !== false,
+    );
     return true;
   }
 
   /**
    * Removes an annotation by ID
    */
-  removeAnnotation(id: string): boolean {
-    return this.annotations.delete(id);
+  removeAnnotation(id: string, options: { recordHistory?: boolean } = {}): boolean {
+    const existing = this.annotations.get(id);
+    if (!existing) return false;
+
+    this.annotations.delete(id);
+    this.recordHistory(
+      {
+        type: "remove",
+        annotationId: id,
+        previousState: this.cloneAnnotation(existing),
+        newState: null,
+        timestamp: Date.now(),
+      },
+      options.recordHistory !== false,
+    );
+    return true;
   }
 
   /**

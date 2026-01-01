@@ -1,21 +1,37 @@
 import { type Annotation, AnnotationManager } from "../../utils/AnnotationManager.ts";
+import { type HistoryAction, HistoryManager } from "../../utils/HistoryManager.ts";
 import { logger } from "../../utils/logger.ts";
 import { embedAllAnnotations } from "../../utils/pdfEngine.ts";
 import { loadPdf, renderPage } from "../../utils/pdfRenderer.ts";
 import { BaseComponent } from "../BaseComponent.ts";
+import { FreehandEditor } from "./FreehandEditor";
+import { HighlighterEditor } from "./HighlighterEditor";
 import { ImageEditor } from "./ImageEditor";
 import { RectangleToolEditor } from "./RectangleToolEditor";
+import { StrikethroughEditor } from "./StrikethroughEditor";
 import { TextEditor } from "./TextEditor";
 import type { EditorTool } from "./types";
+import { UnderlineEditor } from "./UnderlineEditor";
 
 const TARGET_WIDTH = 800;
 
+type TextSelectionSnapshot = {
+  annotationId: string;
+  start: number;
+  end: number;
+};
+
 export class PdfEditor extends BaseComponent {
   protected toolKey = "edit-pdf";
-  private annotationManager: AnnotationManager = new AnnotationManager();
+  private historyManager: HistoryManager = new HistoryManager();
+  private annotationManager: AnnotationManager = new AnnotationManager(this.historyManager);
   private activeTool: EditorTool | null = null;
   private tools: Map<string, EditorTool> = new Map();
   private selectedAnnotationId: string | null = null;
+  private pendingTextSelection: TextSelectionSnapshot | null = null;
+  private pointerActiveTool: EditorTool | null = null;
+  private pointerPageWrapper: HTMLElement | null = null;
+  private suppressNextClick = false;
 
   connectedCallback() {
     super.connectedCallback();
@@ -33,6 +49,10 @@ export class PdfEditor extends BaseComponent {
     this.tools.set("addTextBtn", new TextEditor(context));
     this.tools.set("addRectBtn", new RectangleToolEditor(context));
     this.tools.set("addImageBtn", new ImageEditor(context));
+    this.tools.set("addFreehandBtn", new FreehandEditor(context));
+    this.tools.set("addHighlightBtn", new HighlighterEditor(context));
+    this.tools.set("addStrikeBtn", new StrikethroughEditor(context));
+    this.tools.set("addUnderlineBtn", new UnderlineEditor(context));
   }
 
   render() {
@@ -56,10 +76,31 @@ export class PdfEditor extends BaseComponent {
               <button id="addRectBtn" class="tool-btn" title="Add Rectangle">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></svg>
               </button>
+              <button id="addFreehandBtn" class="tool-btn" title="Freehand Draw">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="m2 2 5 2.5"/><path d="m16 14.5 5 2.5"/></svg>
+              </button>
+              <button id="addHighlightBtn" class="tool-btn" title="Highlight">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11 6 6"/><path d="m12 8 4-4 4 4-4 4-4-4z"/><path d="M2 20h6"/><path d="M7 20l4-4"/></svg>
+              </button>
+              <button id="addStrikeBtn" class="tool-btn" title="Strikethrough">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="12" x2="20" y2="12"/><path d="M7 6h10"/><path d="M7 18h6"/></svg>
+              </button>
+              <button id="addUnderlineBtn" class="tool-btn" title="Underline">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v6a6 6 0 0 0 12 0V4"/><line x1="4" y1="20" x2="20" y2="20"/></svg>
+              </button>
               <input type="file" id="imageInput" class="hidden" accept="image/png,image/jpeg" />
             </div>
             
             <div class="toolbar-spacer"></div>
+
+            <div class="toolbar-group">
+              <button id="undoBtn" class="tool-btn" title="Undo" aria-label="Undo" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-4"/></svg>
+              </button>
+              <button id="redoBtn" class="tool-btn" title="Redo" aria-label="Redo" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h4"/></svg>
+              </button>
+            </div>
             
             <div class="toolbar-group">
               <button id="saveBtn" class="btn btn-primary btn-sm" style="width: auto;">
@@ -145,6 +186,30 @@ export class PdfEditor extends BaseComponent {
                   </button>
                 </div>
               </div>
+              <div id="lineProperties" class="prop-section hidden">
+                <div class="prop-row">
+                  <label>Color</label>
+                  <input type="color" id="lineColorPicker" value="#000000">
+                </div>
+                <div class="prop-row">
+                  <label>Width</label>
+                  <input type="number" id="lineWidthInput" min="1" max="12" value="2">
+                </div>
+                <div class="prop-row">
+                  <label>Opacity</label>
+                  <input type="range" id="lineOpacityInput" min="0" max="1" step="0.1" value="1">
+                </div>
+              </div>
+              <div id="highlightProperties" class="prop-section hidden">
+                <div class="prop-row">
+                  <label>Color</label>
+                  <input type="color" id="highlightColorPicker" value="#ffff00">
+                </div>
+                <div class="prop-row">
+                  <label>Opacity</label>
+                  <input type="range" id="highlightOpacityInput" min="0" max="1" step="0.1" value="0.3">
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -180,8 +245,17 @@ export class PdfEditor extends BaseComponent {
           tool.onActivate();
 
           workspace.className = "editor-workspace";
-          if (btn.id === "addTextBtn") workspace.classList.add("cursor-text-tool");
-          else if (btn.id === "addRectBtn") workspace.classList.add("cursor-crosshair");
+          if (btn.id === "addTextBtn") {
+            workspace.classList.add("cursor-text-tool");
+          } else if (
+            btn.id === "addRectBtn" ||
+            btn.id === "addFreehandBtn" ||
+            btn.id === "addHighlightBtn" ||
+            btn.id === "addStrikeBtn" ||
+            btn.id === "addUnderlineBtn"
+          ) {
+            workspace.classList.add("cursor-crosshair");
+          }
         }
       });
     });
@@ -208,12 +282,19 @@ export class PdfEditor extends BaseComponent {
     const shapeBorderInput = this.querySelector("#shapeBorderInput") as HTMLInputElement;
     const shapeOpacityInput = this.querySelector("#shapeOpacityInput") as HTMLInputElement;
     const imageOpacityInput = this.querySelector("#imageOpacityInput") as HTMLInputElement;
+    const lineColorPicker = this.querySelector("#lineColorPicker") as HTMLInputElement;
+    const lineWidthInput = this.querySelector("#lineWidthInput") as HTMLInputElement;
+    const lineOpacityInput = this.querySelector("#lineOpacityInput") as HTMLInputElement;
+    const highlightColorPicker = this.querySelector("#highlightColorPicker") as HTMLInputElement;
+    const highlightOpacityInput = this.querySelector("#highlightOpacityInput") as HTMLInputElement;
 
     const rotateLeftBtn = this.querySelector("#rotateLeftBtn");
     const rotateRightBtn = this.querySelector("#rotateRightBtn");
     const zoomInBtn = this.querySelector("#zoomInBtn");
     const zoomOutBtn = this.querySelector("#zoomOutBtn");
     const resetImageBtn = this.querySelector("#resetImageBtn");
+    const undoBtn = this.querySelector("#undoBtn") as HTMLButtonElement | null;
+    const redoBtn = this.querySelector("#redoBtn") as HTMLButtonElement | null;
 
     fontSelect?.addEventListener("change", () =>
       this.updateSelectedAnnotation({ font: fontSelect.value }),
@@ -235,6 +316,21 @@ export class PdfEditor extends BaseComponent {
     );
     imageOpacityInput?.addEventListener("input", () =>
       this.updateSelectedAnnotation({ opacity: parseFloat(imageOpacityInput.value) }),
+    );
+    lineColorPicker?.addEventListener("input", () =>
+      this.updateSelectedAnnotation({ color: lineColorPicker.value }),
+    );
+    lineWidthInput?.addEventListener("input", () =>
+      this.updateSelectedAnnotation({ strokeWidth: parseInt(lineWidthInput.value, 10) }),
+    );
+    lineOpacityInput?.addEventListener("input", () =>
+      this.updateSelectedAnnotation({ opacity: parseFloat(lineOpacityInput.value) }),
+    );
+    highlightColorPicker?.addEventListener("input", () =>
+      this.updateSelectedAnnotation({ color: highlightColorPicker.value }),
+    );
+    highlightOpacityInput?.addEventListener("input", () =>
+      this.updateSelectedAnnotation({ opacity: parseFloat(highlightOpacityInput.value) }),
     );
 
     rotateLeftBtn?.addEventListener("click", () => {
@@ -261,17 +357,40 @@ export class PdfEditor extends BaseComponent {
       this.updateSelectedAnnotation({ rotation: 0, scale: 1.0, reset: true });
     });
 
+    const preserveTextSelection = (event: MouseEvent) => {
+      const snapshot = this.captureTextSelectionSnapshot();
+      if (!snapshot) return;
+      this.pendingTextSelection = snapshot;
+      event.preventDefault();
+    };
+
+    undoBtn?.addEventListener("mousedown", preserveTextSelection);
+    redoBtn?.addEventListener("mousedown", preserveTextSelection);
+    undoBtn?.addEventListener("click", () => this.handleUndo());
+    redoBtn?.addEventListener("click", () => this.handleRedo());
+    this.updateHistoryControls();
+
     window.addEventListener("keydown", (e) => {
+      if (this.handleHistoryShortcut(e)) return;
       if ((e.key === "Delete" || e.key === "Backspace") && this.selectedAnnotationId) {
-        if ((document.activeElement as HTMLElement).isContentEditable) return;
+        const activeElement = document.activeElement as HTMLElement | null;
+        if (activeElement?.isContentEditable) return;
         this.removeAnnotation(this.selectedAnnotationId);
       }
+    });
+
+    this.addEventListener("mousedown", (e) => {
+      this.handlePointerDown(e);
     });
 
     this.addEventListener("click", (e) => {
       const target = e.target as HTMLElement;
       const pageWrapper = target.closest(".pdf-page-wrapper") as HTMLElement;
       if (pageWrapper && this.activeTool) {
+        if (this.suppressNextClick) {
+          this.suppressNextClick = false;
+          return;
+        }
         if (
           target.classList.contains("pdf-page-canvas") ||
           target.classList.contains("pdf-page-wrapper")
@@ -284,6 +403,319 @@ export class PdfEditor extends BaseComponent {
         }
       }
     });
+  }
+
+  private handlePointerDown(event: MouseEvent) {
+    const pointerTool = this.activeTool;
+    if (!pointerTool?.onPointerDown) return;
+    const target = event.target as HTMLElement;
+    const pageWrapper = target.closest(".pdf-page-wrapper") as HTMLElement | null;
+    if (!pageWrapper) return;
+    if (
+      !target.classList.contains("pdf-page-canvas") &&
+      !target.classList.contains("pdf-page-wrapper")
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    const rect = pageWrapper.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const pageIndex = parseInt(pageWrapper.dataset.index || "0", 10);
+
+    this.pointerActiveTool = pointerTool;
+    this.pointerPageWrapper = pageWrapper;
+    this.suppressNextClick = true;
+    pointerTool.onPointerDown(pageIndex, x, y, event);
+
+    window.addEventListener("mousemove", this.handlePointerMove);
+    window.addEventListener("mouseup", this.handlePointerUp);
+  }
+
+  private handlePointerMove = (event: MouseEvent) => {
+    const pointerTool = this.pointerActiveTool;
+    if (!pointerTool?.onPointerMove || !this.pointerPageWrapper) return;
+    const rect = this.pointerPageWrapper.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const pageIndex = parseInt(this.pointerPageWrapper.dataset.index || "0", 10);
+    pointerTool.onPointerMove(pageIndex, x, y, event);
+  };
+
+  private handlePointerUp = (event: MouseEvent) => {
+    const pointerTool = this.pointerActiveTool;
+    if (pointerTool?.onPointerUp && this.pointerPageWrapper) {
+      const rect = this.pointerPageWrapper.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      const pageIndex = parseInt(this.pointerPageWrapper.dataset.index || "0", 10);
+      pointerTool.onPointerUp(pageIndex, x, y, event);
+    }
+
+    window.removeEventListener("mousemove", this.handlePointerMove);
+    window.removeEventListener("mouseup", this.handlePointerUp);
+    this.pointerActiveTool = null;
+    this.pointerPageWrapper = null;
+    if (this.suppressNextClick) {
+      setTimeout(() => {
+        this.suppressNextClick = false;
+      }, 0);
+    }
+  };
+
+  private handleHistoryShortcut(event: KeyboardEvent): boolean {
+    if (!(event.ctrlKey || event.metaKey)) return false;
+    if (event.key.toLowerCase() !== "z") return false;
+    if (this.shouldIgnoreHistoryShortcut()) return false;
+
+    const snapshot = this.captureTextSelectionSnapshot();
+    if (snapshot) this.pendingTextSelection = snapshot;
+
+    event.preventDefault();
+    if (event.shiftKey) {
+      this.handleRedo();
+    } else {
+      this.handleUndo();
+    }
+    return true;
+  }
+
+  private shouldIgnoreHistoryShortcut(): boolean {
+    const activeElement = document.activeElement as HTMLElement | null;
+    if (!activeElement) return false;
+    if (activeElement.isContentEditable) return true;
+    const tagName = activeElement.tagName;
+    return (
+      tagName === "INPUT" ||
+      tagName === "TEXTAREA" ||
+      activeElement.getAttribute("role") === "textbox"
+    );
+  }
+
+  private captureTextSelectionSnapshot(): TextSelectionSnapshot | null {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return null;
+
+    const range = selection.getRangeAt(0);
+    const textElement = this.getContentEditableElement(range);
+    if (!textElement) return null;
+
+    const annotationElement = textElement.closest(".annotation") as HTMLElement | null;
+    const annotationId = annotationElement?.dataset.id;
+    if (!annotationId) return null;
+
+    if (!textElement.contains(range.startContainer) || !textElement.contains(range.endContainer)) {
+      return null;
+    }
+
+    return {
+      annotationId,
+      start: this.getTextOffset(textElement, range.startContainer, range.startOffset),
+      end: this.getTextOffset(textElement, range.endContainer, range.endOffset),
+    };
+  }
+
+  private restorePendingTextSelection() {
+    if (!this.pendingTextSelection) return;
+    const snapshot = this.pendingTextSelection;
+    this.pendingTextSelection = null;
+    setTimeout(() => this.restoreTextSelection(snapshot), 0);
+  }
+
+  private restoreTextSelection(snapshot: TextSelectionSnapshot) {
+    const annotationElement = this.querySelector(
+      `.annotation[data-id="${snapshot.annotationId}"]`,
+    ) as HTMLElement | null;
+    const textElement = annotationElement?.querySelector(
+      "div[contenteditable]",
+    ) as HTMLElement | null;
+    if (!textElement) return;
+
+    const textLength = textElement.textContent?.length ?? 0;
+    const start = Math.min(snapshot.start, textLength);
+    const end = Math.min(snapshot.end, textLength);
+
+    textElement.focus({ preventScroll: true });
+
+    const selection = window.getSelection();
+    if (!selection) return;
+
+    const range = document.createRange();
+    this.setRangeByOffsets(textElement, range, start, end);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
+  private getContentEditableElement(range: Range): HTMLElement | null {
+    const startElement =
+      range.startContainer.nodeType === Node.ELEMENT_NODE
+        ? (range.startContainer as Element)
+        : range.startContainer.parentElement;
+    const endElement =
+      range.endContainer.nodeType === Node.ELEMENT_NODE
+        ? (range.endContainer as Element)
+        : range.endContainer.parentElement;
+    const startEditable = startElement?.closest("[contenteditable]");
+    const endEditable = endElement?.closest("[contenteditable]");
+    if (!startEditable || startEditable !== endEditable) return null;
+    if (!(startEditable as HTMLElement).isContentEditable) return null;
+    return startEditable as HTMLElement;
+  }
+
+  private getTextOffset(root: HTMLElement, node: Node, offset: number): number {
+    const range = document.createRange();
+    range.setStart(root, 0);
+    range.setEnd(node, offset);
+    return range.toString().length;
+  }
+
+  private setRangeByOffsets(root: HTMLElement, range: Range, start: number, end: number) {
+    const textNodes = this.getTextNodes(root);
+    if (textNodes.length === 0) {
+      range.setStart(root, 0);
+      range.setEnd(root, 0);
+      return;
+    }
+
+    const [startNode, startOffset] = this.findNodeForOffset(textNodes, start);
+    const [endNode, endOffset] = this.findNodeForOffset(textNodes, end);
+    range.setStart(startNode, startOffset);
+    range.setEnd(endNode, endOffset);
+  }
+
+  private getTextNodes(root: Node): Text[] {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const nodes: Text[] = [];
+    let current = walker.nextNode();
+    while (current) {
+      nodes.push(current as Text);
+      current = walker.nextNode();
+    }
+    return nodes;
+  }
+
+  private findNodeForOffset(nodes: Text[], offset: number): [Text, number] {
+    let remaining = offset;
+    for (const node of nodes) {
+      const length = node.textContent?.length ?? 0;
+      if (remaining <= length) {
+        return [node, remaining];
+      }
+      remaining -= length;
+    }
+    const last = nodes[nodes.length - 1];
+    return [last, last.textContent?.length ?? 0];
+  }
+
+  private handleUndo() {
+    if (!this.pendingTextSelection) {
+      const snapshot = this.captureTextSelectionSnapshot();
+      if (snapshot) this.pendingTextSelection = snapshot;
+    }
+    const action = this.historyManager.undo();
+    if (action) this.applyHistoryAction(action, "undo");
+    this.updateHistoryControls();
+    this.restorePendingTextSelection();
+  }
+
+  private handleRedo() {
+    if (!this.pendingTextSelection) {
+      const snapshot = this.captureTextSelectionSnapshot();
+      if (snapshot) this.pendingTextSelection = snapshot;
+    }
+    const action = this.historyManager.redo();
+    if (action) this.applyHistoryAction(action, "redo");
+    this.updateHistoryControls();
+    this.restorePendingTextSelection();
+  }
+
+  private applyHistoryAction(action: HistoryAction, direction: "undo" | "redo") {
+    if (action.type === "add") {
+      if (direction === "undo") {
+        this.removeAnnotation(action.annotationId, { recordHistory: false });
+      } else {
+        this.restoreAnnotation(action.newState);
+      }
+      return;
+    }
+
+    if (action.type === "remove") {
+      if (direction === "undo") {
+        this.restoreAnnotation(action.previousState);
+      } else {
+        this.removeAnnotation(action.annotationId, { recordHistory: false });
+      }
+      return;
+    }
+
+    const targetState = direction === "undo" ? action.previousState : action.newState;
+    if (!targetState) return;
+
+    this.annotationManager.updateAnnotation(
+      action.annotationId,
+      this.getAnnotationUpdates(targetState),
+      { recordHistory: false },
+    );
+    this.refreshAnnotation(action.annotationId);
+    this.updateHistoryControls();
+  }
+
+  private refreshAnnotation(id: string) {
+    const existing = this.querySelector(`.annotation[data-id="${id}"]`);
+    if (existing) existing.remove();
+    if (this.annotationManager.getAnnotation(id)) {
+      this.renderAnnotation(id);
+    }
+  }
+
+  private restoreAnnotation(state: Annotation | null) {
+    if (!state) return;
+    const cloned = this.cloneAnnotationState(state);
+    const { id, ...ann } = cloned;
+    this.annotationManager.addAnnotation(ann, { id, recordHistory: false });
+    this.refreshAnnotation(id);
+  }
+
+  private cloneAnnotationState(state: Annotation): Annotation {
+    return {
+      ...state,
+      style: state.style ? { ...state.style } : undefined,
+      points: state.points ? state.points.map((point) => ({ ...point })) : undefined,
+    };
+  }
+
+  private getAnnotationUpdates(state: Annotation): Partial<Omit<Annotation, "id" | "pageIndex">> {
+    const { id: _id, pageIndex: _pageIndex, ...updates } = this.cloneAnnotationState(state);
+    return updates;
+  }
+
+  private recordTransformHistory(
+    kind: "move" | "resize",
+    before: Annotation | null,
+    after: Annotation | undefined,
+  ) {
+    if (!before || !after) return;
+    const changed =
+      kind === "move"
+        ? before.x !== after.x || before.y !== after.y
+        : before.width !== after.width || before.height !== after.height;
+    if (!changed) return;
+    this.historyManager.push({
+      type: "update",
+      annotationId: after.id,
+      previousState: before,
+      newState: this.cloneAnnotationState(after),
+      timestamp: Date.now(),
+    });
+    this.updateHistoryControls();
+  }
+
+  private updateHistoryControls() {
+    const undoBtn = this.querySelector("#undoBtn") as HTMLButtonElement | null;
+    const redoBtn = this.querySelector("#redoBtn") as HTMLButtonElement | null;
+    if (undoBtn) undoBtn.disabled = !this.historyManager.canUndo();
+    if (redoBtn) redoBtn.disabled = !this.historyManager.canRedo();
   }
 
   private updateSelectedAnnotation(props: any) {
@@ -373,7 +805,63 @@ export class PdfEditor extends BaseComponent {
         el.style.height = `${newH}px`;
         this.annotationManager.updateAnnotation(ann.id, { width: newW, height: newH });
       }
+    } else if (ann.type === "highlight") {
+      if (props.color) {
+        el.style.backgroundColor = props.color;
+      }
+      if (props.opacity !== undefined) {
+        el.style.opacity = props.opacity.toString();
+      }
+      this.annotationManager.updateAnnotation(ann.id, {
+        style: {
+          ...ann.style,
+          color: props.color ?? ann.style?.color,
+          opacity: props.opacity ?? ann.style?.opacity,
+        },
+      });
+    } else if (ann.type === "freehand") {
+      const path = el.querySelector("path") as SVGPathElement | null;
+      if (props.color && path) path.setAttribute("stroke", props.color);
+      if (props.strokeWidth !== undefined && path) {
+        path.setAttribute("stroke-width", props.strokeWidth.toString());
+      }
+      if (props.opacity !== undefined && path) {
+        path.setAttribute("opacity", props.opacity.toString());
+      }
+      this.annotationManager.updateAnnotation(ann.id, {
+        style: {
+          ...ann.style,
+          color: props.color ?? ann.style?.color,
+          strokeWidth: props.strokeWidth ?? ann.style?.strokeWidth,
+          opacity: props.opacity ?? ann.style?.opacity,
+        },
+      });
+    } else if (ann.type === "strikethrough" || ann.type === "underline") {
+      const lineEl = el.querySelector(".line-annotation") as HTMLElement | null;
+      if (props.color && lineEl) lineEl.style.backgroundColor = props.color;
+      if (props.opacity !== undefined && lineEl) {
+        lineEl.style.opacity = props.opacity.toString();
+      }
+      if (props.strokeWidth !== undefined && lineEl) {
+        lineEl.style.height = `${props.strokeWidth}px`;
+      }
+      const strokeWidth = props.strokeWidth ?? ann.style?.strokeWidth ?? 2;
+      const containerHeight = parseFloat(el.style.height) || ann.height || strokeWidth;
+      const lineTop =
+        ann.type === "underline"
+          ? Math.max(0, containerHeight - strokeWidth)
+          : Math.max(0, containerHeight / 2 - strokeWidth / 2);
+      if (lineEl) lineEl.style.top = `${lineTop}px`;
+      this.annotationManager.updateAnnotation(ann.id, {
+        style: {
+          ...ann.style,
+          color: props.color ?? ann.style?.color,
+          strokeWidth,
+          opacity: props.opacity ?? ann.style?.opacity,
+        },
+      });
     }
+    this.updateHistoryControls();
   }
 
   private showPropertiesPanel(id: string) {
@@ -411,13 +899,35 @@ export class PdfEditor extends BaseComponent {
       (this.querySelector("#imageOpacityInput") as HTMLInputElement).value = (
         ann.style?.opacity ?? 1
       ).toString();
+    } else if (ann.type === "highlight") {
+      this.querySelector("#highlightProperties")?.classList.remove("hidden");
+      (this.querySelector("#highlightColorPicker") as HTMLInputElement).value =
+        ann.style?.color || "#ffff00";
+      (this.querySelector("#highlightOpacityInput") as HTMLInputElement).value = (
+        ann.style?.opacity ?? 0.3
+      ).toString();
+    } else if (
+      ann.type === "freehand" ||
+      ann.type === "strikethrough" ||
+      ann.type === "underline"
+    ) {
+      this.querySelector("#lineProperties")?.classList.remove("hidden");
+      (this.querySelector("#lineColorPicker") as HTMLInputElement).value =
+        ann.style?.color || "#000000";
+      (this.querySelector("#lineWidthInput") as HTMLInputElement).value = (
+        ann.style?.strokeWidth || 2
+      ).toString();
+      (this.querySelector("#lineOpacityInput") as HTMLInputElement).value = (
+        ann.style?.opacity ?? 1
+      ).toString();
     }
   }
 
-  private removeAnnotation(id: string) {
+  private removeAnnotation(id: string, options: { recordHistory?: boolean } = {}) {
     const el = this.querySelector(`.annotation[data-id="${id}"]`);
     if (el) el.remove();
-    this.annotationManager.removeAnnotation(id);
+    this.annotationManager.removeAnnotation(id, options);
+    this.updateHistoryControls();
     if (this.selectedAnnotationId === id) {
       this.selectedAnnotationId = null;
       this.querySelector("#propertiesPanel")?.classList.add("hidden");
@@ -495,19 +1005,36 @@ export class PdfEditor extends BaseComponent {
           }
         }, 200);
       });
-    } else if (ann.type === "rectangle" || ann.type === "image") {
-      el.style.width = `${ann.width}px`;
-      el.style.height = `${ann.height}px`;
-      el.style.cursor = "move";
-      el.style.opacity = (ann.style?.opacity ?? 1).toString();
-      if (ann.style?.rotation) {
-        el.style.transform = `rotate(${ann.style.rotation}deg)`;
+    } else {
+      let width = ann.width ?? 100;
+      let height = ann.height ?? 50;
+      if (ann.type === "image") {
+        width = ann.width ?? 150;
+        height = ann.height ?? 150;
+      } else if (ann.type === "highlight") {
+        width = ann.width ?? 120;
+        height = ann.height ?? 24;
+      } else if (ann.type === "strikethrough" || ann.type === "underline") {
+        width = ann.width ?? 120;
+        height = ann.height ?? 12;
+      } else if (ann.type === "freehand") {
+        width = ann.width ?? 120;
+        height = ann.height ?? 80;
       }
+
+      el.style.width = `${width}px`;
+      el.style.height = `${height}px`;
+      el.style.cursor = "move";
 
       if (ann.type === "rectangle") {
         el.style.backgroundColor = ann.style?.color || "white";
         el.style.border = `${ann.style?.strokeWidth || 0}px solid black`;
-      } else {
+        el.style.opacity = (ann.style?.opacity ?? 1).toString();
+      } else if (ann.type === "image") {
+        el.style.opacity = (ann.style?.opacity ?? 1).toString();
+        if (ann.style?.rotation) {
+          el.style.transform = `rotate(${ann.style.rotation}deg)`;
+        }
         const img = document.createElement("img");
         img.src = ann.content || "";
         img.style.width = "100%";
@@ -515,23 +1042,72 @@ export class PdfEditor extends BaseComponent {
         img.style.objectFit = "contain";
         img.style.pointerEvents = "none";
         el.appendChild(img);
+      } else if (ann.type === "highlight") {
+        el.style.backgroundColor = ann.style?.color || "#ffff00";
+        el.style.opacity = (ann.style?.opacity ?? 0.3).toString();
+        el.style.borderRadius = "2px";
+      } else if (ann.type === "freehand") {
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("width", `${width}`);
+        svg.setAttribute("height", `${height}`);
+        svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+        svg.style.width = "100%";
+        svg.style.height = "100%";
+
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        const points = ann.points ?? [];
+        if (points.length > 0) {
+          const d = points
+            .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
+            .join(" ");
+          path.setAttribute("d", d);
+        }
+        path.setAttribute("fill", "none");
+        path.setAttribute("stroke", ann.style?.color || "#111827");
+        path.setAttribute("stroke-width", `${ann.style?.strokeWidth ?? 2}`);
+        path.setAttribute("stroke-linecap", "round");
+        path.setAttribute("stroke-linejoin", "round");
+        path.setAttribute("opacity", `${ann.style?.opacity ?? 1}`);
+        svg.appendChild(path);
+        el.appendChild(svg);
+      } else if (ann.type === "strikethrough" || ann.type === "underline") {
+        const line = document.createElement("div");
+        line.className = "line-annotation";
+        line.style.position = "absolute";
+        line.style.left = "0";
+        line.style.right = "0";
+        const strokeWidth = ann.style?.strokeWidth ?? 2;
+        line.style.height = `${strokeWidth}px`;
+        line.style.backgroundColor = ann.style?.color || "#111827";
+        line.style.opacity = (ann.style?.opacity ?? 1).toString();
+        const lineTop =
+          ann.type === "underline"
+            ? Math.max(0, height - strokeWidth)
+            : Math.max(0, height / 2 - strokeWidth / 2);
+        line.style.top = `${lineTop}px`;
+        el.appendChild(line);
       }
 
-      const resizer = document.createElement("div");
-      resizer.className = "resizer";
-      resizer.style.width = "10px";
-      resizer.style.height = "10px";
-      resizer.style.backgroundColor = "var(--primary)";
-      resizer.style.position = "absolute";
-      resizer.style.right = "-5px";
-      resizer.style.bottom = "-5px";
-      resizer.style.cursor = "nwse-resize";
-      resizer.style.borderRadius = "50%";
-      resizer.style.display = "none";
-      el.appendChild(resizer);
+      const allowResize =
+        ann.type === "rectangle" || ann.type === "image" || ann.type === "highlight";
+      let resizer: HTMLDivElement | null = null;
+      if (allowResize) {
+        resizer = document.createElement("div");
+        resizer.className = "resizer";
+        resizer.style.width = "10px";
+        resizer.style.height = "10px";
+        resizer.style.backgroundColor = "var(--primary)";
+        resizer.style.position = "absolute";
+        resizer.style.right = "-5px";
+        resizer.style.bottom = "-5px";
+        resizer.style.cursor = "nwse-resize";
+        resizer.style.borderRadius = "50%";
+        resizer.style.display = "none";
+        el.appendChild(resizer);
+      }
 
       el.addEventListener("mousedown", (e) => {
-        if (e.target === resizer) this.startResizing(e, id);
+        if (resizer && e.target === resizer) this.startResizing(e, id);
         else this.startDragging(e, id);
       });
 
@@ -540,7 +1116,7 @@ export class PdfEditor extends BaseComponent {
         this.selectedAnnotationId = id;
         el.style.boxShadow = "0 0 0 2px var(--primary)";
         deleteBtn.style.display = "flex";
-        resizer.style.display = "block";
+        if (resizer) resizer.style.display = "block";
         this.showPropertiesPanel(id);
       });
       el.addEventListener("blur", () => {
@@ -548,7 +1124,7 @@ export class PdfEditor extends BaseComponent {
           if (document.activeElement !== el) {
             el.style.boxShadow = "none";
             deleteBtn.style.display = "none";
-            resizer.style.display = "none";
+            if (resizer) resizer.style.display = "none";
           }
         }, 200);
       });
@@ -560,18 +1136,23 @@ export class PdfEditor extends BaseComponent {
       this.removeAnnotation(id);
     });
     pageWrapper.appendChild(el);
-    if (ann.type === "text") {
-      const textEl = el.querySelector("div[contenteditable]");
-      setTimeout(() => (textEl as HTMLElement)?.focus(), 50);
-    } else {
-      setTimeout(() => el.focus(), 50);
+    if (!this.pendingTextSelection) {
+      if (ann.type === "text") {
+        const textEl = el.querySelector("div[contenteditable]");
+        setTimeout(() => (textEl as HTMLElement)?.focus(), 50);
+      } else {
+        setTimeout(() => el.focus(), 50);
+      }
     }
+    this.updateHistoryControls();
   }
 
   private startResizing(e: MouseEvent, id: string) {
     e.stopPropagation();
     e.preventDefault();
     const el = this.querySelector(`.annotation[data-id="${id}"]`) as HTMLElement;
+    const initialState = this.annotationManager.getAnnotation(id);
+    const beforeState = initialState ? this.cloneAnnotationState(initialState) : null;
     const startX = e.clientX;
     const startY = e.clientY;
     const initialWidth = el.offsetWidth;
@@ -583,11 +1164,17 @@ export class PdfEditor extends BaseComponent {
       const newH = Math.max(10, initialHeight + dh);
       el.style.width = `${newW}px`;
       el.style.height = `${newH}px`;
-      this.annotationManager.updateAnnotation(id, { width: newW, height: newH });
+      this.annotationManager.updateAnnotation(
+        id,
+        { width: newW, height: newH },
+        { recordHistory: false },
+      );
     };
     const handleMouseUp = () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
+      const afterState = this.annotationManager.getAnnotation(id);
+      this.recordTransformHistory("resize", beforeState, afterState);
     };
     document.addEventListener("mousemove", handleMouseMove);
     document.addEventListener("mouseup", handleMouseUp);
@@ -596,6 +1183,8 @@ export class PdfEditor extends BaseComponent {
   private startDragging(e: MouseEvent, id: string) {
     e.stopPropagation();
     const annElement = this.querySelector(`.annotation[data-id="${id}"]`) as HTMLElement;
+    const initialState = this.annotationManager.getAnnotation(id);
+    const beforeState = initialState ? this.cloneAnnotationState(initialState) : null;
     const startX = e.clientX;
     const startY = e.clientY;
     const initialLeft = parseFloat(annElement.style.left);
@@ -607,11 +1196,13 @@ export class PdfEditor extends BaseComponent {
       const newY = initialTop + dy;
       annElement.style.left = `${newX}px`;
       annElement.style.top = `${newY}px`;
-      this.annotationManager.updateAnnotation(id, { x: newX, y: newY });
+      this.annotationManager.updateAnnotation(id, { x: newX, y: newY }, { recordHistory: false });
     };
     const handleMouseUp = () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
+      const afterState = this.annotationManager.getAnnotation(id);
+      this.recordTransformHistory("move", beforeState, afterState);
     };
     document.addEventListener("mousemove", handleMouseMove);
     document.addEventListener("mouseup", handleMouseUp);
@@ -630,6 +1221,12 @@ export class PdfEditor extends BaseComponent {
         const viewport = page.getViewport({ scale: 1.0 });
         const scale = TARGET_WIDTH / viewport.width;
 
+        const scaledStyle = ann.style ? { ...ann.style } : undefined;
+        if (scaledStyle?.fontSize) scaledStyle.fontSize = scaledStyle.fontSize / scale;
+        if (typeof scaledStyle?.strokeWidth === "number") {
+          scaledStyle.strokeWidth = scaledStyle.strokeWidth / scale;
+        }
+
         // We pass the raw DOM coordinates to the engine, and let the engine handle the PDF origin inversion
         // OR we do it here. The engine currently does: pdfY = height - ann.y - ...
         // So we just need to scale the DOM pixels to PDF points.
@@ -640,7 +1237,10 @@ export class PdfEditor extends BaseComponent {
           y: ann.y / scale,
           width: ann.width ? ann.width / scale : undefined,
           height: ann.height ? ann.height / scale : undefined,
-          style: { ...ann.style, fontSize: (ann.style?.fontSize || 16) / scale },
+          points: ann.points
+            ? ann.points.map((point) => ({ x: point.x / scale, y: point.y / scale }))
+            : undefined,
+          style: scaledStyle,
         });
       }
       this.updateProgress(50, "Embedding all annotations...");

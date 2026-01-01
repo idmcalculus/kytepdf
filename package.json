@@ -27,6 +27,7 @@
     "@vitest/coverage-v8": "^4.0.16",
     "esbuild": "^0.27.2",
     "fake-indexeddb": "^6.2.5",
+    "fast-check": "^4.5.3",
     "jsdom": "^27.3.0",
     "sass": "^1.97.1",
     "typescript": "^5.9.3",
@@ -34,9 +35,11 @@
     "vitest": "^4.0.16"
   },
   "dependencies": {
+    "docx": "^9.5.1",
     "jszip": "^3.10.1",
     "lucide": "^0.562.0",
     "pdf-lib": "^1.17.1",
-    "pdfjs-dist": "^5.4.449"
+    "pdfjs-dist": "^5.4.449",
+    "xlsx": "^0.18.5"
   }
 }

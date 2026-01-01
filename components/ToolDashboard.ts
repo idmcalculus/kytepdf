@@ -8,6 +8,7 @@ interface Tool {
   icon: string;
   active: boolean;
   isCloud?: boolean;
+  isHybrid?: boolean;
 }
 
 export class ToolDashboard extends HTMLElement {
@@ -73,6 +74,7 @@ export class ToolDashboard extends HTMLElement {
         icon: "file-text",
         active: true,
         isCloud: true,
+        isHybrid: true,
       },
       {
         id: "word-to-pdf",
@@ -89,6 +91,7 @@ export class ToolDashboard extends HTMLElement {
         icon: "file-spreadsheet",
         active: true,
         isCloud: true,
+        isHybrid: true,
       },
       {
         id: "pdf-to-pp",
@@ -97,6 +100,7 @@ export class ToolDashboard extends HTMLElement {
         icon: "presentation",
         active: true,
         isCloud: true,
+        isHybrid: true,
       },
       {
         id: "pdf-ai",
@@ -170,14 +174,21 @@ export class ToolDashboard extends HTMLElement {
               ${
                 !tool.active
                   ? '<span class="badge">Coming Soon</span>'
-                  : tool.isCloud
+                  : tool.isHybrid
                     ? `
+                <span class="badge hybrid-badge">
+                  <i data-lucide="cloud" style="width: 12px; height: 12px;"></i>
+                  Local + Cloud
+                </span>
+              `
+                    : tool.isCloud
+                      ? `
                 <span class="badge cloud-badge">
                   <i data-lucide="cloud" style="width: 12px; height: 12px;"></i>
                   Cloud
                 </span>
               `
-                    : ""
+                      : ""
               }
               <div class="icon-wrapper">
                 <i data-lucide="${tool.icon}"></i>
@@ -232,7 +243,7 @@ export class ToolDashboard extends HTMLElement {
         const tool = this.tools.find((t) => t.id === toolId);
         if (tool?.active) {
           // Check for cloud consent if necessary
-          if (tool.isCloud) {
+          if (tool.isCloud && !tool.isHybrid) {
             const consented = await (window as any).ensureCloudConsent();
             if (!consented) return;
           }

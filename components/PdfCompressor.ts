@@ -1,12 +1,13 @@
 import { logger } from "../utils/logger.ts";
-import { pdfjsLib } from "../utils/pdfConfig.ts";
 import { compressPdf } from "../utils/pdfEngine.ts";
 import { calculateSavingsPercent, generateOutputFilename } from "../utils/pdfUtils.ts";
+import { PdfPreviewController } from "../utils/pdfPreview.ts";
 import { persistence } from "../utils/persistence.ts";
 import { BaseComponent } from "./BaseComponent.ts";
 
 export class PdfCompressor extends BaseComponent {
   private selectedRatio: number | null = 0.4;
+  private previewController: PdfPreviewController | null = null;
   protected toolKey = "pdf-compressor";
 
   render() {
@@ -121,12 +122,8 @@ export class PdfCompressor extends BaseComponent {
     });
 
     compressBtn.addEventListener("click", () => this.startCompression());
-    (this.querySelector("#prevPage") as HTMLElement).addEventListener("click", () =>
-      this.changePage(-1),
-    );
-    (this.querySelector("#nextPage") as HTMLElement).addEventListener("click", () =>
-      this.changePage(1),
-    );
+
+    this.previewController = this.createPreviewController();
 
     // Resume session bind
     const resumeBtn = this.querySelector("#resumeBtn") as HTMLButtonElement;
@@ -210,6 +207,10 @@ export class PdfCompressor extends BaseComponent {
     this.selectedFile = file;
     logger.info("File loaded for compression", { name: file.name, size: file.size });
 
+    if (!this.previewController) {
+      this.previewController = this.createPreviewController();
+    }
+
     (this.querySelector("#fileName") as HTMLElement).textContent = this.selectedFile.name;
     (this.querySelector("#fileSize") as HTMLElement).textContent = this.formatBytes(
       this.selectedFile.size,
@@ -221,10 +222,7 @@ export class PdfCompressor extends BaseComponent {
     this.saveSession();
 
     try {
-      const arrayBuffer = await this.selectedFile.arrayBuffer();
-      this.currentPdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      this.currentPageNum = 1;
-      await this.renderPage(this.currentPageNum);
+      await this.previewController?.load(this.selectedFile);
     } catch (err) {
       logger.error("Preview load error", err);
       this.showErrorDialog(
@@ -245,30 +243,24 @@ export class PdfCompressor extends BaseComponent {
     this.checkWarning();
   }
 
-  async renderPage(pageNum: number) {
-    if (!this.currentPdfDoc) return;
-    const page = await this.currentPdfDoc.getPage(pageNum);
-    const viewport = page.getViewport({ scale: 0.8 });
-    const canvas = this.querySelector("#previewCanvas") as HTMLCanvasElement;
-    const context = canvas.getContext("2d");
-    canvas.height = viewport.height;
-    canvas.width = viewport.width;
-    await page.render({ canvasContext: context as any, viewport, canvas }).promise;
-    (this.querySelector("#pageIndicator") as HTMLElement).textContent =
-      `Page ${pageNum} of ${this.currentPdfDoc.numPages}`;
+  private createPreviewController() {
+    const canvas = this.querySelector("#previewCanvas") as HTMLCanvasElement | null;
+    if (!canvas) return null;
+    const pageIndicator = this.querySelector("#pageIndicator") as HTMLElement | null;
+    const prevButton = this.querySelector("#prevPage") as HTMLButtonElement | null;
+    const nextButton = this.querySelector("#nextPage") as HTMLButtonElement | null;
 
-    (this.querySelector("#prevPage") as HTMLButtonElement).disabled = pageNum <= 1;
-    (this.querySelector("#nextPage") as HTMLButtonElement).disabled =
-      pageNum >= this.currentPdfDoc.numPages;
-  }
+    const controller = new PdfPreviewController({
+      canvas,
+      pageIndicator,
+      prevButton,
+      nextButton,
+      scale: 0.8,
+    });
 
-  changePage(offset: number) {
-    if (!this.currentPdfDoc) return;
-    const newPage = this.currentPageNum + offset;
-    if (newPage >= 1 && newPage <= this.currentPdfDoc.numPages) {
-      this.currentPageNum = newPage;
-      this.renderPage(this.currentPageNum);
-    }
+    prevButton?.addEventListener("click", () => controller.prev());
+    nextButton?.addEventListener("click", () => controller.next());
+    return controller;
   }
 
   async checkWarning() {

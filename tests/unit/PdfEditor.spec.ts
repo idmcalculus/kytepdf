@@ -142,4 +142,147 @@ describe("PdfEditor", () => {
     const annotations = (editor as any).annotationManager.getAllAnnotations();
     expect(annotations.find((a: any) => a.type === "rectangle")).toBeDefined();
   });
+
+  it("should create a freehand annotation when drawing with Freehand tool active", async () => {
+    const file = new File(["dummy"], "test.pdf", { type: "application/pdf" });
+    await editor.handleFiles({ 0: file, length: 1, item: () => file } as any);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const freehandBtn = editor.querySelector("#addFreehandBtn") as HTMLElement;
+    freehandBtn.click();
+
+    const pdfContainer = editor.querySelector("#pdfContainer") as HTMLElement;
+    const pageWrapper = pdfContainer.querySelector(".pdf-page-wrapper") as HTMLElement;
+
+    pageWrapper.dispatchEvent(
+      new MouseEvent("mousedown", { bubbles: true, clientX: 20, clientY: 20 }),
+    );
+    window.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: 60, clientY: 40 }));
+    window.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, clientX: 80, clientY: 50 }));
+
+    const annotations = (editor as any).annotationManager.getAllAnnotations();
+    expect(annotations.find((a: any) => a.type === "freehand")).toBeDefined();
+  });
+
+  it("should create a highlight annotation when drawing with Highlight tool active", async () => {
+    const file = new File(["dummy"], "test.pdf", { type: "application/pdf" });
+    await editor.handleFiles({ 0: file, length: 1, item: () => file } as any);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const highlightBtn = editor.querySelector("#addHighlightBtn") as HTMLElement;
+    highlightBtn.click();
+
+    const pdfContainer = editor.querySelector("#pdfContainer") as HTMLElement;
+    const pageWrapper = pdfContainer.querySelector(".pdf-page-wrapper") as HTMLElement;
+
+    pageWrapper.dispatchEvent(
+      new MouseEvent("mousedown", { bubbles: true, clientX: 30, clientY: 30 }),
+    );
+    window.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: 90, clientY: 50 }));
+    window.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, clientX: 90, clientY: 50 }));
+
+    const annotations = (editor as any).annotationManager.getAllAnnotations();
+    expect(annotations.find((a: any) => a.type === "highlight")).toBeDefined();
+  });
+
+  it("should update highlight color via properties panel", async () => {
+    const file = new File(["dummy"], "test.pdf", { type: "application/pdf" });
+    await editor.handleFiles({ 0: file, length: 1, item: () => file } as any);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const highlightBtn = editor.querySelector("#addHighlightBtn") as HTMLElement;
+    highlightBtn.click();
+
+    const pdfContainer = editor.querySelector("#pdfContainer") as HTMLElement;
+    const pageWrapper = pdfContainer.querySelector(".pdf-page-wrapper") as HTMLElement;
+
+    pageWrapper.dispatchEvent(
+      new MouseEvent("mousedown", { bubbles: true, clientX: 30, clientY: 30 }),
+    );
+    window.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: 90, clientY: 50 }));
+    window.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, clientX: 90, clientY: 50 }));
+
+    const highlightEl = editor.querySelector(".annotation-highlight") as HTMLElement;
+    highlightEl.focus();
+
+    const colorPicker = editor.querySelector("#highlightColorPicker") as HTMLInputElement;
+    colorPicker.value = "#ff0000";
+    colorPicker.dispatchEvent(new Event("input", { bubbles: true }));
+
+    const annotations = (editor as any).annotationManager.getAllAnnotations();
+    const highlight = annotations.find((a: any) => a.type === "highlight");
+    expect(highlight?.style?.color).toBe("#ff0000");
+  });
+
+  it("should create a strikethrough annotation when drawing with Strikethrough tool active", async () => {
+    const file = new File(["dummy"], "test.pdf", { type: "application/pdf" });
+    await editor.handleFiles({ 0: file, length: 1, item: () => file } as any);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const strikeBtn = editor.querySelector("#addStrikeBtn") as HTMLElement;
+    strikeBtn.click();
+
+    const pdfContainer = editor.querySelector("#pdfContainer") as HTMLElement;
+    const pageWrapper = pdfContainer.querySelector(".pdf-page-wrapper") as HTMLElement;
+
+    pageWrapper.dispatchEvent(
+      new MouseEvent("mousedown", { bubbles: true, clientX: 40, clientY: 40 }),
+    );
+    window.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: 120, clientY: 42 }));
+    window.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, clientX: 120, clientY: 42 }));
+
+    const annotations = (editor as any).annotationManager.getAllAnnotations();
+    expect(annotations.find((a: any) => a.type === "strikethrough")).toBeDefined();
+  });
+
+  it("should create an underline annotation when drawing with Underline tool active", async () => {
+    const file = new File(["dummy"], "test.pdf", { type: "application/pdf" });
+    await editor.handleFiles({ 0: file, length: 1, item: () => file } as any);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const underlineBtn = editor.querySelector("#addUnderlineBtn") as HTMLElement;
+    underlineBtn.click();
+
+    const pdfContainer = editor.querySelector("#pdfContainer") as HTMLElement;
+    const pageWrapper = pdfContainer.querySelector(".pdf-page-wrapper") as HTMLElement;
+
+    pageWrapper.dispatchEvent(
+      new MouseEvent("mousedown", { bubbles: true, clientX: 45, clientY: 60 }),
+    );
+    window.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: 140, clientY: 62 }));
+    window.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, clientX: 140, clientY: 62 }));
+
+    const annotations = (editor as any).annotationManager.getAllAnnotations();
+    expect(annotations.find((a: any) => a.type === "underline")).toBeDefined();
+  });
+
+  it("should trigger undo on Ctrl+Z", () => {
+    const historyManager = (editor as any).historyManager;
+    const undoSpy = vi.spyOn(historyManager, "undo").mockReturnValue(null);
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true }));
+
+    expect(undoSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("should trigger redo on Ctrl+Shift+Z", () => {
+    const historyManager = (editor as any).historyManager;
+    const redoSpy = vi.spyOn(historyManager, "redo").mockReturnValue(null);
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, shiftKey: true }));
+
+    expect(redoSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("should support Cmd shortcuts for undo and redo", () => {
+    const historyManager = (editor as any).historyManager;
+    const undoSpy = vi.spyOn(historyManager, "undo").mockReturnValue(null);
+    const redoSpy = vi.spyOn(historyManager, "redo").mockReturnValue(null);
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "z", metaKey: true }));
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "z", metaKey: true, shiftKey: true }));
+
+    expect(undoSpy).toHaveBeenCalledTimes(1);
+    expect(redoSpy).toHaveBeenCalledTimes(1);
+  });
 });

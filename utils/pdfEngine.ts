@@ -11,6 +11,13 @@ export async function embedAllAnnotations(
     const pdfDoc = await PDFDocument.load(pdfData);
     const pages = pdfDoc.getPages();
 
+    const toRgb = (hex: string) => {
+      const r = parseInt(hex.slice(1, 3), 16) / 255 || 0;
+      const g = parseInt(hex.slice(3, 5), 16) / 255 || 0;
+      const b = parseInt(hex.slice(5, 7), 16) / 255 || 0;
+      return { r, g, b };
+    };
+
     // Cache for embedded fonts to avoid redundant embedding
     const fontCache: Record<string, any> = {};
     const getFont = async (fontName: string) => {
@@ -38,12 +45,8 @@ export async function embedAllAnnotations(
 
       const { height } = page.getSize();
 
-      const hex = ann.style?.color || (ann.type === "text" ? "#000000" : "#ffffff");
-      const r = parseInt(hex.slice(1, 3), 16) / 255 || 0;
-      const g = parseInt(hex.slice(3, 5), 16) / 255 || 0;
-      const b = parseInt(hex.slice(5, 7), 16) / 255 || 0;
-
       if (ann.type === "text" && ann.content) {
+        const { r, g, b } = toRgb(ann.style?.color || "#000000");
         const font = await getFont(ann.style?.font || "Helvetica");
         const pdfX = ann.x;
         const fontSize = ann.style?.fontSize || 16;
@@ -57,6 +60,7 @@ export async function embedAllAnnotations(
           color: rgb(r, g, b),
         });
       } else if (ann.type === "rectangle") {
+        const { r, g, b } = toRgb(ann.style?.color || "#ffffff");
         const pdfX = ann.x;
         const pdfY = height - ann.y - (ann.height || 0);
 
@@ -68,6 +72,59 @@ export async function embedAllAnnotations(
           color: rgb(r, g, b),
           borderWidth: ann.style?.strokeWidth || 0,
           opacity: ann.style?.opacity ?? 1.0,
+        });
+      } else if (ann.type === "highlight") {
+        const { r, g, b } = toRgb(ann.style?.color || "#ffff00");
+        const pdfX = ann.x;
+        const pdfY = height - ann.y - (ann.height || 0);
+
+        page.drawRectangle({
+          x: pdfX,
+          y: pdfY,
+          width: ann.width || 50,
+          height: ann.height || 10,
+          color: rgb(r, g, b),
+          opacity: ann.style?.opacity ?? 0.3,
+          borderWidth: 0,
+        });
+      } else if (ann.type === "freehand" && ann.points && ann.points.length > 1) {
+        const { r, g, b } = toRgb(ann.style?.color || "#111827");
+        const strokeWidth = ann.style?.strokeWidth || 2;
+        const opacity = ann.style?.opacity ?? 1;
+
+        for (let i = 1; i < ann.points.length; i++) {
+          const prev = ann.points[i - 1];
+          const next = ann.points[i];
+          const startX = ann.x + prev.x;
+          const startY = ann.y + prev.y;
+          const endX = ann.x + next.x;
+          const endY = ann.y + next.y;
+
+          page.drawLine({
+            start: { x: startX, y: height - startY },
+            end: { x: endX, y: height - endY },
+            thickness: strokeWidth,
+            color: rgb(r, g, b),
+            opacity,
+          });
+        }
+      } else if (ann.type === "strikethrough" || ann.type === "underline") {
+        const { r, g, b } = toRgb(ann.style?.color || "#111827");
+        const strokeWidth = ann.style?.strokeWidth || 2;
+        const opacity = ann.style?.opacity ?? 1;
+        const lineHeight = ann.height || strokeWidth * 2;
+        const lineOffset =
+          ann.type === "underline"
+            ? Math.max(0, lineHeight - strokeWidth)
+            : Math.max(0, lineHeight / 2 - strokeWidth / 2);
+        const lineY = ann.y + lineOffset;
+
+        page.drawLine({
+          start: { x: ann.x, y: height - lineY },
+          end: { x: ann.x + (ann.width || 50), y: height - lineY },
+          thickness: strokeWidth,
+          color: rgb(r, g, b),
+          opacity,
         });
       } else if (ann.type === "image" && ann.content) {
         const pdfX = ann.x;
