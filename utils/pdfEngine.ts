@@ -293,3 +293,42 @@ export async function compressPdf(
   onProgress(100, "Finalizing...");
   return bestBuffer;
 }
+
+export async function convertPdfToImages(
+  pdfData: Uint8Array,
+  options: { format: "png" | "jpeg"; scale?: number },
+): Promise<Blob[]> {
+  try {
+    const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+    const numPages = pdf.numPages;
+    const images: Blob[] = [];
+    const scale = options.scale || 2.0;
+
+    for (let i = 1; i <= numPages; i++) {
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale });
+
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.floor(viewport.width));
+      canvas.height = Math.max(1, Math.floor(viewport.height));
+
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Could not get 2D context from canvas");
+
+      await page.render({ canvasContext: context, viewport }).promise;
+
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, `image/${options.format}`, 0.95),
+      );
+
+      if (blob) {
+        images.push(blob);
+      }
+    }
+
+    return images;
+  } catch (err) {
+    logger.error("Failed to convert PDF to images", err);
+    throw err;
+  }
+}
