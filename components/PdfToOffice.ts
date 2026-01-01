@@ -1,7 +1,7 @@
+import { type ConversionFormat, cloudConversionService } from "../utils/CloudConversionService.ts";
 import { logger } from "../utils/logger.ts";
-import { cloudConversionService, type ConversionFormat } from "../utils/CloudConversionService.ts";
-import { persistence } from "../utils/persistence.ts";
 import { generateOutputFilename } from "../utils/pdfUtils.ts";
+import { persistence } from "../utils/persistence.ts";
 import { BaseComponent } from "./BaseComponent.ts";
 
 export class PdfToOffice extends BaseComponent {
@@ -26,10 +26,14 @@ export class PdfToOffice extends BaseComponent {
 
   get formatLabel() {
     switch (this.targetFormat) {
-      case "docx": return "Word";
-      case "pptx": return "PowerPoint";
-      case "xlsx": return "Excel (Sheets)";
-      default: return this.targetFormat.toUpperCase();
+      case "docx":
+        return "Word";
+      case "pptx":
+        return "PowerPoint";
+      case "xlsx":
+        return "Excel (Sheets)";
+      default:
+        return this.targetFormat.toUpperCase();
     }
   }
 
@@ -166,11 +170,11 @@ export class PdfToOffice extends BaseComponent {
       const resultBytes = await cloudConversionService.convertFile(
         this.selectedFile,
         this.targetFormat,
-        { ocr: this.ocrEnabled }
+        { ocr: this.ocrEnabled },
       );
 
       this.updateProgress(100, "Conversion complete!");
-      
+
       const ext = `.${this.targetFormat}`;
       const outputName = generateOutputFilename(this.selectedFile.name, "_converted", ext);
 
@@ -179,9 +183,8 @@ export class PdfToOffice extends BaseComponent {
 
       await this.recordJob(`PDF to ${this.formatLabel}`, outputName, resultBytes, {
         ocr: this.ocrEnabled,
-        format: this.targetFormat
+        format: this.targetFormat,
       });
-
     } catch (err: any) {
       logger.error("Cloud conversion failed", err);
       this.showErrorDialog(`Conversion failed: ${err.message}`);

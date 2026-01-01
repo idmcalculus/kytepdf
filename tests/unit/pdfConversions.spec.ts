@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-// @ts-ignore
+import { beforeEach, describe, expect, it, vi } from "vitest";
+// @ts-expect-error
 import { convertPdfToImages } from "../../utils/pdfEngine";
 
 // Mock pdfConfig
@@ -35,14 +35,14 @@ vi.mock("../../utils/pdfConfig", () => ({
 describe("pdfConversions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    
+
     mockGetPage.mockResolvedValue({
       getViewport: vi.fn().mockReturnValue({ width: 100, height: 200 }),
       render: mockRender,
     });
 
     // Mock HTMLCanvasElement toBlob
-    // @ts-ignore
+    // @ts-expect-error
     HTMLCanvasElement.prototype.toBlob = vi.fn((callback) => {
       callback(new Blob(["mock-image-data"], { type: "image/png" }));
     });
@@ -63,7 +63,7 @@ describe("pdfConversions", () => {
   describe("convertImagesToPdf", () => {
     it("should convert an array of images to a single PDF Uint8Array", async () => {
       const { convertImagesToPdf } = await import("../../utils/pdfEngine");
-      
+
       const mockImages = [
         new File(["data1"], "img1.png", { type: "image/png" }),
         new File(["data2"], "img2.jpg", { type: "image/jpeg" }),

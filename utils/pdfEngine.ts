@@ -1,7 +1,7 @@
-import { logger } from "./logger.ts";
-import { PDFDocument, StandardFonts, pdfjsLib, rgb, degrees } from "./pdfConfig.ts";
 import type { Annotation } from "./AnnotationManager.ts";
 import { adjustYForTextBaseline } from "./coordinates.ts";
+import { logger } from "./logger.ts";
+import { degrees, PDFDocument, pdfjsLib, rgb, StandardFonts } from "./pdfConfig.ts";
 
 export async function embedAllAnnotations(
   pdfData: Uint8Array,
@@ -10,17 +10,23 @@ export async function embedAllAnnotations(
   try {
     const pdfDoc = await PDFDocument.load(pdfData);
     const pages = pdfDoc.getPages();
-    
+
     // Cache for embedded fonts to avoid redundant embedding
     const fontCache: Record<string, any> = {};
     const getFont = async (fontName: string) => {
       if (fontCache[fontName]) return fontCache[fontName];
-      
-      let font;
+
+      let font: Awaited<ReturnType<typeof pdfDoc.embedFont>> | undefined;
       switch (fontName) {
-        case "Times-Roman": font = await pdfDoc.embedFont(StandardFonts.TimesRoman); break;
-        case "Courier": font = await pdfDoc.embedFont(StandardFonts.Courier); break;
-        default: font = await pdfDoc.embedFont(StandardFonts.Helvetica); break;
+        case "Times-Roman":
+          font = await pdfDoc.embedFont(StandardFonts.TimesRoman);
+          break;
+        case "Courier":
+          font = await pdfDoc.embedFont(StandardFonts.Courier);
+          break;
+        default:
+          font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+          break;
       }
       fontCache[fontName] = font;
       return font;
@@ -69,7 +75,7 @@ export async function embedAllAnnotations(
 
         // Convert Data URL to Bytes
         const imageBytes = await fetch(ann.content).then((res) => res.arrayBuffer());
-        let embeddedImage;
+        let embeddedImage: Awaited<ReturnType<typeof pdfDoc.embedPng | typeof pdfDoc.embedJpg>>;
         if (ann.content.includes("image/png")) {
           embeddedImage = await pdfDoc.embedPng(imageBytes);
         } else {
@@ -339,7 +345,7 @@ export async function convertImagesToPdf(images: File[]): Promise<Uint8Array> {
 
     for (const imageFile of images) {
       const arrayBuffer = await imageFile.arrayBuffer();
-      let embeddedImage;
+      let embeddedImage: Awaited<ReturnType<typeof pdfDoc.embedPng | typeof pdfDoc.embedJpg>>;
 
       if (imageFile.type === "image/png") {
         embeddedImage = await pdfDoc.embedPng(arrayBuffer);

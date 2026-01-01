@@ -1,0 +1,125 @@
+// _utilities.scss - Utility classes
+
+@use "variables" as *;
+
+// Display utilities
+.hidden {
+  display: none !important;
+}
+
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+// Text utilities
+.text-center {
+  text-align: center;
+}
+
+.text-muted {
+  color: $text-muted;
+}
+
+.text-primary {
+  color: $color-primary;
+}
+
+.text-accent {
+  color: $color-accent;
+}
+
+.font-bold {
+  font-weight: $font-weight-bold;
+}
+
+.font-semibold {
+  font-weight: $font-weight-semibold;
+}
+
+// Spacing utilities
+.mt-1 {
+  margin-top: $spacing-md;
+}
+
+.mt-2 {
+  margin-top: $spacing-lg;
+}
+
+.mt-3 {
+  margin-top: $spacing-xl;
+}
+
+.mb-1 {
+  margin-bottom: $spacing-md;
+}
+
+.mb-2 {
+  margin-bottom: $spacing-lg;
+}
+
+.gap-1 {
+  gap: $spacing-md;
+}
+
+.gap-2 {
+  gap: $spacing-lg;
+}
+
+// Width utilities
+.w-full {
+  width: 100%;
+}
+
+// Cursor utilities
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.cursor-grab {
+  cursor: grab;
+}
+
+// Overflow utilities
+.overflow-hidden {
+  overflow: hidden;
+}
+
+.overflow-auto {
+  overflow: auto;
+}
+
+// Position utilities
+.relative {
+  position: relative;
+}
+
+.absolute {
+  position: absolute;
+}
+
+// Truncate text
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

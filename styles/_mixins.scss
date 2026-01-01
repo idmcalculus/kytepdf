@@ -1,0 +1,206 @@
+// _mixins.scss - Reusable mixins for KytePDF
+
+@use "variables" as *;
+
+// Glassmorphism effect
+@mixin glassmorphism($blur: 20px, $opacity: 0.7) {
+  background: rgba(2, 6, 23, $opacity);
+  backdrop-filter: blur($blur) saturate(180%);
+  -webkit-backdrop-filter: blur($blur) saturate(180%);
+  border: 1px solid $glass-border;
+}
+
+// Glass background (lighter)
+@mixin glass-bg($blur: 12px) {
+  background: $bg-glass;
+  backdrop-filter: blur($blur);
+  -webkit-backdrop-filter: blur($blur);
+}
+
+// Button base styles
+@mixin button-base {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-sm;
+  border-radius: $radius-lg;
+  font-weight: $font-weight-semibold;
+  cursor: pointer;
+  transition: all $transition-cubic;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+// Primary button
+@mixin button-primary {
+  @include button-base;
+  background: $color-primary;
+  color: white;
+  border: none;
+  box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.3);
+
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 15px 20px -5px rgba(99, 102, 241, 0.4);
+  }
+}
+
+// Secondary button
+@mixin button-secondary {
+  @include button-base;
+  background: rgba(255, 255, 255, 0.05);
+  color: $text-primary;
+  border: 1px solid $border-color;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
+
+// Card styles
+@mixin card {
+  @include glassmorphism;
+  border-radius: $radius-4xl;
+  box-shadow: $shadow-xl;
+}
+
+// Tool card hover effect
+@mixin card-hover {
+  transition: all $transition-cubic;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: $color-primary;
+    transform: translateY(-5px);
+    box-shadow: $shadow-glow-lg;
+  }
+}
+
+// Focus ring for accessibility
+@mixin focus-ring {
+  &:focus-visible {
+    outline: 2px solid $color-primary;
+    outline-offset: 2px;
+  }
+}
+
+// Text truncation
+@mixin truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Gradient text
+@mixin gradient-text($gradient) {
+  background: $gradient;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+// Icon wrapper
+@mixin icon-wrapper($size: 48px) {
+  width: $size;
+  height: $size;
+  background: $primary-glow;
+  border-radius: $radius-lg;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: $color-primary;
+}
+
+// Responsive breakpoints
+@mixin mobile {
+  @media (max-width: $breakpoint-sm) {
+    @content;
+  }
+}
+
+@mixin tablet {
+  @media (max-width: $breakpoint-lg) {
+    @content;
+  }
+}
+
+@mixin tablet-up {
+  @media (min-width: $breakpoint-lg) {
+    @content;
+  }
+}
+
+@mixin desktop {
+  @media (min-width: $breakpoint-xl) {
+    @content;
+  }
+}
+
+// Hide scrollbar
+@mixin hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+// Flex center
+@mixin flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+// Flex between
+@mixin flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+// Absolute center
+@mixin absolute-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+// Full cover
+@mixin full-cover {
+  position: absolute;
+  inset: 0;
+}
+
+// Input base styles
+@mixin input-base {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid $border-color;
+  border-radius: $radius-md;
+  padding: $spacing-lg $spacing-md;
+  color: $text-primary;
+  font-size: $font-size-xl;
+  outline: none;
+  transition: border-color $transition-base;
+
+  &:focus {
+    border-color: $color-primary;
+  }
+}
+
+// Badge styles
+@mixin badge($bg: $color-accent, $color: #000) {
+  background: $bg;
+  color: $color;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-extrabold;
+  padding: 0.2rem 0.6rem;
+  border-radius: $radius-full;
+  text-transform: uppercase;
+}

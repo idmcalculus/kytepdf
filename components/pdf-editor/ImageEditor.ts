@@ -1,5 +1,5 @@
-import { BaseTool } from "./BaseTool";
 import { logger } from "../../utils/logger";
+import { BaseTool } from "./BaseTool";
 
 export class ImageEditor extends BaseTool {
   constructor(context: any) {
@@ -31,9 +31,9 @@ export class ImageEditor extends BaseTool {
         width: 150,
         height: 150,
         content: dataUrl,
-        style: { opacity: 1.0, rotation: 0 }
+        style: { opacity: 1.0, rotation: 0 },
       });
-      
+
       this.context.renderAnnotation(id);
     } catch (err) {
       logger.error("Image upload failed", err);

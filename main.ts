@@ -1,4 +1,4 @@
-import "./style.css";
+import "./styles/main.scss";
 import "./components/ToolDashboard.ts";
 import "./components/PdfCompressor.ts";
 import "./components/PdfMerge.ts";
@@ -117,7 +117,7 @@ function showPdfToExcel() {
 }
 
 function showOfficeToPdf() {
-  mainContainer.innerHTML = '<office-to-pdf></office-to-pdf>';
+  mainContainer.innerHTML = "<office-to-pdf></office-to-pdf>";
 }
 
 function showEdit() {

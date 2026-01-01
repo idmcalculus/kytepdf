@@ -1,11 +1,11 @@
-import type { ToolContext, EditorTool } from "./types";
+import type { EditorTool, ToolContext } from "./types";
 
 export abstract class BaseTool implements EditorTool {
   public active = false;
 
   constructor(
     public id: string,
-    protected context: ToolContext
+    protected context: ToolContext,
   ) {}
 
   onActivate() {

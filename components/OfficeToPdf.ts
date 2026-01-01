@@ -1,7 +1,7 @@
-import { logger } from "../utils/logger.ts";
 import { cloudConversionService } from "../utils/CloudConversionService.ts";
-import { persistence } from "../utils/persistence.ts";
+import { logger } from "../utils/logger.ts";
 import { generateOutputFilename } from "../utils/pdfUtils.ts";
+import { persistence } from "../utils/persistence.ts";
 import { BaseComponent } from "./BaseComponent.ts";
 
 export class OfficeToPdf extends BaseComponent {
@@ -73,8 +73,8 @@ export class OfficeToPdf extends BaseComponent {
     const file = files[0];
     // Custom validation for Office types
     const allowed = [".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls"];
-    const ext = "." + file.name.split('.').pop()?.toLowerCase();
-    
+    const ext = `.${file.name.split(".").pop()?.toLowerCase()}`;
+
     if (!allowed.includes(ext)) {
       this.showErrorDialog(`Invalid file type: ${ext}. Supported formats: Word, PPT, Excel.`);
       return;
@@ -129,22 +129,18 @@ export class OfficeToPdf extends BaseComponent {
       successMsg.classList.add("hidden");
       this.updateProgress(20, "Sending to secure cloud...");
 
-      const resultBytes = await cloudConversionService.convertFile(
-        this.selectedFile,
-        "pdf"
-      );
+      const resultBytes = await cloudConversionService.convertFile(this.selectedFile, "pdf");
 
       this.updateProgress(100, "PDF created!");
-      
+
       const outputName = generateOutputFilename(this.selectedFile.name, "_converted", ".pdf");
 
       this.showSuccess(resultBytes, outputName, "", ".pdf");
       this.showSuccessDialog(`Your PDF document is ready.`);
 
       await this.recordJob(`Office to PDF`, outputName, resultBytes, {
-        originalFormat: this.selectedFile.name.split('.').pop()
+        originalFormat: this.selectedFile.name.split(".").pop(),
       });
-
     } catch (err: any) {
       logger.error("Cloud conversion failed", err);
       this.showErrorDialog(`Conversion failed: ${err.message}`);

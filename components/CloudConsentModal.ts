@@ -41,8 +41,9 @@ export class CloudConsentModal extends HTMLElement {
       const dialog = document.getElementById("globalDialog") as any;
       dialog.show({
         title: "Cloud Data Policy",
-        message: "KytePDF uses industry-standard encryption (AES-256) to protect your files. We do not store your documents longer than necessary for the conversion process (typically less than 5 minutes).",
-        type: "info"
+        message:
+          "KytePDF uses industry-standard encryption (AES-256) to protect your files. We do not store your documents longer than necessary for the conversion process (typically less than 5 minutes).",
+        type: "info",
       });
     };
 
@@ -69,7 +70,7 @@ export class CloudConsentModal extends HTMLElement {
     const overlay = this.querySelector("#consentOverlay") as HTMLElement;
     overlay.classList.remove("active");
     setTimeout(() => overlay.classList.add("hidden"), 300);
-    
+
     if (this.activeResolve) {
       this.activeResolve(confirmed);
       this.activeResolve = null;

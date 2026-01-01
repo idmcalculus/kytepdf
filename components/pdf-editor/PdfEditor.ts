@@ -1,12 +1,11 @@
-import { BaseComponent } from "../BaseComponent.ts";
+import { type Annotation, AnnotationManager } from "../../utils/AnnotationManager.ts";
 import { logger } from "../../utils/logger.ts";
-import { loadPdf, renderPage } from "../../utils/pdfRenderer.ts";
-import { AnnotationManager, type Annotation } from "../../utils/AnnotationManager.ts";
 import { embedAllAnnotations } from "../../utils/pdfEngine.ts";
-
-import { TextEditor } from "./TextEditor";
-import { RectangleToolEditor } from "./RectangleToolEditor";
+import { loadPdf, renderPage } from "../../utils/pdfRenderer.ts";
+import { BaseComponent } from "../BaseComponent.ts";
 import { ImageEditor } from "./ImageEditor";
+import { RectangleToolEditor } from "./RectangleToolEditor";
+import { TextEditor } from "./TextEditor";
 import type { EditorTool } from "./types";
 
 const TARGET_WIDTH = 800;
@@ -18,10 +17,6 @@ export class PdfEditor extends BaseComponent {
   private tools: Map<string, EditorTool> = new Map();
   private selectedAnnotationId: string | null = null;
 
-  constructor() {
-    super();
-  }
-
   connectedCallback() {
     super.connectedCallback();
   }
@@ -32,7 +27,7 @@ export class PdfEditor extends BaseComponent {
       annotationManager: this.annotationManager,
       pdfDoc: this.currentPdfDoc,
       renderAnnotation: (id: string) => this.renderAnnotation(id),
-      showProperties: (id: string) => this.showPropertiesPanel(id)
+      showProperties: (id: string) => this.showPropertiesPanel(id),
     };
 
     this.tools.set("addTextBtn", new TextEditor(context));
@@ -165,7 +160,7 @@ export class PdfEditor extends BaseComponent {
     const toolBtns = this.querySelectorAll(".tool-btn");
     const workspace = this.querySelector(".editor-workspace") as HTMLElement;
 
-    toolBtns.forEach(btn => {
+    toolBtns.forEach((btn) => {
       btn.addEventListener("click", () => {
         const tool = this.tools.get(btn.id);
         if (btn.id === "addImageBtn") {
@@ -175,13 +170,15 @@ export class PdfEditor extends BaseComponent {
         }
 
         if (this.activeTool) this.activeTool.onDeactivate();
-        toolBtns.forEach(b => b.classList.remove("active"));
-        
+        for (const b of toolBtns) {
+          b.classList.remove("active");
+        }
+
         if (tool) {
           btn.classList.add("active");
           this.activeTool = tool;
           tool.onActivate();
-          
+
           workspace.className = "editor-workspace";
           if (btn.id === "addTextBtn") workspace.classList.add("cursor-text-tool");
           else if (btn.id === "addRectBtn") workspace.classList.add("cursor-crosshair");
@@ -211,20 +208,34 @@ export class PdfEditor extends BaseComponent {
     const shapeBorderInput = this.querySelector("#shapeBorderInput") as HTMLInputElement;
     const shapeOpacityInput = this.querySelector("#shapeOpacityInput") as HTMLInputElement;
     const imageOpacityInput = this.querySelector("#imageOpacityInput") as HTMLInputElement;
-    
+
     const rotateLeftBtn = this.querySelector("#rotateLeftBtn");
     const rotateRightBtn = this.querySelector("#rotateRightBtn");
     const zoomInBtn = this.querySelector("#zoomInBtn");
     const zoomOutBtn = this.querySelector("#zoomOutBtn");
     const resetImageBtn = this.querySelector("#resetImageBtn");
 
-    fontSelect?.addEventListener("change", () => this.updateSelectedAnnotation({ font: fontSelect.value }));
-    fontSizeInput?.addEventListener("input", () => this.updateSelectedAnnotation({ fontSize: parseInt(fontSizeInput.value, 10) }));
-    colorPicker?.addEventListener("input", () => this.updateSelectedAnnotation({ color: colorPicker.value }));
-    shapeFillPicker?.addEventListener("input", () => this.updateSelectedAnnotation({ color: shapeFillPicker.value }));
-    shapeBorderInput?.addEventListener("input", () => this.updateSelectedAnnotation({ strokeWidth: parseInt(shapeBorderInput.value, 10) }));
-    shapeOpacityInput?.addEventListener("input", () => this.updateSelectedAnnotation({ opacity: parseFloat(shapeOpacityInput.value) }));
-    imageOpacityInput?.addEventListener("input", () => this.updateSelectedAnnotation({ opacity: parseFloat(imageOpacityInput.value) }));
+    fontSelect?.addEventListener("change", () =>
+      this.updateSelectedAnnotation({ font: fontSelect.value }),
+    );
+    fontSizeInput?.addEventListener("input", () =>
+      this.updateSelectedAnnotation({ fontSize: parseInt(fontSizeInput.value, 10) }),
+    );
+    colorPicker?.addEventListener("input", () =>
+      this.updateSelectedAnnotation({ color: colorPicker.value }),
+    );
+    shapeFillPicker?.addEventListener("input", () =>
+      this.updateSelectedAnnotation({ color: shapeFillPicker.value }),
+    );
+    shapeBorderInput?.addEventListener("input", () =>
+      this.updateSelectedAnnotation({ strokeWidth: parseInt(shapeBorderInput.value, 10) }),
+    );
+    shapeOpacityInput?.addEventListener("input", () =>
+      this.updateSelectedAnnotation({ opacity: parseFloat(shapeOpacityInput.value) }),
+    );
+    imageOpacityInput?.addEventListener("input", () =>
+      this.updateSelectedAnnotation({ opacity: parseFloat(imageOpacityInput.value) }),
+    );
 
     rotateLeftBtn?.addEventListener("click", () => {
       const ann = this.annotationManager.getAnnotation(this.selectedAnnotationId!);
@@ -261,7 +272,10 @@ export class PdfEditor extends BaseComponent {
       const target = e.target as HTMLElement;
       const pageWrapper = target.closest(".pdf-page-wrapper") as HTMLElement;
       if (pageWrapper && this.activeTool) {
-        if (target.classList.contains("pdf-page-canvas") || target.classList.contains("pdf-page-wrapper")) {
+        if (
+          target.classList.contains("pdf-page-canvas") ||
+          target.classList.contains("pdf-page-wrapper")
+        ) {
           const rect = pageWrapper.getBoundingClientRect();
           const x = e.clientX - rect.left;
           const y = e.clientY - rect.top;
@@ -277,55 +291,75 @@ export class PdfEditor extends BaseComponent {
     const ann = this.annotationManager.getAnnotation(this.selectedAnnotationId);
     if (!ann) return;
 
-    const el = this.querySelector(`.annotation[data-id="${this.selectedAnnotationId}"]`) as HTMLElement;
+    const el = this.querySelector(
+      `.annotation[data-id="${this.selectedAnnotationId}"]`,
+    ) as HTMLElement;
     if (!el) return;
 
     if (ann.type === "text") {
       const textEl = el.querySelector("div[contenteditable]") as HTMLElement;
       if (props.fontSize) {
         textEl.style.fontSize = `${props.fontSize}px`;
-        this.annotationManager.updateAnnotation(ann.id, { style: { ...ann.style, fontSize: props.fontSize } });
+        this.annotationManager.updateAnnotation(ann.id, {
+          style: { ...ann.style, fontSize: props.fontSize },
+        });
       }
       if (props.color) {
         textEl.style.color = props.color;
-        this.annotationManager.updateAnnotation(ann.id, { style: { ...ann.style, color: props.color } });
+        this.annotationManager.updateAnnotation(ann.id, {
+          style: { ...ann.style, color: props.color },
+        });
       }
       if (props.font) {
         textEl.style.fontFamily = props.font;
-        this.annotationManager.updateAnnotation(ann.id, { style: { ...ann.style, font: props.font } });
+        this.annotationManager.updateAnnotation(ann.id, {
+          style: { ...ann.style, font: props.font },
+        });
       }
     } else if (ann.type === "rectangle") {
       if (props.color) {
         el.style.backgroundColor = props.color;
-        this.annotationManager.updateAnnotation(ann.id, { style: { ...ann.style, color: props.color } });
+        this.annotationManager.updateAnnotation(ann.id, {
+          style: { ...ann.style, color: props.color },
+        });
       }
       if (props.strokeWidth !== undefined) {
         el.style.borderWidth = `${props.strokeWidth}px`;
-        this.annotationManager.updateAnnotation(ann.id, { style: { ...ann.style, strokeWidth: props.strokeWidth } });
+        this.annotationManager.updateAnnotation(ann.id, {
+          style: { ...ann.style, strokeWidth: props.strokeWidth },
+        });
       }
       if (props.opacity !== undefined) {
         el.style.opacity = props.opacity.toString();
-        this.annotationManager.updateAnnotation(ann.id, { style: { ...ann.style, opacity: props.opacity } });
+        this.annotationManager.updateAnnotation(ann.id, {
+          style: { ...ann.style, opacity: props.opacity },
+        });
       }
     } else if (ann.type === "image") {
       if (props.opacity !== undefined) {
         el.style.opacity = props.opacity.toString();
-        this.annotationManager.updateAnnotation(ann.id, { style: { ...ann.style, opacity: props.opacity } });
+        this.annotationManager.updateAnnotation(ann.id, {
+          style: { ...ann.style, opacity: props.opacity },
+        });
       }
       if (props.rotation !== undefined) {
         el.style.transform = `rotate(${props.rotation}deg)`;
-        this.annotationManager.updateAnnotation(ann.id, { style: { ...ann.style, rotation: props.rotation } });
+        this.annotationManager.updateAnnotation(ann.id, {
+          style: { ...ann.style, rotation: props.rotation },
+        });
       }
       if (props.scale !== undefined) {
         // If it's a reset, we use the initial stored dimensions if we have them
-        // or just hardcoded 150 for now. 
+        // or just hardcoded 150 for now.
         // For incremental, we multiply existing width.
         const currentW = parseFloat(el.style.width);
         const currentH = parseFloat(el.style.height);
-        
-        let newW, newH;
+
+        let newW: number;
+        let newH: number;
         if (props.reset) {
-          newW = 150; newH = 150;
+          newW = 150;
+          newH = 150;
         } else {
           newW = currentW * props.scale;
           newH = currentH * props.scale;
@@ -349,21 +383,34 @@ export class PdfEditor extends BaseComponent {
     const panel = this.querySelector("#propertiesPanel");
     const sections = this.querySelectorAll(".prop-section");
     panel?.classList.remove("hidden");
-    sections.forEach(s => s.classList.add("hidden"));
+    for (const s of sections) {
+      s.classList.add("hidden");
+    }
 
     if (ann.type === "text") {
       this.querySelector("#textProperties")?.classList.remove("hidden");
-      (this.querySelector("#fontSizeInput") as HTMLInputElement).value = (ann.style?.fontSize || 16).toString();
-      (this.querySelector("#colorPicker") as HTMLInputElement).value = ann.style?.color || "#000000";
-      (this.querySelector("#fontFamilySelect") as HTMLSelectElement).value = ann.style?.font || "Helvetica";
+      (this.querySelector("#fontSizeInput") as HTMLInputElement).value = (
+        ann.style?.fontSize || 16
+      ).toString();
+      (this.querySelector("#colorPicker") as HTMLInputElement).value =
+        ann.style?.color || "#000000";
+      (this.querySelector("#fontFamilySelect") as HTMLSelectElement).value =
+        ann.style?.font || "Helvetica";
     } else if (ann.type === "rectangle") {
       this.querySelector("#shapeProperties")?.classList.remove("hidden");
-      (this.querySelector("#shapeFillPicker") as HTMLInputElement).value = ann.style?.color || "#ffffff";
-      (this.querySelector("#shapeBorderInput") as HTMLInputElement).value = (ann.style?.strokeWidth || 0).toString();
-      (this.querySelector("#shapeOpacityInput") as HTMLInputElement).value = (ann.style?.opacity ?? 1).toString();
+      (this.querySelector("#shapeFillPicker") as HTMLInputElement).value =
+        ann.style?.color || "#ffffff";
+      (this.querySelector("#shapeBorderInput") as HTMLInputElement).value = (
+        ann.style?.strokeWidth || 0
+      ).toString();
+      (this.querySelector("#shapeOpacityInput") as HTMLInputElement).value = (
+        ann.style?.opacity ?? 1
+      ).toString();
     } else if (ann.type === "image") {
       this.querySelector("#imageProperties")?.classList.remove("hidden");
-      (this.querySelector("#imageOpacityInput") as HTMLInputElement).value = (ann.style?.opacity ?? 1).toString();
+      (this.querySelector("#imageOpacityInput") as HTMLInputElement).value = (
+        ann.style?.opacity ?? 1
+      ).toString();
     }
   }
 
@@ -429,7 +476,9 @@ export class PdfEditor extends BaseComponent {
 
       el.appendChild(textEl);
       textEl.addEventListener("mousedown", (e) => this.startDragging(e, id));
-      textEl.addEventListener("input", () => this.annotationManager.updateAnnotation(id, { content: textEl.innerText }));
+      textEl.addEventListener("input", () =>
+        this.annotationManager.updateAnnotation(id, { content: textEl.innerText }),
+      );
       textEl.addEventListener("focus", () => {
         this.selectedAnnotationId = id;
         textEl.style.borderColor = "var(--primary)";
@@ -461,15 +510,24 @@ export class PdfEditor extends BaseComponent {
       } else {
         const img = document.createElement("img");
         img.src = ann.content || "";
-        img.style.width = "100%"; img.style.height = "100%"; img.style.objectFit = "contain"; img.style.pointerEvents = "none";
+        img.style.width = "100%";
+        img.style.height = "100%";
+        img.style.objectFit = "contain";
+        img.style.pointerEvents = "none";
         el.appendChild(img);
       }
 
       const resizer = document.createElement("div");
       resizer.className = "resizer";
-      resizer.style.width = "10px"; resizer.style.height = "10px"; resizer.style.backgroundColor = "var(--primary)";
-      resizer.style.position = "absolute"; resizer.style.right = "-5px"; resizer.style.bottom = "-5px";
-      resizer.style.cursor = "nwse-resize"; resizer.style.borderRadius = "50%"; resizer.style.display = "none";
+      resizer.style.width = "10px";
+      resizer.style.height = "10px";
+      resizer.style.backgroundColor = "var(--primary)";
+      resizer.style.position = "absolute";
+      resizer.style.right = "-5px";
+      resizer.style.bottom = "-5px";
+      resizer.style.cursor = "nwse-resize";
+      resizer.style.borderRadius = "50%";
+      resizer.style.display = "none";
       el.appendChild(resizer);
 
       el.addEventListener("mousedown", (e) => {
@@ -488,14 +546,19 @@ export class PdfEditor extends BaseComponent {
       el.addEventListener("blur", () => {
         setTimeout(() => {
           if (document.activeElement !== el) {
-            el.style.boxShadow = "none"; deleteBtn.style.display = "none"; resizer.style.display = "none";
+            el.style.boxShadow = "none";
+            deleteBtn.style.display = "none";
+            resizer.style.display = "none";
           }
         }, 200);
       });
     }
 
     el.appendChild(deleteBtn);
-    deleteBtn.addEventListener("click", (e) => { e.stopPropagation(); this.removeAnnotation(id); });
+    deleteBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.removeAnnotation(id);
+    });
     pageWrapper.appendChild(el);
     if (ann.type === "text") {
       const textEl = el.querySelector("div[contenteditable]");
@@ -506,33 +569,52 @@ export class PdfEditor extends BaseComponent {
   }
 
   private startResizing(e: MouseEvent, id: string) {
-    e.stopPropagation(); e.preventDefault();
+    e.stopPropagation();
+    e.preventDefault();
     const el = this.querySelector(`.annotation[data-id="${id}"]`) as HTMLElement;
-    const startX = e.clientX; const startY = e.clientY;
-    const initialWidth = el.offsetWidth; const initialHeight = el.offsetHeight;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const initialWidth = el.offsetWidth;
+    const initialHeight = el.offsetHeight;
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      const dw = moveEvent.clientX - startX; const dh = moveEvent.clientY - startY;
-      const newW = Math.max(10, initialWidth + dw); const newH = Math.max(10, initialHeight + dh);
-      el.style.width = `${newW}px`; el.style.height = `${newH}px`;
+      const dw = moveEvent.clientX - startX;
+      const dh = moveEvent.clientY - startY;
+      const newW = Math.max(10, initialWidth + dw);
+      const newH = Math.max(10, initialHeight + dh);
+      el.style.width = `${newW}px`;
+      el.style.height = `${newH}px`;
       this.annotationManager.updateAnnotation(id, { width: newW, height: newH });
     };
-    const handleMouseUp = () => { document.removeEventListener("mousemove", handleMouseMove); document.removeEventListener("mouseup", handleMouseUp); };
-    document.addEventListener("mousemove", handleMouseMove); document.addEventListener("mouseup", handleMouseUp);
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
   }
 
   private startDragging(e: MouseEvent, id: string) {
     e.stopPropagation();
     const annElement = this.querySelector(`.annotation[data-id="${id}"]`) as HTMLElement;
-    const startX = e.clientX; const startY = e.clientY;
-    const initialLeft = parseFloat(annElement.style.left); const initialTop = parseFloat(annElement.style.top);
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const initialLeft = parseFloat(annElement.style.left);
+    const initialTop = parseFloat(annElement.style.top);
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      const dx = moveEvent.clientX - startX; const dy = moveEvent.clientY - startY;
-      const newX = initialLeft + dx; const newY = initialTop + dy;
-      annElement.style.left = `${newX}px`; annElement.style.top = `${newY}px`;
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+      const newX = initialLeft + dx;
+      const newY = initialTop + dy;
+      annElement.style.left = `${newX}px`;
+      annElement.style.top = `${newY}px`;
       this.annotationManager.updateAnnotation(id, { x: newX, y: newY });
     };
-    const handleMouseUp = () => { document.removeEventListener("mousemove", handleMouseMove); document.removeEventListener("mouseup", handleMouseUp); };
-    document.addEventListener("mousemove", handleMouseMove); document.addEventListener("mouseup", handleMouseUp);
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
   }
 
   async handleSave() {
@@ -547,18 +629,18 @@ export class PdfEditor extends BaseComponent {
         const page = await this.currentPdfDoc.getPage(ann.pageIndex + 1);
         const viewport = page.getViewport({ scale: 1.0 });
         const scale = TARGET_WIDTH / viewport.width;
-        
+
         // We pass the raw DOM coordinates to the engine, and let the engine handle the PDF origin inversion
         // OR we do it here. The engine currently does: pdfY = height - ann.y - ...
         // So we just need to scale the DOM pixels to PDF points.
-        
+
         scaledAnnotations.push({
           ...ann,
           x: ann.x / scale,
           y: ann.y / scale,
           width: ann.width ? ann.width / scale : undefined,
           height: ann.height ? ann.height / scale : undefined,
-          style: { ...ann.style, fontSize: (ann.style?.fontSize || 16) / scale }
+          style: { ...ann.style, fontSize: (ann.style?.fontSize || 16) / scale },
         });
       }
       this.updateProgress(50, "Embedding all annotations...");
@@ -566,9 +648,13 @@ export class PdfEditor extends BaseComponent {
       this.updateProgress(90, "Saving...");
       const success = await this.savePdf(modifiedPdfBytes, this.selectedFile.name, "_edited");
       if (success) {
-        await this.recordJob("Edit", this.selectedFile.name, modifiedPdfBytes, { annotationCount: annotations.length });
+        await this.recordJob("Edit", this.selectedFile.name, modifiedPdfBytes, {
+          annotationCount: annotations.length,
+        });
         this.updateProgress(100, "Saved!");
-      } else { this.updateProgress(0, "Save cancelled"); }
+      } else {
+        this.updateProgress(0, "Save cancelled");
+      }
       setTimeout(() => {
         const progressSection = this.querySelector("#progressSection");
         if (progressSection) progressSection.classList.add("hidden");
@@ -615,7 +701,7 @@ export class PdfEditor extends BaseComponent {
   async renderPages() {
     const container = this.querySelector("#pdfContainer");
     if (!container || !this.currentPdfDoc) return;
-    container.innerHTML = ""; 
+    container.innerHTML = "";
     for (let i = 1; i <= this.currentPdfDoc.numPages; i++) {
       const pageWrapper = document.createElement("div");
       pageWrapper.className = "pdf-page-wrapper";
@@ -625,11 +711,11 @@ export class PdfEditor extends BaseComponent {
       canvas.className = "pdf-page-canvas";
       pageWrapper.appendChild(canvas);
       container.appendChild(pageWrapper);
-            const page = await this.currentPdfDoc.getPage(i);
-            const viewport = page.getViewport({ scale: 1.0 });
-            const scale = TARGET_WIDTH / viewport.width;
-      
-            await renderPage(this.currentPdfDoc, i, canvas, scale);
+      const page = await this.currentPdfDoc.getPage(i);
+      const viewport = page.getViewport({ scale: 1.0 });
+      const scale = TARGET_WIDTH / viewport.width;
+
+      await renderPage(this.currentPdfDoc, i, canvas, scale);
     }
   }
 }

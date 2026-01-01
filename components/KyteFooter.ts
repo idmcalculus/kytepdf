@@ -1,10 +1,10 @@
 export class KyteFooter extends HTMLElement {
-	connectedCallback() {
-		this.render();
-	}
+  connectedCallback() {
+    this.render();
+  }
 
-	render() {
-		this.innerHTML = `
+  render() {
+    this.innerHTML = `
       <footer>
         <div class="footer-content centered">
           <div class="footer-branding">
@@ -15,9 +15,9 @@ export class KyteFooter extends HTMLElement {
         </div>
       </footer>
     `;
-	}
+  }
 }
 
 if (!customElements.get("kyte-footer")) {
-	customElements.define("kyte-footer", KyteFooter);
+  customElements.define("kyte-footer", KyteFooter);
 }

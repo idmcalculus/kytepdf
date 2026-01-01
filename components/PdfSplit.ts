@@ -1,7 +1,7 @@
 import { logger } from "../utils/logger.ts";
 import { PDFDocument, pdfjsLib } from "../utils/pdfConfig.ts";
-import { persistence } from "../utils/persistence.ts";
 import { formatSelectionInfo } from "../utils/pdfUtils.ts";
+import { persistence } from "../utils/persistence.ts";
 import { BaseComponent } from "./BaseComponent.ts";
 
 export class PdfSplit extends BaseComponent {

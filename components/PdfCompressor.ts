@@ -1,8 +1,8 @@
 import { logger } from "../utils/logger.ts";
 import { pdfjsLib } from "../utils/pdfConfig.ts";
 import { compressPdf } from "../utils/pdfEngine.ts";
-import { persistence } from "../utils/persistence.ts";
 import { calculateSavingsPercent, generateOutputFilename } from "../utils/pdfUtils.ts";
+import { persistence } from "../utils/persistence.ts";
 import { BaseComponent } from "./BaseComponent.ts";
 
 export class PdfCompressor extends BaseComponent {

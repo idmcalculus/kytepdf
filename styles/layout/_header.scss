@@ -1,0 +1,118 @@
+// layout/_header.scss - Header/navigation styles
+
+@use "../variables" as *;
+@use "../mixins" as *;
+
+// View header (back button + title area)
+.view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: $spacing-xl;
+  width: 100%;
+
+  @media (max-width: $breakpoint-lg) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: $spacing-md;
+  }
+}
+
+// Back button
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-sm;
+  color: $text-muted;
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  cursor: pointer;
+  margin-bottom: $spacing-xl;
+  transition: color $transition-base;
+  background: none;
+  border: none;
+  padding: 0;
+
+  &:hover {
+    color: $color-primary;
+  }
+}
+
+// Header link (About, etc.)
+.header-link {
+  background: none;
+  border: none;
+  color: $text-muted;
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  cursor: pointer;
+  transition: color $transition-base;
+  padding: $spacing-sm $spacing-md;
+
+  &:hover {
+    color: $color-primary;
+  }
+}
+
+// User account header
+.user-account-header {
+  display: flex;
+  align-items: center;
+  z-index: 10;
+}
+
+// Account pill
+.account-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid $glass-border;
+  border-radius: $radius-full;
+  color: $text-primary;
+  font-size: $font-size-base;
+  font-weight: $font-weight-medium;
+  cursor: pointer;
+  transition: all $transition-cubic;
+  backdrop-filter: blur(10px);
+
+  &:hover {
+    background: rgba(6, 182, 212, 0.1);
+    border-color: $color-primary;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(6, 182, 212, 0.2);
+  }
+
+  svg {
+    color: $color-primary;
+  }
+}
+
+// File list header
+.file-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: $spacing-md;
+  gap: $spacing-md;
+
+  @media (max-width: $breakpoint-sm) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+// Header actions
+.header-actions {
+  display: flex;
+  gap: $spacing-sm;
+
+  @media (max-width: $breakpoint-sm) {
+    width: 100%;
+
+    .btn {
+      flex: 1;
+    }
+  }
+}

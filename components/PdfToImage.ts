@@ -1,17 +1,18 @@
+import JSZip from "jszip";
 import { logger } from "../utils/logger.ts";
 import { pdfjsLib } from "../utils/pdfConfig.ts";
 import { convertPdfToImages } from "../utils/pdfEngine.ts";
-import { persistence } from "../utils/persistence.ts";
 import { generateOutputFilename } from "../utils/pdfUtils.ts";
+import { persistence } from "../utils/persistence.ts";
 import { BaseComponent } from "./BaseComponent.ts";
-import JSZip from "jszip";
 
 export class PdfToImage extends BaseComponent {
   protected toolKey = "pdf-to-image";
   private selectedPages: Set<number> = new Set();
   private format: "png" | "jpeg" = "png";
   private scale = 2.0;
-  private downloadMode: "selected-individual" | "selected-zip" | "all-individual" | "all-zip" = "all-zip";
+  private downloadMode: "selected-individual" | "selected-zip" | "all-individual" | "all-zip" =
+    "all-zip";
 
   render() {
     this.innerHTML = `
@@ -143,7 +144,7 @@ export class PdfToImage extends BaseComponent {
       this.scale = parseFloat(scaleInput.value) || 2.0;
     };
 
-    modeRadios.forEach(radio => {
+    modeRadios.forEach((radio) => {
       radio.addEventListener("change", (e) => {
         this.downloadMode = (e.target as HTMLInputElement).value as any;
         this.checkSelectionWarning();
@@ -216,7 +217,8 @@ export class PdfToImage extends BaseComponent {
   async renderThumbnails() {
     if (!this.selectedFile) return;
     const thumbnailGrid = this.querySelector("#thumbnailGrid") as HTMLElement;
-    thumbnailGrid.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">Loading pages...</p>';
+    thumbnailGrid.innerHTML =
+      '<p style="grid-column: 1/-1; text-align: center;">Loading pages...</p>';
 
     try {
       const data = await this.selectedFile.arrayBuffer();
@@ -242,7 +244,8 @@ export class PdfToImage extends BaseComponent {
         const viewport = page.getViewport({ scale: 0.3 });
         canvas.height = viewport.height;
         canvas.width = viewport.width;
-        await page.render({ canvasContext: canvas.getContext("2d") as any, viewport, canvas }).promise;
+        await page.render({ canvasContext: canvas.getContext("2d") as any, viewport, canvas })
+          .promise;
 
         pageItem.onclick = () => {
           if (this.selectedPages.has(i)) {
@@ -273,7 +276,7 @@ export class PdfToImage extends BaseComponent {
     const convertBtn = this.querySelector("#convertBtn") as HTMLButtonElement;
     const progressSection = this.querySelector("#progressSection") as HTMLElement;
     const successMsg = this.querySelector("#successMessage") as HTMLElement;
-    
+
     convertBtn.disabled = true;
     progressSection.classList.remove("hidden");
     successMsg.classList.add("hidden");
@@ -281,13 +284,18 @@ export class PdfToImage extends BaseComponent {
 
     try {
       const pdfData = new Uint8Array(await this.selectedFile.arrayBuffer());
-      const allImages = await convertPdfToImages(pdfData, { format: this.format, scale: this.scale });
-      
-      const indicesToExport = isSelectedMode 
-        ? Array.from(this.selectedPages).map(p => p - 1).sort((a,b) => a - b)
+      const allImages = await convertPdfToImages(pdfData, {
+        format: this.format,
+        scale: this.scale,
+      });
+
+      const indicesToExport = isSelectedMode
+        ? Array.from(this.selectedPages)
+            .map((p) => p - 1)
+            .sort((a, b) => a - b)
         : allImages.map((_, i) => i);
 
-      const imagesToExport = indicesToExport.map(i => allImages[i]);
+      const imagesToExport = indicesToExport.map((i) => allImages[i]);
 
       if (imagesToExport.length === 0) {
         throw new Error("No pages found for export");
@@ -299,7 +307,7 @@ export class PdfToImage extends BaseComponent {
         this.updateProgress(80, "Creating ZIP file...");
         const zip = new JSZip();
         const baseName = this.selectedFile.name.replace(".pdf", "");
-        
+
         imagesToExport.forEach((blob, i) => {
           const pageNum = indicesToExport[i] + 1;
           const ext = this.format === "jpeg" ? "jpg" : "png";
@@ -307,17 +315,21 @@ export class PdfToImage extends BaseComponent {
         });
 
         const zipBlob = await zip.generateAsync({ type: "blob" });
-        const outputName = generateOutputFilename(this.selectedFile.name, isSelectedMode ? "_selected_images" : "_images", ".zip");
+        const outputName = generateOutputFilename(
+          this.selectedFile.name,
+          isSelectedMode ? "_selected_images" : "_images",
+          ".zip",
+        );
         const zipData = new Uint8Array(await zipBlob.arrayBuffer());
 
         this.updateProgress(100, "Done!");
         this.showSuccess(zipData, outputName, "", ".zip");
         this.showSuccessDialog(`Successfully converted ${imagesToExport.length} pages to ZIP.`);
-        
+
         await this.recordJob("PDF to Image", outputName, zipData, {
           pageCount: imagesToExport.length,
           format: this.format,
-          mode: this.downloadMode
+          mode: this.downloadMode,
         });
       } else {
         // Individual Files
@@ -329,24 +341,25 @@ export class PdfToImage extends BaseComponent {
           const pageNum = indicesToExport[i] + 1;
           const blob = imagesToExport[i];
           const fileName = `${baseName}_page_${pageNum}${ext}`;
-          
+
           const url = URL.createObjectURL(blob);
           const link = document.createElement("a");
           link.href = url;
           link.download = fileName;
           link.click();
           URL.revokeObjectURL(url);
-          
+
           // Small delay to prevent browser download throttling
           if (imagesToExport.length > 1) {
-            await new Promise(resolve => setTimeout(resolve, 100));
+            await new Promise((resolve) => setTimeout(resolve, 100));
           }
         }
 
         this.updateProgress(100, "Done!");
-        this.showSuccessDialog(`Successfully triggered download for ${imagesToExport.length} images.`);
+        this.showSuccessDialog(
+          `Successfully triggered download for ${imagesToExport.length} images.`,
+        );
       }
-
     } catch (err: any) {
       logger.error("Conversion failed", err);
       this.showErrorDialog(`Conversion failed: ${err.message}`);

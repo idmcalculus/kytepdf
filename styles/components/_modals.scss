@@ -1,0 +1,212 @@
+// components/_modals.scss - Modal/dialog base styles
+
+@use "../variables" as *;
+@use "../mixins" as *;
+
+// Modal overlay
+.kyte-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: $z-modal;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity $transition-slow;
+  pointer-events: none;
+
+  &.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+// Modal container
+.kyte-modal {
+  background: $bg-card;
+  border: 1px solid $glass-border;
+  border-radius: $radius-4xl;
+  padding: $spacing-2xl;
+  max-width: 450px;
+  width: 90%;
+  text-align: center;
+  box-shadow: $shadow-xl;
+  transform: scale(0.9) translateY(20px);
+  transition: all $transition-bounce;
+
+  .kyte-overlay.active & {
+    transform: scale(1) translateY(0);
+  }
+}
+
+.kyte-modal-icon {
+  margin-bottom: $spacing-lg;
+  display: flex;
+  justify-content: center;
+}
+
+.kyte-modal h2 {
+  font-size: $font-size-6xl;
+  font-weight: $font-weight-extrabold;
+  margin-bottom: $spacing-md;
+  color: #fff;
+}
+
+.kyte-modal p {
+  color: $text-muted;
+  line-height: 1.6;
+  margin-bottom: $spacing-xl;
+}
+
+.kyte-modal-actions {
+  display: flex;
+  gap: $spacing-md;
+}
+
+// Modal variants
+.kyte-modal-success .kyte-modal-icon {
+  color: $color-secondary;
+  filter: drop-shadow(0 0 10px $secondary-glow);
+}
+
+.kyte-modal-error .kyte-modal-icon {
+  color: $color-error;
+  filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.4));
+}
+
+.kyte-modal-warning .kyte-modal-icon {
+  color: $color-accent;
+  filter: drop-shadow(0 0 10px $accent-glow);
+}
+
+.kyte-modal-info .kyte-modal-icon {
+  color: $color-primary;
+  filter: drop-shadow(0 0 10px $primary-glow);
+}
+
+// About modal specifics
+.about-modal {
+  max-width: 550px;
+  text-align: left;
+}
+
+.about-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: $spacing-lg;
+  border-bottom: 1px solid $border-color;
+  padding-bottom: $spacing-md;
+
+  h2 {
+    margin: 0;
+    @include gradient-text(linear-gradient(135deg, #fff 0%, $color-primary 100%));
+  }
+
+  .btn-close {
+    margin-top: 0;
+    flex-shrink: 0;
+  }
+}
+
+.about-copy {
+  font-size: $font-size-2xl;
+  line-height: 1.7;
+  color: $text-primary;
+  margin-bottom: $spacing-xl;
+}
+
+.about-credits {
+  background: $bg-glass;
+  border: 1px solid $border-color;
+  border-radius: $radius-xl;
+  padding: $spacing-lg;
+  margin-bottom: $spacing-lg;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  p {
+    margin-bottom: $spacing-lg !important;
+    font-weight: $font-weight-semibold;
+  }
+
+  a {
+    color: $color-primary;
+    text-decoration: none;
+  }
+}
+
+.social-icons {
+  display: flex;
+  gap: $spacing-md;
+  align-items: center;
+  justify-content: center;
+
+  a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: $text-muted;
+    transition: color $transition-base, transform $transition-base;
+
+    &:hover {
+      color: $color-primary;
+      transform: scale(1.1);
+    }
+  }
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+.about-contribute {
+  background: $bg-glass;
+  border: 1px solid $border-color;
+  border-radius: $radius-xl;
+  padding: $spacing-md $spacing-lg;
+  margin-bottom: $spacing-lg;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  p {
+    margin: 0 !important;
+    padding: 0;
+    font-size: $font-size-lg;
+    color: $text-muted;
+    line-height: 1.5;
+  }
+
+  a {
+    color: $color-primary;
+    text-decoration: none;
+    font-weight: $font-weight-semibold;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+.about-support {
+  text-align: center;
+  padding: $spacing-lg;
+  background: rgba(251, 191, 36, 0.05);
+  border: 1px dashed $color-accent;
+  border-radius: $radius-xl;
+}
+
+.support-text {
+  font-size: $font-size-md;
+  color: $text-muted;
+  margin-bottom: $spacing-md !important;
+}

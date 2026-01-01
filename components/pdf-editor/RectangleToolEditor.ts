@@ -13,9 +13,9 @@ export class RectangleToolEditor extends BaseTool {
       y,
       width: 100,
       height: 50,
-      style: { color: "#ffffff", strokeWidth: 0, opacity: 1.0 }
+      style: { color: "#ffffff", strokeWidth: 0, opacity: 1.0 },
     });
-    
+
     this.context.renderAnnotation(id);
   }
 }

@@ -1,5 +1,5 @@
-import { pdfjsLib } from "./pdfConfig.ts";
 import { logger } from "./logger.ts";
+import { pdfjsLib } from "./pdfConfig.ts";
 
 export async function loadPdf(data: ArrayBuffer | Uint8Array) {
   try {
@@ -15,7 +15,7 @@ export async function renderPage(
   pdfDoc: any,
   pageNumber: number,
   canvas: HTMLCanvasElement,
-  scale = 1.0
+  scale = 1.0,
 ) {
   try {
     const page = await pdfDoc.getPage(pageNumber);

@@ -1,7 +1,7 @@
 import { logger } from "../utils/logger.ts";
 import { PDFDocument } from "../utils/pdfConfig.ts";
+import { moveArrayItem, swapArrayItems } from "../utils/pdfUtils.ts";
 import { persistence } from "../utils/persistence.ts";
-import { swapArrayItems, moveArrayItem } from "../utils/pdfUtils.ts";
 import { BaseComponent } from "./BaseComponent.ts";
 
 export class PdfMerge extends BaseComponent {

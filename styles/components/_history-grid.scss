@@ -1,0 +1,120 @@
+// components/_history-grid.scss - Job history cards
+
+@use "../variables" as *;
+
+// History section
+.history-section {
+  margin-top: $spacing-3xl;
+  padding-top: $spacing-xl;
+  border-top: 1px solid $border-color;
+}
+
+// Job card
+.job-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid $border-color;
+  border-radius: $radius-xl;
+  padding: $spacing-lg;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-lg;
+  transition: all $transition-slow;
+  position: relative;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: $primary-glow;
+    transform: translateY(-3px);
+  }
+}
+
+// Job header
+.job-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+// Job tool badge
+.job-tool-badge {
+  padding: 3px 8px;
+  background: $primary-glow;
+  color: $color-primary;
+  border-radius: 6px;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-bold;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+// Job time
+.job-time {
+  font-size: $font-size-xs;
+  color: $text-muted;
+}
+
+// Job filename
+.job-filename {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $text-primary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// Job metrics
+.job-metrics {
+  font-size: $font-size-sm;
+  color: $color-accent;
+  font-weight: $font-weight-medium;
+  background: rgba(251, 191, 36, 0.05);
+  padding: 4px 8px;
+  border-radius: 6px;
+  width: fit-content;
+}
+
+// Job actions
+.job-actions {
+  display: flex;
+  gap: $spacing-sm;
+  margin-top: $spacing-sm;
+}
+
+// Job button
+.job-btn {
+  flex: 1;
+  padding: 6px;
+  border-radius: 8px;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all $transition-base;
+  border: 1px solid transparent;
+}
+
+// Download button
+.job-btn-download {
+  background: $color-primary;
+  color: white;
+
+  &:hover {
+    filter: brightness(1.1);
+  }
+}
+
+// Delete button
+.job-btn-delete {
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.2);
+
+  &:hover {
+    background: $color-error;
+    color: white;
+  }
+}

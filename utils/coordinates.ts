@@ -15,10 +15,15 @@ export interface Point {
  * @param pageHeight PDF page height in points
  * @param scale The current rendering scale (targetWidth / viewportWidth)
  */
-export function domToPdfPoint(domX: number, domY: number, pageHeight: number, scale: number): Point {
+export function domToPdfPoint(
+  domX: number,
+  domY: number,
+  pageHeight: number,
+  scale: number,
+): Point {
   return {
     x: domX / scale,
-    y: pageHeight - (domY / scale)
+    y: pageHeight - domY / scale,
   };
 }
 
@@ -28,5 +33,5 @@ export function domToPdfPoint(domX: number, domY: number, pageHeight: number, sc
  */
 export function adjustYForTextBaseline(pdfY: number, fontSize: number): number {
   // Approximate baseline shift (descender compensation)
-  return pdfY - (fontSize * 0.8);
+  return pdfY - fontSize * 0.8;
 }

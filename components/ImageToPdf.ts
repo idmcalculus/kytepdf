@@ -1,7 +1,7 @@
 import { logger } from "../utils/logger.ts";
 import { convertImagesToPdf } from "../utils/pdfEngine.ts";
+import { moveArrayItem, swapArrayItems } from "../utils/pdfUtils.ts";
 import { persistence } from "../utils/persistence.ts";
-import { swapArrayItems, moveArrayItem } from "../utils/pdfUtils.ts";
 import { BaseComponent } from "./BaseComponent.ts";
 
 export class ImageToPdf extends BaseComponent {
@@ -114,8 +114,8 @@ export class ImageToPdf extends BaseComponent {
   }
 
   handleFiles(newFiles: FileList) {
-    const validFiles = Array.from(newFiles).filter((file) => 
-      this.validateFile(file, { allowedTypes: ["image/png", "image/jpeg"] })
+    const validFiles = Array.from(newFiles).filter((file) =>
+      this.validateFile(file, { allowedTypes: ["image/png", "image/jpeg"] }),
     );
 
     if (validFiles.length > 0) {
@@ -242,10 +242,10 @@ export class ImageToPdf extends BaseComponent {
       const pdfBytes = await convertImagesToPdf(this.files);
 
       this.updateProgress(100, "Done!");
-      
+
       const fileName = "converted_images.pdf";
       await this.recordJob("Image to PDF", fileName, pdfBytes, {
-        imageCount: this.files.length
+        imageCount: this.files.length,
       });
 
       this.showSuccess(pdfBytes, fileName, "");

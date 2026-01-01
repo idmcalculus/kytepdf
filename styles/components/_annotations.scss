@@ -1,0 +1,85 @@
+// components/_annotations.scss - Annotation overlays
+
+@use "../variables" as *;
+
+// Annotation layer styles will be added here as the editor is enhanced
+// This file provides the foundation for annotation-related styles
+
+// Text annotation
+.annotation-text {
+  position: absolute;
+  cursor: move;
+  user-select: none;
+  
+  &.selected {
+    outline: 2px solid $color-primary;
+    outline-offset: 2px;
+  }
+}
+
+// Image annotation
+.annotation-image {
+  position: absolute;
+  cursor: move;
+  user-select: none;
+  
+  &.selected {
+    outline: 2px solid $color-primary;
+    outline-offset: 2px;
+  }
+  
+  img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+}
+
+// Rectangle annotation
+.annotation-rectangle {
+  position: absolute;
+  cursor: move;
+  user-select: none;
+  
+  &.selected {
+    outline: 2px solid $color-primary;
+    outline-offset: 2px;
+  }
+}
+
+// Resize handles
+.resize-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: $color-primary;
+  border: 2px solid white;
+  border-radius: 2px;
+  
+  &.nw { top: -5px; left: -5px; cursor: nw-resize; }
+  &.ne { top: -5px; right: -5px; cursor: ne-resize; }
+  &.sw { bottom: -5px; left: -5px; cursor: sw-resize; }
+  &.se { bottom: -5px; right: -5px; cursor: se-resize; }
+  &.n { top: -5px; left: 50%; transform: translateX(-50%); cursor: n-resize; }
+  &.s { bottom: -5px; left: 50%; transform: translateX(-50%); cursor: s-resize; }
+  &.e { right: -5px; top: 50%; transform: translateY(-50%); cursor: e-resize; }
+  &.w { left: -5px; top: 50%; transform: translateY(-50%); cursor: w-resize; }
+}
+
+// Rotation handle
+.rotation-handle {
+  position: absolute;
+  top: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 20px;
+  background: $color-primary;
+  border: 2px solid white;
+  border-radius: 50%;
+  cursor: grab;
+  
+  &:active {
+    cursor: grabbing;
+  }
+}

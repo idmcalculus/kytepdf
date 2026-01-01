@@ -1,0 +1,217 @@
+// components/_forms.scss - Input, select, checkbox styles
+
+@use "../variables" as *;
+@use "../mixins" as *;
+
+// Controls container
+.controls {
+  margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+
+  @media (max-width: $breakpoint-lg) {
+    gap: $spacing-md;
+  }
+}
+
+// Control group
+.control-group {
+  margin-bottom: 0;
+}
+
+// Presets grid
+.presets-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: $spacing-lg;
+  margin-bottom: $spacing-sm;
+
+  @media (max-width: $breakpoint-lg) {
+    display: flex;
+    overflow-x: auto;
+    gap: $spacing-sm;
+    padding-bottom: $spacing-md;
+    margin-bottom: $spacing-sm;
+    @include hide-scrollbar;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+// Preset button
+.preset-btn {
+  background: $bg-glass;
+  border: 1px solid $border-color;
+  border-radius: $radius-lg;
+  padding: $spacing-lg;
+  text-align: center;
+  cursor: pointer;
+  transition: all $transition-base;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  &.active {
+    background: rgba(99, 102, 241, 0.1);
+    border-color: $color-primary;
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.2);
+  }
+
+  @media (max-width: $breakpoint-lg) {
+    flex: 0 0 110px;
+    padding: 0.6rem;
+  }
+}
+
+.preset-name {
+  display: block;
+  font-weight: $font-weight-bold;
+  color: $text-primary;
+  font-size: $font-size-base;
+
+  @media (max-width: $breakpoint-lg) {
+    font-size: $font-size-sm;
+  }
+}
+
+.preset-desc {
+  display: block;
+  font-size: $font-size-xs;
+  color: $text-muted;
+}
+
+// Mode selection (radio buttons)
+.mode-selection {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: $spacing-lg;
+  margin-top: $spacing-sm;
+}
+
+.mode-option {
+  cursor: pointer;
+  position: relative;
+
+  input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+  }
+}
+
+.mode-card {
+  display: flex;
+  flex-direction: column;
+  padding: $spacing-lg;
+  background: $bg-glass;
+  border: 1px solid $border-color;
+  border-radius: $radius-lg;
+  transition: all $transition-base;
+  text-align: center;
+  height: 100%;
+  justify-content: center;
+
+  .mode-option:hover & {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .mode-option input[type="radio"]:checked + & {
+    background: rgba(6, 182, 212, 0.1);
+    border-color: $color-primary;
+    box-shadow: 0 0 15px $primary-glow;
+  }
+}
+
+.mode-title {
+  display: block;
+  font-weight: $font-weight-bold;
+  font-size: $font-size-base;
+  color: $text-primary;
+  margin-bottom: 0.1rem;
+}
+
+.mode-desc {
+  display: block;
+  font-size: $font-size-xs;
+  color: $text-muted;
+}
+
+// Email form
+.email-form {
+  margin-top: $spacing-lg;
+  width: 100%;
+
+  .input-group {
+    margin-bottom: $spacing-lg;
+  }
+
+  input[type="email"] {
+    width: 100%;
+    padding: $spacing-md $spacing-lg;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid $border-color;
+    border-radius: $radius-lg;
+    color: white;
+    font-size: $font-size-xl;
+    transition: all $transition-base;
+
+    &:focus {
+      border-color: $color-primary;
+      box-shadow: 0 0 0 2px $primary-glow;
+      outline: none;
+    }
+  }
+}
+
+.privacy-note {
+  margin-top: $spacing-lg !important;
+  font-size: $font-size-xs !important;
+  opacity: 0.6;
+}
+
+// Warning message
+.warning {
+  margin-top: $spacing-md;
+  padding: $spacing-lg;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: $radius-md;
+  color: $color-warning;
+  font-size: $font-size-base;
+  display: flex;
+  gap: $spacing-sm;
+  align-items: flex-start;
+
+  a {
+    transition: opacity $transition-base;
+
+    &:hover {
+      opacity: 0.8;
+    }
+  }
+}
+
+// Success message
+.success-message {
+  margin-top: $spacing-lg;
+  text-align: center;
+  color: $color-accent;
+  font-weight: $font-weight-semibold;
+  animation: fadeIn 0.5s ease;
+}
+
+// Range input in properties panel
+.prop-row input[type="range"] {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid $border-color;
+  border-radius: 4px;
+  color: white;
+  padding: 4px 8px;
+  font-size: $font-size-base;
+  width: 100px;
+}

@@ -1,0 +1,97 @@
+// components/_tool-card.scss - Tool card component
+
+@use "../variables" as *;
+@use "../mixins" as *;
+
+.tool-card {
+  background: $bg-glass;
+  border: 1px solid $border-color;
+  border-radius: $radius-2xl;
+  padding: $spacing-lg;
+  cursor: pointer;
+  transition: all $transition-cubic;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+  position: relative;
+  overflow: hidden;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: $color-primary;
+    transform: translateY(-5px);
+    box-shadow: $shadow-glow-lg;
+  }
+
+  .icon-wrapper {
+    @include icon-wrapper;
+  }
+
+  h3 {
+    font-size: $font-size-5xl;
+    font-weight: $font-weight-bold;
+    color: $text-primary;
+  }
+
+  p {
+    font-size: $font-size-md;
+    color: $text-muted;
+    line-height: 1.5;
+  }
+}
+
+// Recent file chip
+.recent-file-chip {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid $border-color;
+  border-radius: $radius-full;
+  padding: $spacing-sm $spacing-md;
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  cursor: pointer;
+  transition: all $transition-base;
+  color: $text-muted;
+  font-size: $font-size-base;
+  max-width: 250px;
+
+  &:hover {
+    background: rgba(6, 182, 212, 0.1);
+    border-color: $color-primary;
+    color: $text-primary;
+    transform: translateY(-2px);
+  }
+
+  svg {
+    color: $color-primary;
+    flex-shrink: 0;
+  }
+}
+
+// File name chip
+.file-name-chip {
+  display: flex;
+  align-items: center;
+  gap: $spacing-lg;
+  background: rgba(255, 255, 255, 0.05);
+  padding: $spacing-sm $spacing-md;
+  border-radius: $radius-full;
+  border: 1px solid $border-color;
+  color: $color-primary;
+
+  h3 {
+    margin: 0;
+    @include truncate;
+    max-width: 200px;
+  }
+
+  @media (max-width: $breakpoint-sm) {
+    width: 100%;
+    margin-bottom: $spacing-sm;
+
+    h3 {
+      max-width: none;
+      flex: 1;
+    }
+  }
+}

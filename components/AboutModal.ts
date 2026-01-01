@@ -1,10 +1,10 @@
 export class AboutModal extends HTMLElement {
-	connectedCallback() {
-		this.render();
-	}
+  connectedCallback() {
+    this.render();
+  }
 
-	render() {
-		this.innerHTML = `
+  render() {
+    this.innerHTML = `
       <div id="aboutOverlay" class="kyte-overlay hidden">
         <div class="kyte-modal about-modal">
           <div class="about-header">
@@ -50,25 +50,25 @@ export class AboutModal extends HTMLElement {
       </div>
     `;
 
-		this.querySelector("#closeAbout")?.addEventListener("click", () => this.hide());
-		this.querySelector("#aboutOverlay")?.addEventListener("click", (e) => {
-			if ((e.target as HTMLElement).id === "aboutOverlay") this.hide();
-		});
-	}
+    this.querySelector("#closeAbout")?.addEventListener("click", () => this.hide());
+    this.querySelector("#aboutOverlay")?.addEventListener("click", (e) => {
+      if ((e.target as HTMLElement).id === "aboutOverlay") this.hide();
+    });
+  }
 
-	show() {
-		const overlay = this.querySelector("#aboutOverlay") as HTMLElement;
-		overlay.classList.remove("hidden");
-		overlay.classList.add("active");
-	}
+  show() {
+    const overlay = this.querySelector("#aboutOverlay") as HTMLElement;
+    overlay.classList.remove("hidden");
+    overlay.classList.add("active");
+  }
 
-	hide() {
-		const overlay = this.querySelector("#aboutOverlay") as HTMLElement;
-		overlay.classList.remove("active");
-		setTimeout(() => overlay.classList.add("hidden"), 300);
-	}
+  hide() {
+    const overlay = this.querySelector("#aboutOverlay") as HTMLElement;
+    overlay.classList.remove("active");
+    setTimeout(() => overlay.classList.add("hidden"), 300);
+  }
 }
 
 if (!customElements.get("about-modal")) {
-	customElements.define("about-modal", AboutModal);
+  customElements.define("about-modal", AboutModal);
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { CloudConsentModal } from "../../components/CloudConsentModal";
 
 if (!customElements.get("cloud-consent-modal")) {
@@ -23,7 +23,7 @@ describe("CloudConsentModal", () => {
     const promise = modal.show();
     const acceptBtn = modal.querySelector("#acceptConsent") as HTMLElement;
     acceptBtn.click();
-    
+
     const result = await promise;
     expect(result).toBe(true);
   });
@@ -32,7 +32,7 @@ describe("CloudConsentModal", () => {
     const promise = modal.show();
     const cancelBtn = modal.querySelector("#cancelConsent") as HTMLElement;
     cancelBtn.click();
-    
+
     const result = await promise;
     expect(result).toBe(false);
   });

@@ -1,0 +1,43 @@
+// components/_drop-zone.scss - File drop zone
+
+@use "../variables" as *;
+
+.drop-zone {
+  border: 2px dashed $glass-border;
+  border-radius: $radius-3xl;
+  padding: $spacing-3xl $spacing-xl;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  background: $bg-glass;
+  margin-bottom: $spacing-lg;
+  position: relative;
+  overflow: hidden;
+
+  &:hover,
+  &.drag-over {
+    border-color: $color-primary;
+    background: rgba(6, 182, 212, 0.05);
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px -5px $primary-glow;
+  }
+
+  i {
+    font-size: 3.5rem;
+    color: $color-primary;
+    margin-bottom: $spacing-lg;
+    display: block;
+    filter: drop-shadow(0 0 10px $primary-glow);
+  }
+
+  p {
+    font-size: $font-size-xl;
+    color: $text-muted;
+  }
+}
+
+@media (max-width: $breakpoint-lg) {
+  .drop-zone {
+    padding: $spacing-2xl $spacing-md;
+  }
+}

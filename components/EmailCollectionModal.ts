@@ -1,14 +1,14 @@
 import { telemetry } from "../utils/telemetry.ts";
 
 export class EmailCollectionModal extends HTMLElement {
-	private activeResolve: ((value: string | null) => void) | null = null;
+  private activeResolve: ((value: string | null) => void) | null = null;
 
-	connectedCallback() {
-		this.render();
-	}
+  connectedCallback() {
+    this.render();
+  }
 
-	render() {
-		this.innerHTML = `
+  render() {
+    this.innerHTML = `
       <div id="emailOverlay" class="kyte-overlay hidden">
         <div class="kyte-modal email-modal">
           <div class="kyte-modal-icon">
@@ -32,68 +32,68 @@ export class EmailCollectionModal extends HTMLElement {
       </div>
     `;
 
-		const form = this.querySelector("#emailForm") as HTMLFormElement;
-		const skipBtn = this.querySelector("#skipEmail") as HTMLElement;
-		const privacyLink = this.querySelector("#privacyPolicyLink") as HTMLElement;
+    const form = this.querySelector("#emailForm") as HTMLFormElement;
+    const skipBtn = this.querySelector("#skipEmail") as HTMLElement;
+    const privacyLink = this.querySelector("#privacyPolicyLink") as HTMLElement;
 
-		privacyLink.onclick = (e) => {
-			e.preventDefault();
-			const dialog = document.getElementById("globalDialog") as any;
-			dialog.show({
-				title: "Privacy Policy",
-				message:
-					"KytePDF is built with a privacy-first mindset. Your documents are processed locally in your browser and are never uploaded to our servers. Email addresses are stored securely and used only for the purposes you opt into.",
-				type: "info",
-			});
-		};
+    privacyLink.onclick = (e) => {
+      e.preventDefault();
+      const dialog = document.getElementById("globalDialog") as any;
+      dialog.show({
+        title: "Privacy Policy",
+        message:
+          "KytePDF is built with a privacy-first mindset. Your documents are processed locally in your browser and are never uploaded to our servers. Email addresses are stored securely and used only for the purposes you opt into.",
+        type: "info",
+      });
+    };
 
-		form.onsubmit = (e) => {
-			e.preventDefault();
-			const email = (this.querySelector("#userEmail") as HTMLInputElement).value;
-			this.handleSubmit(email);
-		};
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      const email = (this.querySelector("#userEmail") as HTMLInputElement).value;
+      this.handleSubmit(email);
+    };
 
-		skipBtn.onclick = () => this.handleSkip();
+    skipBtn.onclick = () => this.handleSkip();
 
-		this.querySelector("#emailOverlay")?.addEventListener("click", (e) => {
-			if ((e.target as HTMLElement).id === "emailOverlay") this.handleSkip();
-		});
-	}
+    this.querySelector("#emailOverlay")?.addEventListener("click", (e) => {
+      if ((e.target as HTMLElement).id === "emailOverlay") this.handleSkip();
+    });
+  }
 
-	show(): Promise<string | null> {
-		const overlay = this.querySelector("#emailOverlay") as HTMLElement;
-		overlay.classList.remove("hidden");
-		overlay.classList.add("active");
-		this.querySelector("input")?.focus();
+  show(): Promise<string | null> {
+    const overlay = this.querySelector("#emailOverlay") as HTMLElement;
+    overlay.classList.remove("hidden");
+    overlay.classList.add("active");
+    this.querySelector("input")?.focus();
 
-		return new Promise((resolve) => {
-			this.activeResolve = resolve;
-		});
-	}
+    return new Promise((resolve) => {
+      this.activeResolve = resolve;
+    });
+  }
 
-	private handleSubmit(email: string) {
-		telemetry.logEvent("growth", "email_signup", { email_provided: true });
-		this.dispatchEvent(new CustomEvent("email-submitted", { detail: { email }, bubbles: true }));
-		this.close(email);
-	}
+  private handleSubmit(email: string) {
+    telemetry.logEvent("growth", "email_signup", { email_provided: true });
+    this.dispatchEvent(new CustomEvent("email-submitted", { detail: { email }, bubbles: true }));
+    this.close(email);
+  }
 
-	private handleSkip() {
-		telemetry.logEvent("growth", "email_signup_skipped", { email_provided: false });
-		this.dispatchEvent(new CustomEvent("modal-dismissed", { bubbles: true }));
-		this.close(null);
-	}
+  private handleSkip() {
+    telemetry.logEvent("growth", "email_signup_skipped", { email_provided: false });
+    this.dispatchEvent(new CustomEvent("modal-dismissed", { bubbles: true }));
+    this.close(null);
+  }
 
-	private close(value: string | null) {
-		const overlay = this.querySelector("#emailOverlay") as HTMLElement;
-		overlay.classList.remove("active");
-		setTimeout(() => overlay.classList.add("hidden"), 300);
-		if (this.activeResolve) {
-			this.activeResolve(value);
-			this.activeResolve = null;
-		}
-	}
+  private close(value: string | null) {
+    const overlay = this.querySelector("#emailOverlay") as HTMLElement;
+    overlay.classList.remove("active");
+    setTimeout(() => overlay.classList.add("hidden"), 300);
+    if (this.activeResolve) {
+      this.activeResolve(value);
+      this.activeResolve = null;
+    }
+  }
 }
 
 if (!customElements.get("email-modal")) {
-	customElements.define("email-modal", EmailCollectionModal);
+  customElements.define("email-modal", EmailCollectionModal);
 }

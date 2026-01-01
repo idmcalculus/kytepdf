@@ -1,0 +1,58 @@
+// layout/_footer.scss - Footer styles
+
+@use "../variables" as *;
+
+footer {
+  width: 100%;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  padding: $spacing-lg $spacing-md;
+  background: linear-gradient(to top, $bg-dark 40%, transparent);
+  border-top: 1px solid $border-color;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 50;
+}
+
+.footer-content {
+  &.centered {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    text-align: center;
+    font-size: $font-size-base;
+    color: $text-muted;
+  }
+}
+
+.footer-divider {
+  margin: 0 $spacing-lg;
+  opacity: 0.3;
+}
+
+.footer-branding {
+  a {
+    color: $color-primary;
+    text-decoration: none;
+    font-weight: $font-weight-semibold;
+    transition: all $transition-base;
+
+    &:hover {
+      color: white;
+      text-shadow: 0 0 8px $primary-glow;
+    }
+  }
+}
+
+@media (max-width: $breakpoint-lg) {
+  .footer-content.centered {
+    flex-direction: column;
+    gap: $spacing-sm;
+  }
+
+  .footer-divider {
+    display: none;
+  }
+}

@@ -1,6 +1,6 @@
 export interface Annotation {
   id: string;
-  type: 'text' | 'image' | 'rectangle';
+  type: "text" | "image" | "rectangle";
   pageIndex: number;
   x: number; // PDF coordinates
   y: number; // PDF coordinates
@@ -23,7 +23,7 @@ export class AnnotationManager {
   /**
    * Adds a new annotation and returns its unique ID
    */
-  addAnnotation(ann: Omit<Annotation, 'id'>): string {
+  addAnnotation(ann: Omit<Annotation, "id">): string {
     const id = crypto.randomUUID();
     const newAnnotation: Annotation = { ...ann, id };
     this.annotations.set(id, newAnnotation);
@@ -33,7 +33,7 @@ export class AnnotationManager {
   /**
    * Updates an existing annotation
    */
-  updateAnnotation(id: string, updates: Partial<Omit<Annotation, 'id' | 'pageIndex'>>): boolean {
+  updateAnnotation(id: string, updates: Partial<Omit<Annotation, "id" | "pageIndex">>): boolean {
     const existing = this.annotations.get(id);
     if (!existing) return false;
 
@@ -59,8 +59,7 @@ export class AnnotationManager {
    * Gets all annotations for a specific page
    */
   getAnnotations(pageIndex: number): Annotation[] {
-    return Array.from(this.annotations.values())
-      .filter(ann => ann.pageIndex === pageIndex);
+    return Array.from(this.annotations.values()).filter((ann) => ann.pageIndex === pageIndex);
   }
 
   /**

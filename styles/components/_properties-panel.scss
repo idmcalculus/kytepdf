@@ -1,0 +1,58 @@
+// components/_properties-panel.scss - Editor properties panel
+
+@use "../variables" as *;
+
+// Properties panel
+.properties-panel {
+  position: absolute;
+  top: 80px;
+  right: 20px;
+  width: 240px;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid $glass-border;
+  border-radius: $radius-xl;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  animation: slideInRight 0.3s ease;
+}
+
+// Panel header
+.panel-header {
+  padding: $spacing-lg $spacing-md;
+  border-bottom: 1px solid $glass-border;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: $font-size-base;
+  font-weight: $font-weight-bold;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: $color-primary;
+}
+
+// Panel content
+.panel-content {
+  padding: $spacing-md;
+}
+
+// Property section
+.prop-section {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+}
+
+// Property row
+.prop-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-md;
+
+  label {
+    font-size: $font-size-sm;
+    color: $text-muted;
+    margin: 0;
+  }
+}

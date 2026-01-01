@@ -1,0 +1,58 @@
+// components/_badges.scss - Cloud/local badges
+
+@use "../variables" as *;
+@use "../mixins" as *;
+
+// Base badge
+.badge {
+  position: absolute;
+  top: $spacing-md;
+  right: $spacing-md;
+  @include badge;
+  z-index: 5;
+}
+
+// Cloud badge
+.badge.cloud-badge {
+  background: $primary-glow;
+  color: $color-primary;
+  border: 1px solid $color-primary;
+  font-size: 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0.15rem $spacing-sm;
+}
+
+// Coming soon badge
+.badge.coming-soon {
+  background: $color-accent;
+  color: #000;
+}
+
+// Local badge
+.badge.local-badge {
+  background: $secondary-glow;
+  color: $color-secondary;
+  border: 1px solid $color-secondary;
+}
+
+// Hybrid badge (Local + Cloud)
+.badge.hybrid-badge {
+  background: linear-gradient(135deg, $secondary-glow, $primary-glow);
+  color: $text-primary;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+// New badge
+.badge.new-badge {
+  background: $color-secondary;
+  color: white;
+}
+
+// Beta badge
+.badge.beta-badge {
+  background: rgba(139, 92, 246, 0.2);
+  color: #a78bfa;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}

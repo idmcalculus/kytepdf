@@ -1,0 +1,68 @@
+// components/_editor-toolbar.scss - PDF editor toolbar
+
+@use "../variables" as *;
+@use "../mixins" as *;
+
+// Editor interface container
+.editor-interface {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 200px);
+  background: $bg-glass;
+  border: 1px solid $glass-border;
+  border-radius: $radius-3xl;
+  overflow: hidden;
+  backdrop-filter: blur(12px);
+  margin-top: $spacing-md;
+  position: relative;
+}
+
+// Editor toolbar
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  padding: $spacing-md $spacing-lg;
+  background: $bg-glass;
+  border-bottom: 1px solid $glass-border;
+  gap: $spacing-md;
+}
+
+// Toolbar group
+.toolbar-group {
+  display: flex;
+  gap: $spacing-sm;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 0.35rem;
+  border-radius: $radius-lg;
+  border: 1px solid $glass-border;
+}
+
+// Toolbar spacer
+.toolbar-spacer {
+  flex: 1;
+}
+
+// Editor workspace
+.editor-workspace {
+  flex: 1;
+  overflow-y: auto;
+  padding: $spacing-xl;
+  background: rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+// Tool view container
+.tool-view {
+  animation: fadeIn 0.4s ease;
+}
+
+// Cursor styles for editor tools
+.cursor-text-tool {
+  cursor: text !important;
+}
+
+.cursor-crosshair {
+  cursor: crosshair !important;
+}

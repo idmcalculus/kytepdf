@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-// @ts-ignore
+import { beforeEach, describe, expect, it, vi } from "vitest";
+// @ts-expect-error
 import { loadPdf, renderPage } from "../../utils/pdfRenderer";
 
 // Mock pdfConfig
@@ -20,11 +20,11 @@ vi.mock("../../utils/pdfConfig", () => ({
 
 describe("pdfRenderer", () => {
   let canvas: HTMLCanvasElement;
-  
+
   beforeEach(() => {
     vi.clearAllMocks();
     canvas = document.createElement("canvas");
-    
+
     mockGetPage.mockResolvedValue({
       getViewport: vi.fn().mockReturnValue({ width: 100, height: 200 }),
       render: mockRender,
@@ -39,7 +39,7 @@ describe("pdfRenderer", () => {
 
   it("should render a page to canvas", async () => {
     await renderPage(mockPdfProxy, 1, canvas);
-    
+
     expect(mockGetPage).toHaveBeenCalledWith(1);
     expect(mockRender).toHaveBeenCalled();
     expect(canvas.width).toBe(100);

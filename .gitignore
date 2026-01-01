@@ -31,3 +31,6 @@ conductor
 conductor/*
 conductor/**/*
 conductor/**/.*
+
+# Kiro IDE
+.kiro/*

@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { PdfToImage } from "../../components/PdfToImage";
+import { beforeEach, describe, expect, it } from "vitest";
 import { ImageToPdf } from "../../components/ImageToPdf";
-import { PdfToOffice } from "../../components/PdfToOffice";
 import { OfficeToPdf } from "../../components/OfficeToPdf";
+import { PdfToImage } from "../../components/PdfToImage";
+import { PdfToOffice } from "../../components/PdfToOffice";
 
 // Generic setup for custom elements
 const register = (tag: string, cls: any) => {
@@ -15,7 +15,7 @@ describe("Final Conversion Suite E2E (Integration)", () => {
     register("image-to-pdf", ImageToPdf);
     register("pdf-to-office", PdfToOffice);
     register("office-to-pdf", OfficeToPdf);
-    
+
     document.body.innerHTML = '<div id="main-container"></div><div id="globalDialog"></div>';
   });
 

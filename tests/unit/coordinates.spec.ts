@@ -1,11 +1,11 @@
-import { describe, it, expect } from "vitest";
-import { domToPdfPoint, adjustYForTextBaseline } from "../../utils/coordinates";
+import { describe, expect, it } from "vitest";
+import { adjustYForTextBaseline, domToPdfPoint } from "../../utils/coordinates";
 
 describe("coordinates utility", () => {
   it("should convert top-left DOM coordinates to bottom-left PDF points", () => {
     const pageHeight = 842; // A4 height in points
     const scale = 1.0;
-    
+
     // Origin (0,0 in DOM) should be (0, pageHeight in PDF)
     const p1 = domToPdfPoint(0, 0, pageHeight, scale);
     expect(p1.x).toBe(0);

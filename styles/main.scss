@@ -1,0 +1,32 @@
+// main.scss - KytePDF Styles Entry Point
+// This file imports all SCSS partials in the correct order
+
+// Foundation
+@use "variables";
+@use "mixins";
+@use "reset";
+@use "base";
+@use "utilities";
+@use "animations";
+
+// Layout
+@use "layout/grid";
+@use "layout/header";
+@use "layout/footer";
+
+// Components
+@use "components/card";
+@use "components/tool-card";
+@use "components/drop-zone";
+@use "components/progress-bar";
+@use "components/buttons";
+@use "components/modals";
+@use "components/forms";
+@use "components/badges";
+
+// PDF-specific components
+@use "components/pdf-preview";
+@use "components/editor-toolbar";
+@use "components/annotations";
+@use "components/properties-panel";
+@use "components/history-grid";
