@@ -16,6 +16,20 @@ vi.mock("../../utils/pdfConfig", () => ({
       promise: Promise.resolve(mockPdfProxy),
     })),
   },
+  PDFDocument: {
+    create: vi.fn().mockResolvedValue({
+      addPage: vi.fn().mockReturnValue({
+        drawImage: vi.fn(),
+      }),
+      embedPng: vi.fn().mockResolvedValue({
+        scale: vi.fn().mockReturnValue({ width: 100, height: 100 }),
+      }),
+      embedJpg: vi.fn().mockResolvedValue({
+        scale: vi.fn().mockReturnValue({ width: 100, height: 100 }),
+      }),
+      save: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+    }),
+  },
 }));
 
 describe("pdfConversions", () => {
@@ -43,6 +57,22 @@ describe("pdfConversions", () => {
       expect(images[0]).toBeInstanceOf(Blob);
       expect(mockGetPage).toHaveBeenCalledTimes(2);
       expect(mockRender).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("convertImagesToPdf", () => {
+    it("should convert an array of images to a single PDF Uint8Array", async () => {
+      const { convertImagesToPdf } = await import("../../utils/pdfEngine");
+      
+      const mockImages = [
+        new File(["data1"], "img1.png", { type: "image/png" }),
+        new File(["data2"], "img2.jpg", { type: "image/jpeg" }),
+      ];
+
+      const pdfBytes = await convertImagesToPdf(mockImages);
+
+      expect(pdfBytes).toBeInstanceOf(Uint8Array);
+      expect(pdfBytes.length).toBeGreaterThan(0);
     });
   });
 });

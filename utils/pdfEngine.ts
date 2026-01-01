@@ -315,7 +315,7 @@ export async function convertPdfToImages(
       const context = canvas.getContext("2d");
       if (!context) throw new Error("Could not get 2D context from canvas");
 
-      await page.render({ canvasContext: context, viewport }).promise;
+      await page.render({ canvasContext: context, viewport, canvas }).promise;
 
       const blob = await new Promise<Blob | null>((resolve) =>
         canvas.toBlob(resolve, `image/${options.format}`, 0.95),
@@ -329,6 +329,38 @@ export async function convertPdfToImages(
     return images;
   } catch (err) {
     logger.error("Failed to convert PDF to images", err);
+    throw err;
+  }
+}
+
+export async function convertImagesToPdf(images: File[]): Promise<Uint8Array> {
+  try {
+    const pdfDoc = await PDFDocument.create();
+
+    for (const imageFile of images) {
+      const arrayBuffer = await imageFile.arrayBuffer();
+      let embeddedImage;
+
+      if (imageFile.type === "image/png") {
+        embeddedImage = await pdfDoc.embedPng(arrayBuffer);
+      } else {
+        embeddedImage = await pdfDoc.embedJpg(arrayBuffer);
+      }
+
+      const { width, height } = embeddedImage.scale(1);
+      const page = pdfDoc.addPage([width, height]);
+
+      page.drawImage(embeddedImage, {
+        x: 0,
+        y: 0,
+        width,
+        height,
+      });
+    }
+
+    return await pdfDoc.save();
+  } catch (err) {
+    logger.error("Failed to convert images to PDF", err);
     throw err;
   }
 }
