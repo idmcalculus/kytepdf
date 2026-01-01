@@ -19,18 +19,18 @@ Focus: Setting up the secure bridge for external API processing.
 - [x] Task: Add "Cloud" vs "Local" badging to the `ToolDashboard` UI 47f4163
 - [x] Task: Conductor - User Manual Verification 'Phase 2: Cloud Infrastructure & Privacy Gates' (Protocol in workflow.md)
 
-## Phase 3: Office & OCR Integration
+## Phase 3: Office & OCR Integration [checkpoint: 6763f25]
 Focus: Implementing the complex document conversions and OCR.
 
-- [~] Task: Write integration tests for PDF to Word/PPT conversion flow
-- [ ] Task: Implement `PdfToOffice.ts` (handling Word and PPT directions)
-- [ ] Task: Implement `OfficeToPdf.ts` (handling upload and conversion return)
-- [ ] Task: Enable and verify OCR flags in the Cloud API requests for scanned documents
-- [ ] Task: Conductor - User Manual Verification 'Phase 3: Office & OCR Integration' (Protocol in workflow.md)
+- [x] Task: Write integration tests for PDF to Word/PPT conversion flow d68a03e
+- [x] Task: Implement `PdfToOffice.ts` (handling Word and PPT directions) d550fcb
+- [x] Task: Implement `OfficeToPdf.ts` (handling upload and conversion return) d550fcb
+- [x] Task: Enable and verify OCR flags in the Cloud API requests for scanned documents d550fcb
+- [x] Task: Conductor - User Manual Verification 'Phase 3: Office & OCR Integration' (Protocol in workflow.md)
 
 ## Phase 4: Polish & Dashboard Integration
 Focus: Finalizing the user experience and ensuring all tools are live.
 
-- [ ] Task: Update `main.ts` router to handle all new conversion tool IDs
+- [~] Task: Update `main.ts` router to handle all new conversion tool IDs
 - [ ] Task: Conduct final E2E tests for the entire conversion suite
 - [ ] Task: Conductor - User Manual Verification 'Phase 4: Polish & Dashboard Integration' (Protocol in workflow.md)
