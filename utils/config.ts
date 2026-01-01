@@ -19,12 +19,18 @@ interface AppMetadata {
   version: string;
 }
 
+interface CloudConfig {
+  apiKey: string;
+  apiEndpoint: string;
+}
+
 interface KyteConfig {
   env: string;
   isProd: boolean;
   isDev: boolean;
   logging: LoggingConfig;
   pdf: PdfConfig;
+  cloud: CloudConfig;
   app: AppMetadata;
 }
 
@@ -51,6 +57,12 @@ export const config: KyteConfig = {
   // PDF Configuration
   pdf: {
     workerSrc: "/pdf.worker.min.js",
+  },
+
+  // Cloud Conversion API (e.g., CloudConvert or ConvertAPI)
+  cloud: {
+    apiKey: import.meta.env.VITE_CLOUD_CONVERT_API_KEY || "",
+    apiEndpoint: import.meta.env.VITE_CLOUD_CONVERT_API_ENDPOINT || "https://api.cloudconvert.com/v2",
   },
 
   // App Metadata
