@@ -52,6 +52,20 @@ export class ToolDashboard extends HTMLElement {
         active: true,
       },
       {
+        id: "pdf-to-img",
+        name: "PDF to Image",
+        desc: "Convert PDF pages into high-quality images.",
+        icon: "image",
+        active: true,
+      },
+      {
+        id: "img-to-pdf",
+        name: "Image to PDF",
+        desc: "Convert JPG, PNG, and more into PDF files.",
+        icon: "file-image",
+        active: true,
+      },
+      {
         id: "pdf-ai",
         name: "AI Analyzer",
         desc: "Chat with your PDF and extract insights using AI.",
@@ -70,20 +84,6 @@ export class ToolDashboard extends HTMLElement {
         name: "Watermark",
         desc: "Add text or image watermarks to your document.",
         icon: "stamp",
-        active: false,
-      },
-      {
-        id: "pdf-to-img",
-        name: "PDF to Image",
-        desc: "Convert PDF pages into high-quality images.",
-        icon: "image",
-        active: false,
-      },
-      {
-        id: "img-to-pdf",
-        name: "Image to PDF",
-        desc: "Convert JPG, PNG, and more into PDF files.",
-        icon: "file-image",
         active: false,
       },
       {
