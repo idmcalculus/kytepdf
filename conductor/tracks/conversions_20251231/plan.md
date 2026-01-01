@@ -11,18 +11,18 @@ Focus: Implementing high-privacy, browser-based conversions for images.
 - [x] Task: Implement `ImageToImage.ts` component with multi-file reordering fa0f4f7
 - [x] Task: Conductor - User Manual Verification 'Phase 1: Local Image Conversions' (Protocol in workflow.md)
 
-## Phase 2: Cloud Infrastructure & Privacy Gates
+## Phase 2: Cloud Infrastructure & Privacy Gates [checkpoint: ef6e797]
 Focus: Setting up the secure bridge for external API processing.
 
-- [~] Task: Implement `CloudConsentModal.ts` component for per-session opt-in
-- [ ] Task: Create `CloudConversionService.ts` utility for API communication (Vite env variables)
-- [ ] Task: Add "Cloud" vs "Local" badging to the `ToolDashboard` UI
-- [ ] Task: Conductor - User Manual Verification 'Phase 2: Cloud Infrastructure & Privacy Gates' (Protocol in workflow.md)
+- [x] Task: Implement `CloudConsentModal.ts` component for per-session opt-in 28e2270
+- [x] Task: Create `CloudConversionService.ts` utility for API communication (Vite env variables) d416749
+- [x] Task: Add "Cloud" vs "Local" badging to the `ToolDashboard` UI 47f4163
+- [x] Task: Conductor - User Manual Verification 'Phase 2: Cloud Infrastructure & Privacy Gates' (Protocol in workflow.md)
 
 ## Phase 3: Office & OCR Integration
 Focus: Implementing the complex document conversions and OCR.
 
-- [ ] Task: Write integration tests for PDF to Word/PPT conversion flow
+- [~] Task: Write integration tests for PDF to Word/PPT conversion flow
 - [ ] Task: Implement `PdfToOffice.ts` (handling Word and PPT directions)
 - [ ] Task: Implement `OfficeToPdf.ts` (handling upload and conversion return)
 - [ ] Task: Enable and verify OCR flags in the Cloud API requests for scanned documents
