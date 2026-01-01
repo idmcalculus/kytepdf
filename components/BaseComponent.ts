@@ -494,7 +494,20 @@ export class BaseComponent extends HTMLElement {
 	 */
 	async ensureEmailCollected() {
 		const alreadyCollected = localStorage.getItem("kyte_email_collected");
-		if (alreadyCollected || this.hasAskedForEmail) return true;
+		if (alreadyCollected) return true;
+
+		// State Machine for Suppression
+		const n = parseInt(localStorage.getItem("kyte_email_suppression_n") || "0", 10);
+		const counter = parseInt(localStorage.getItem("kyte_email_op_counter") || "0", 10);
+
+		if (n > 0 && counter < n) {
+			// Still in suppression period
+			localStorage.setItem("kyte_email_op_counter", (counter + 1).toString());
+			logger.debug(`Email prompt suppressed. Counter: ${counter + 1}/${n}`);
+			return true;
+		}
+
+		if (this.hasAskedForEmail) return true;
 
 		this.hasAskedForEmail = true;
 		const emailModal = document.getElementById("emailModal") as any;
@@ -504,10 +517,13 @@ export class BaseComponent extends HTMLElement {
 				localStorage.setItem("kyte_email_collected", "true");
 				logger.info("User provided email", { email: result });
 			} else {
-				// We don't set the flag if they skip, so we can ask again later or after next job
-				// User preference: maybe we SHOULD set it to true anyway to not be annoying?
-				// Spec says "Privacy-first/Non-coercive". I'll let them skip and ask again in future sessions.
-				logger.info("User skipped email collection");
+				// Dismissed - Increment N logic
+				let newN = n === 0 ? 3 : n + 1;
+				if (newN > 10) newN = 3; // Reset to 3 after reaching limit
+
+				localStorage.setItem("kyte_email_suppression_n", newN.toString());
+				localStorage.setItem("kyte_email_op_counter", "1"); // Start counting from 1
+				logger.info(`User skipped email collection. Next prompt in ${newN} operations.`);
 			}
 		}
 		return true; // Always allow proceeding to download
