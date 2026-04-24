@@ -25,6 +25,8 @@ dist-ssr
 
 # coverage
 coverage/
+playwright-report/
+test-results/
 
 # gemini conductor
 conductor
@@ -34,3 +36,5 @@ conductor/**/.*
 
 # Kiro IDE
 .kiro/*
+# Local Netlify folder
+.netlify

@@ -38,7 +38,7 @@
     "docx": "^9.5.1",
     "jszip": "^3.10.1",
     "lucide": "^0.562.0",
-    "pdf-lib": "^1.17.1",
+    "pdf-lib-with-encrypt": "^1.2.1",
     "pdfjs-dist": "^5.4.449",
     "xlsx": "^0.18.5"
   }

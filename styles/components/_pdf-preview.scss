@@ -31,7 +31,7 @@
 }
 
 // Preview canvas
-#previewCanvas {
+.preview-container #previewCanvas {
   max-width: 100%;
   max-height: 320px;
   height: auto;
@@ -186,6 +186,23 @@
   margin-bottom: $spacing-xl;
 }
 
+.security-file-info {
+  margin-bottom: $spacing-xl;
+  cursor: default;
+
+  &:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  @media (max-width: 580px) {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "details"
+      "actions";
+  }
+}
+
 // File list item
 .file-list-item {
   background: rgba(255, 255, 255, 0.02);
@@ -232,6 +249,80 @@
     padding: $spacing-lg;
     align-items: center;
   }
+}
+
+.security-selection-panel {
+  min-height: 600px;
+}
+
+.security-selection-header {
+  padding: $spacing-lg;
+  margin-bottom: 0;
+  border-bottom: 1px solid $border-color;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.security-selection-heading {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-xs;
+  min-width: 0;
+
+  h3 {
+    margin: 0;
+    color: $text-primary;
+    font-size: $font-size-2xl;
+  }
+}
+
+.security-selection-meta {
+  margin: 0;
+  color: $text-muted;
+  font-size: $font-size-sm;
+  line-height: 1.5;
+}
+
+.security-selection-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: $spacing-lg;
+}
+
+.security-file-list {
+  margin-bottom: 0;
+}
+
+.security-file-item.is-selected {
+  border-color: rgba(6, 182, 212, 0.28);
+}
+
+.security-file-item.is-unselected {
+  opacity: 0.65;
+  border-style: dashed;
+}
+
+.security-file-item .file-item-details {
+  @media (max-width: 580px) {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: $spacing-md;
+  }
+}
+
+.security-file-select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 0.15rem;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.security-file-checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: $color-primary;
+  cursor: pointer;
 }
 
 // File item details

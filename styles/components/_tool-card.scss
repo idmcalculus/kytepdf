@@ -23,6 +23,18 @@
     box-shadow: $shadow-glow-lg;
   }
 
+  &.coming-soon {
+    cursor: not-allowed;
+    opacity: 0.72;
+
+    &:hover {
+      background: $bg-glass;
+      border-color: $border-color;
+      box-shadow: none;
+      transform: none;
+    }
+  }
+
   .icon-wrapper {
     @include icon-wrapper;
   }
