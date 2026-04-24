@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BaseComponent } from "../../components/BaseComponent";
 
 class TestComponent extends BaseComponent {
@@ -17,12 +17,17 @@ describe("Email Suppression State Machine", () => {
   let mockModal: any;
 
   beforeEach(() => {
+    vi.stubEnv("VITE_ENABLE_EMAIL_COLLECTION", "true");
     localStorage.clear();
     document.body.innerHTML = '<email-modal id="emailModal"></email-modal>';
     mockModal = document.getElementById("emailModal");
     mockModal.show = vi.fn();
     component = new TestComponent();
     document.body.appendChild(component);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it("should show prompt on first try", async () => {

@@ -36,6 +36,10 @@ class TestComponent extends BaseComponent {
 		`;
   }
 
+  setupEventListeners() {
+    this.setupBaseListeners();
+  }
+
   handleFiles(files: FileList) {
     this.selectedFile = files[0];
   }
@@ -50,12 +54,20 @@ describe("BaseComponent", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    delete (window as any).showSaveFilePicker;
     document.body.innerHTML = '<div id="globalDialog"></div>';
     (document.getElementById("globalDialog") as any).show = vi.fn().mockResolvedValue(true);
     component = new TestComponent();
     document.body.appendChild(component);
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
+
+  const asFileList = (...files: File[]) =>
+    ({
+      ...files,
+      length: files.length,
+      item: (index: number) => files[index] ?? null,
+    }) as unknown as FileList;
 
   describe("formatBytes", () => {
     it("should format bytes correctly", () => {
@@ -157,6 +169,53 @@ describe("BaseComponent", () => {
       const fileInput = component.querySelector("#fileInput") as HTMLInputElement;
       expect(fileInput).toBeTruthy();
     });
+
+    it("should handle drag states, dropped files, and selected files", () => {
+      const dropZone = component.querySelector("#dropZone") as HTMLElement;
+      const fileInput = component.querySelector("#fileInput") as HTMLInputElement;
+      const file = new File(["pdf"], "dragged.pdf", { type: "application/pdf" });
+
+      dropZone.dispatchEvent(new Event("dragover", { bubbles: true, cancelable: true }));
+      expect(dropZone.classList.contains("drag-over")).toBe(true);
+
+      dropZone.dispatchEvent(new Event("dragleave", { bubbles: true }));
+      expect(dropZone.classList.contains("drag-over")).toBe(false);
+
+      const dropEvent = new Event("drop", { bubbles: true, cancelable: true });
+      Object.defineProperty(dropEvent, "dataTransfer", {
+        value: { files: asFileList(file) },
+      });
+      dropZone.dispatchEvent(dropEvent);
+      expect((component as any).selectedFile).toBe(file);
+
+      Object.defineProperty(fileInput, "files", {
+        value: asFileList(file),
+        configurable: true,
+      });
+      fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+      expect((component as any).selectedFile).toBe(file);
+    });
+
+    it("should handle account, about, and clear-storage controls", async () => {
+      const showAbout = vi.fn();
+      (window as any).showAbout = showAbout;
+      const { persistence } = await import("../../utils/persistence");
+
+      (component.querySelector("#aboutBtn") as HTMLButtonElement).click();
+      expect(showAbout).toHaveBeenCalled();
+
+      (component.querySelector("#userAccountBtn") as HTMLButtonElement).click();
+      expect((document.getElementById("globalDialog") as any).show).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "User Account" }),
+      );
+
+      const clearLink = component.querySelector("#clearStorageLink") as HTMLAnchorElement;
+      clearLink.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(persistence.delete).toHaveBeenCalledWith("test-tool");
+
+      delete (window as any).showAbout;
+    });
   });
 
   describe("getDropZone", () => {
@@ -202,6 +261,19 @@ describe("BaseComponent", () => {
 
       const successMessage = component.querySelector("#successMessage");
       expect(successMessage?.classList.contains("hidden")).toBe(false);
+    });
+
+    it("should collect email and save from the download link", async () => {
+      const pdfBytes = new Uint8Array([1, 2, 3]);
+      const collectSpy = vi.spyOn(component, "ensureEmailCollected").mockResolvedValue(true);
+      const saveSpy = vi.spyOn(component, "savePdf").mockResolvedValue(true);
+
+      component.showSuccess(pdfBytes, "test.pdf", "_processed");
+      (component.querySelector("#downloadLink") as HTMLButtonElement).click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(collectSpy).toHaveBeenCalled();
+      expect(saveSpy).toHaveBeenCalledWith(pdfBytes, "test.pdf", "_processed", ".pdf");
     });
   });
 
@@ -266,6 +338,24 @@ describe("BaseComponent", () => {
       const storageWarning = component.querySelector("#storageWarning");
       expect(storageWarning?.classList.contains("hidden")).toBe(false);
     });
+
+    it("should warn when browser storage quota is almost full", async () => {
+      const { persistence } = await import("../../utils/persistence");
+      (persistence.getStorageUsage as any).mockResolvedValueOnce({ usage: 900, quota: 1000 });
+
+      await component.checkStorageUsage();
+
+      expect((document.getElementById("globalDialog") as any).show).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "error" }),
+      );
+    });
+
+    it("should tolerate storage usage failures", async () => {
+      const { persistence } = await import("../../utils/persistence");
+      (persistence.estimateUsage as any).mockRejectedValueOnce(new Error("storage failed"));
+
+      await expect(component.checkStorageUsage()).resolves.toBeUndefined();
+    });
   });
 
   describe("recordJob", () => {
@@ -277,12 +367,111 @@ describe("BaseComponent", () => {
 
       expect(persistence.addJob).toHaveBeenCalled();
     });
+
+    it("should tolerate record failures", async () => {
+      const { persistence } = await import("../../utils/persistence");
+      (persistence.addJob as any).mockRejectedValueOnce(new Error("indexeddb failed"));
+
+      await expect(
+        component.recordJob("Test", "test.pdf", new Uint8Array([1]), { test: true }),
+      ).resolves.toBeUndefined();
+    });
   });
 
   describe("getBackButton", () => {
     it("should render back button element", () => {
       const backSection = component.querySelector(".back-btn");
       expect(backSection).toBeTruthy();
+    });
+  });
+
+  describe("renderRecentFiles", () => {
+    it("should render recent jobs and restore one as a file", async () => {
+      const { persistence } = await import("../../utils/persistence");
+      (persistence.getJobs as any).mockResolvedValueOnce([
+        { id: "1", fileName: "one.pdf", data: new Uint8Array([1]) },
+        { id: "2", fileName: "two.pdf", data: new Uint8Array([2]) },
+        { id: "3", fileName: "three.pdf", data: new Uint8Array([3]) },
+        { id: "4", fileName: "four.pdf", data: new Uint8Array([4]) },
+      ]);
+
+      await component.renderRecentFiles();
+
+      const chips = component.querySelectorAll(".recent-file-chip");
+      expect(chips).toHaveLength(3);
+
+      (chips[1] as HTMLButtonElement).click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect((component as any).selectedFile.name).toBe("two.pdf");
+    });
+
+    it("should tolerate recent file lookup failures", async () => {
+      const { persistence } = await import("../../utils/persistence");
+      (persistence.getJobs as any).mockRejectedValueOnce(new Error("jobs failed"));
+
+      await expect(component.renderRecentFiles()).resolves.toBeUndefined();
+    });
+  });
+
+  describe("savePdf", () => {
+    it("should reject empty save content", async () => {
+      await expect(component.savePdf(null, "test.pdf")).resolves.toBe(false);
+      expect((document.getElementById("globalDialog") as any).show).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "error" }),
+      );
+    });
+
+    it("should save with the File System Access API", async () => {
+      const write = vi.fn().mockResolvedValue(undefined);
+      const close = vi.fn().mockResolvedValue(undefined);
+      (window as any).showSaveFilePicker = vi.fn().mockResolvedValue({
+        createWritable: vi.fn().mockResolvedValue({ write, close }),
+      });
+
+      await expect(component.savePdf(new Uint8Array([1, 2]), "draft.pdf", "_signed")).resolves.toBe(
+        true,
+      );
+
+      expect((window as any).showSaveFilePicker).toHaveBeenCalledWith(
+        expect.objectContaining({ suggestedName: "draft_signed.pdf" }),
+      );
+      expect(write).toHaveBeenCalledWith(new Uint8Array([1, 2]));
+      expect(close).toHaveBeenCalled();
+    });
+
+    it("should return false when the native save dialog is aborted", async () => {
+      const error = new Error("aborted");
+      error.name = "AbortError";
+      (window as any).showSaveFilePicker = vi.fn().mockRejectedValue(error);
+
+      await expect(component.savePdf(new Uint8Array([1]), "draft.pdf")).resolves.toBe(false);
+    });
+
+    it("should fall back to an anchor download when native save is unavailable", async () => {
+      const clickSpy = vi
+        .spyOn(HTMLAnchorElement.prototype, "click")
+        .mockImplementation(() => undefined);
+      const createObjectURL = vi.fn(() => "blob:test");
+      const revokeObjectURL = vi.fn();
+      Object.defineProperty(URL, "createObjectURL", {
+        configurable: true,
+        writable: true,
+        value: createObjectURL,
+      });
+      Object.defineProperty(URL, "revokeObjectURL", {
+        configurable: true,
+        writable: true,
+        value: revokeObjectURL,
+      });
+
+      await expect(
+        component.savePdf(new Uint8Array([1]), "archive", "_ignored", ".zip"),
+      ).resolves.toBe(true);
+
+      expect(createObjectURL).toHaveBeenCalled();
+      expect(clickSpy).toHaveBeenCalled();
+
+      clickSpy.mockRestore();
     });
   });
 });

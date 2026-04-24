@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AboutModal } from "../../components/AboutModal";
 
 if (!customElements.get("about-modal")) {
@@ -9,6 +9,8 @@ describe("AboutModal", () => {
   let modal: AboutModal;
 
   beforeEach(() => {
+    vi.useRealTimers();
+    document.body.innerHTML = "";
     modal = new AboutModal();
     document.body.appendChild(modal);
   });
@@ -44,5 +46,22 @@ describe("AboutModal", () => {
     modal.hide();
     const overlay = modal.querySelector("#aboutOverlay");
     expect(overlay?.classList.contains("active")).toBe(false);
+  });
+
+  it("hides from the close button and overlay backdrop", () => {
+    vi.useFakeTimers();
+    modal.show();
+
+    (modal.querySelector("#closeAbout") as HTMLButtonElement).click();
+    let overlay = modal.querySelector("#aboutOverlay") as HTMLElement;
+    expect(overlay.classList.contains("active")).toBe(false);
+    vi.advanceTimersByTime(300);
+    expect(overlay.classList.contains("hidden")).toBe(true);
+
+    modal.show();
+    overlay = modal.querySelector("#aboutOverlay") as HTMLElement;
+    overlay.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(overlay.classList.contains("active")).toBe(false);
+    vi.useRealTimers();
   });
 });

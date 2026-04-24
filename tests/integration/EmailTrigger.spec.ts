@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EmailCollectionModal } from "../../components/EmailCollectionModal";
 import { PdfCompressor } from "../../components/PdfCompressor";
 
@@ -23,6 +23,8 @@ describe("Email Trigger Integration", () => {
   let emailModal: EmailCollectionModal;
 
   beforeEach(() => {
+    vi.stubEnv("VITE_ENABLE_EMAIL_COLLECTION", "true");
+    localStorage.clear();
     document.body.innerHTML = `
       <kyte-dialog id="globalDialog"></kyte-dialog>
       <email-modal id="emailModal"></email-modal>
@@ -31,6 +33,10 @@ describe("Email Trigger Integration", () => {
     compressor = new PdfCompressor();
     emailModal = document.getElementById("emailModal") as EmailCollectionModal;
     document.getElementById("main-container")?.appendChild(compressor);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it("should show email modal when download is clicked and email not collected", async () => {

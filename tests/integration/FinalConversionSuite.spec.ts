@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { ImageToPdf } from "../../components/ImageToPdf";
 import { OfficeToPdf } from "../../components/OfficeToPdf";
+import { PdfCreator } from "../../components/PdfCreator";
+import { PdfSecurity } from "../../components/PdfSecurity";
 import { PdfToImage } from "../../components/PdfToImage";
 import { PdfToOffice } from "../../components/PdfToOffice";
 
@@ -13,8 +15,10 @@ describe("Final Conversion Suite E2E (Integration)", () => {
   beforeEach(() => {
     register("pdf-to-image", PdfToImage);
     register("image-to-pdf", ImageToPdf);
+    register("pdf-creator", PdfCreator);
     register("pdf-to-office", PdfToOffice);
     register("office-to-pdf", OfficeToPdf);
+    register("pdf-security", PdfSecurity);
 
     document.body.innerHTML = '<div id="main-container"></div><div id="globalDialog"></div>';
   });
@@ -32,6 +36,12 @@ describe("Final Conversion Suite E2E (Integration)", () => {
     expect(el.innerHTML).toContain("Image to PDF");
   });
 
+  it("should render PdfCreator", async () => {
+    const el = new PdfCreator();
+    document.getElementById("main-container")?.appendChild(el);
+    expect(el.innerHTML).toContain("Create PDF");
+  });
+
   it("should render PdfToOffice with correct format", async () => {
     const el = new PdfToOffice("pptx");
     document.getElementById("main-container")?.appendChild(el);
@@ -42,5 +52,11 @@ describe("Final Conversion Suite E2E (Integration)", () => {
     const el = new OfficeToPdf();
     document.getElementById("main-container")?.appendChild(el);
     expect(el.innerHTML).toContain("Office to PDF");
+  });
+
+  it("should render PdfSecurity", async () => {
+    const el = new PdfSecurity();
+    document.getElementById("main-container")?.appendChild(el);
+    expect(el.innerHTML).toContain("Protect PDF");
   });
 });

@@ -47,14 +47,24 @@ vi.mock("../../utils/pdfConfig", () => {
         save: vi.fn().mockResolvedValue(new Uint8Array([4, 5, 6])),
       }),
     },
+    degrees: vi.fn((value) => ({ value })),
     rgb: vi.fn().mockReturnValue({}),
     StandardFonts: {
+      Courier: "Courier",
       Helvetica: "Helvetica",
+      TimesRoman: "Times-Roman",
     },
   };
 });
 
-import { compressPdf } from "../../utils/pdfEngine";
+import {
+  compressPdf,
+  convertImagesToPdf,
+  convertPdfToImages,
+  embedAllAnnotations,
+  embedShapeAnnotations,
+  embedTextAnnotations,
+} from "../../utils/pdfEngine";
 
 describe("pdfEngine", () => {
   const originalCreateElement = document.createElement.bind(document);
@@ -137,7 +147,6 @@ describe("pdfEngine", () => {
       },
     ];
 
-    const { embedTextAnnotations } = await import("../../utils/pdfEngine");
     const result = await embedTextAnnotations(pdfData, annotations);
 
     expect(result).toBeInstanceOf(Uint8Array);
@@ -192,11 +201,316 @@ describe("pdfEngine", () => {
       },
     ];
 
-    const { embedAllAnnotations } = await import("../../utils/pdfEngine");
     const result = await embedAllAnnotations(pdfData, annotations);
 
     expect(result).toBeInstanceOf(Uint8Array);
     expect(pageMock.drawRectangle).toHaveBeenCalled();
     expect(pageMock.drawLine).toHaveBeenCalled();
+  });
+
+  it("should embed text, rectangles, and cached images through the unified annotation path", async () => {
+    const { PDFDocument, StandardFonts } = await import("../../utils/pdfConfig");
+    const page = {
+      drawImage: vi.fn(),
+      drawLine: vi.fn(),
+      drawRectangle: vi.fn(),
+      drawText: vi.fn(),
+      getSize: vi.fn().mockReturnValue({ width: 612, height: 792 }),
+    };
+    const doc = {
+      embedFont: vi.fn().mockResolvedValue({ font: true }),
+      embedJpg: vi.fn().mockResolvedValue({ image: "jpg" }),
+      embedPng: vi.fn().mockResolvedValue({ image: "png" }),
+      getPages: vi.fn().mockReturnValue([page]),
+      save: vi.fn().mockResolvedValue(new Uint8Array([7, 8, 9])),
+    };
+    vi.mocked(PDFDocument.load).mockResolvedValueOnce(doc as any);
+    global.fetch = vi.fn().mockResolvedValue({
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(4)),
+    }) as any;
+
+    const pngData = "data:image/png;base64,abc";
+    const jpgData = "data:image/jpeg;base64,def";
+    const result = await embedAllAnnotations(new Uint8Array([1]), [
+      {
+        content: "Times",
+        id: "text-times",
+        pageIndex: 0,
+        style: { color: "#zzzzzz", font: "Times-Roman", fontSize: 18 },
+        type: "text",
+        x: 10,
+        y: 20,
+      },
+      {
+        content: "Courier",
+        id: "text-courier",
+        pageIndex: 0,
+        style: { color: "#112233", font: "Courier", fontSize: 12 },
+        type: "text",
+        x: 20,
+        y: 30,
+      },
+      {
+        content: "Default",
+        id: "text-default",
+        pageIndex: 0,
+        type: "text",
+        x: 30,
+        y: 40,
+      },
+      {
+        height: 20,
+        id: "rect",
+        pageIndex: 0,
+        style: { color: "#abcdef", opacity: 0.4, strokeWidth: 3 },
+        type: "rectangle",
+        width: 40,
+        x: 50,
+        y: 60,
+      },
+      {
+        content: pngData,
+        height: 30,
+        id: "image-png-1",
+        pageIndex: 0,
+        style: { opacity: 0.8, rotation: 15 },
+        type: "image",
+        width: 30,
+        x: 70,
+        y: 80,
+      },
+      {
+        content: pngData,
+        height: 30,
+        id: "image-png-2",
+        pageIndex: 0,
+        type: "image",
+        width: 30,
+        x: 75,
+        y: 85,
+      },
+      {
+        content: jpgData,
+        height: 30,
+        id: "image-jpg",
+        pageIndex: 0,
+        type: "image",
+        width: 30,
+        x: 90,
+        y: 100,
+      },
+      {
+        content: "Skipped",
+        id: "missing-page",
+        pageIndex: 99,
+        type: "text",
+        x: 1,
+        y: 1,
+      },
+    ]);
+
+    expect(result).toEqual(new Uint8Array([7, 8, 9]));
+    expect(doc.embedFont).toHaveBeenCalledWith(StandardFonts.TimesRoman);
+    expect(doc.embedFont).toHaveBeenCalledWith(StandardFonts.Courier);
+    expect(doc.embedFont).toHaveBeenCalledWith(StandardFonts.Helvetica);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(doc.embedPng).toHaveBeenCalledTimes(1);
+    expect(doc.embedJpg).toHaveBeenCalledTimes(1);
+    expect(page.drawText).toHaveBeenCalledTimes(3);
+    expect(page.drawRectangle).toHaveBeenCalledTimes(1);
+    expect(page.drawImage).toHaveBeenCalledTimes(3);
+  });
+
+  it("should embed rectangle-only annotations and ignore other annotation types", async () => {
+    const result = await embedShapeAnnotations(new Uint8Array([1]), [
+      {
+        id: "text",
+        pageIndex: 0,
+        type: "text",
+        x: 1,
+        y: 1,
+      },
+      {
+        height: 25,
+        id: "rect",
+        pageIndex: 0,
+        style: { color: "#ffffff", strokeWidth: 2 },
+        type: "rectangle",
+        width: 75,
+        x: 10,
+        y: 20,
+      },
+      {
+        height: 25,
+        id: "missing",
+        pageIndex: 99,
+        type: "rectangle",
+        width: 75,
+        x: 10,
+        y: 20,
+      },
+    ]);
+
+    expect(result).toEqual(new Uint8Array([4, 5, 6]));
+    expect(pageMock.drawRectangle).toHaveBeenCalled();
+  });
+
+  it("should propagate annotation embedding failures", async () => {
+    const { PDFDocument } = await import("../../utils/pdfConfig");
+    vi.mocked(PDFDocument.load).mockRejectedValueOnce(new Error("load failed"));
+    await expect(embedAllAnnotations(new Uint8Array([1]), [])).rejects.toThrow("load failed");
+
+    vi.mocked(PDFDocument.load).mockRejectedValueOnce(new Error("text failed"));
+    await expect(embedTextAnnotations(new Uint8Array([1]), [])).rejects.toThrow("text failed");
+
+    vi.mocked(PDFDocument.load).mockRejectedValueOnce(new Error("shape failed"));
+    await expect(embedShapeAnnotations(new Uint8Array([1]), [])).rejects.toThrow("shape failed");
+  });
+
+  it("should fail compression when canvas context or image blobs are unavailable", async () => {
+    vi.mocked(document.createElement).mockImplementationOnce((tagName: string) => {
+      if (tagName === "canvas") {
+        return {
+          getContext: vi.fn().mockReturnValue(null),
+        } as any;
+      }
+      return originalCreateElement(tagName);
+    });
+
+    await expect(
+      compressPdf(new File([""], "test.pdf", { type: "application/pdf" }), 100, vi.fn()),
+    ).rejects.toThrow("Could not get 2D context");
+
+    vi.mocked(document.createElement).mockImplementationOnce((tagName: string) => {
+      if (tagName === "canvas") {
+        return {
+          getContext: vi.fn().mockReturnValue({}),
+          height: 0,
+          toBlob: vi.fn((cb) => cb(null)),
+          width: 0,
+        } as any;
+      }
+      return originalCreateElement(tagName);
+    });
+
+    await expect(
+      compressPdf(new File([""], "test.pdf", { type: "application/pdf" }), 100, vi.fn()),
+    ).rejects.toThrow("Failed to create blob from canvas");
+  });
+
+  it("should yield while compressing multi-page PDFs and keep the best result after later errors", async () => {
+    const { PDFDocument, pdfjsLib } = await import("../../utils/pdfConfig");
+    const page = {
+      getViewport: vi.fn().mockReturnValue({ height: 100, width: 100 }),
+      render: vi.fn().mockReturnValue({ promise: Promise.resolve() }),
+    };
+    vi.mocked(pdfjsLib.getDocument).mockReturnValueOnce({
+      promise: Promise.resolve({
+        getPage: vi.fn().mockResolvedValue(page),
+        numPages: 2,
+      }),
+    } as any);
+
+    const currentPdf = {
+      addPage: vi.fn().mockReturnValue({ drawImage: vi.fn() }),
+      embedJpg: vi.fn().mockResolvedValue({}),
+      save: vi.fn().mockResolvedValue(new Uint8Array(2048)),
+    };
+    vi.mocked(PDFDocument.create)
+      .mockResolvedValueOnce(currentPdf as any)
+      .mockRejectedValueOnce(new Error("later iteration failed"));
+
+    const result = await compressPdf(
+      new File([""], "two-pages.pdf", { type: "application/pdf" }),
+      1,
+      vi.fn(),
+    );
+
+    expect(result).toEqual(new Uint8Array(2048));
+    expect(page.render).toHaveBeenCalledTimes(2);
+  });
+
+  it("should convert PDF pages to image blobs and skip unavailable page blobs", async () => {
+    const { pdfjsLib } = await import("../../utils/pdfConfig");
+    const page = {
+      getViewport: vi.fn().mockReturnValue({ height: 80, width: 120 }),
+      render: vi.fn().mockReturnValue({ promise: Promise.resolve() }),
+    };
+    vi.mocked(pdfjsLib.getDocument).mockReturnValueOnce({
+      promise: Promise.resolve({
+        getPage: vi.fn().mockResolvedValue(page),
+        numPages: 2,
+      }),
+    } as any);
+    let callCount = 0;
+    vi.mocked(document.createElement).mockImplementationOnce((tagName: string) => {
+      if (tagName === "canvas") {
+        return {
+          getContext: vi.fn().mockReturnValue({}),
+          height: 0,
+          toBlob: vi.fn((cb) => {
+            callCount += 1;
+            cb(callCount === 1 ? new Blob(["image"], { type: "image/png" }) : null);
+          }),
+          width: 0,
+        } as any;
+      }
+      return originalCreateElement(tagName);
+    });
+
+    const images = await convertPdfToImages(new Uint8Array([1, 2, 3]), {
+      format: "png",
+      scale: 1,
+    });
+
+    expect(images).toHaveLength(1);
+    expect(page.render).toHaveBeenCalledTimes(2);
+  });
+
+  it("should surface PDF-to-image rendering failures", async () => {
+    vi.mocked(document.createElement).mockImplementationOnce((tagName: string) => {
+      if (tagName === "canvas") {
+        return {
+          getContext: vi.fn().mockReturnValue(null),
+        } as any;
+      }
+      return originalCreateElement(tagName);
+    });
+
+    await expect(convertPdfToImages(new Uint8Array([1, 2, 3]), { format: "jpeg" })).rejects.toThrow(
+      "Could not get 2D context",
+    );
+  });
+
+  it("should convert PNG and JPEG images into a PDF", async () => {
+    const { PDFDocument } = await import("../../utils/pdfConfig");
+    const page = { drawImage: vi.fn() };
+    const doc = {
+      addPage: vi.fn().mockReturnValue(page),
+      embedJpg: vi.fn().mockResolvedValue({ scale: vi.fn(() => ({ height: 20, width: 10 })) }),
+      embedPng: vi.fn().mockResolvedValue({ scale: vi.fn(() => ({ height: 40, width: 30 })) }),
+      save: vi.fn().mockResolvedValue(new Uint8Array([3, 2, 1])),
+    };
+    vi.mocked(PDFDocument.create).mockResolvedValueOnce(doc as any);
+
+    const result = await convertImagesToPdf([
+      new File(["png"], "one.png", { type: "image/png" }),
+      new File(["jpg"], "two.jpg", { type: "image/jpeg" }),
+    ]);
+
+    expect(result).toEqual(new Uint8Array([3, 2, 1]));
+    expect(doc.embedPng).toHaveBeenCalledTimes(1);
+    expect(doc.embedJpg).toHaveBeenCalledTimes(1);
+    expect(doc.addPage).toHaveBeenCalledTimes(2);
+    expect(page.drawImage).toHaveBeenCalledTimes(2);
+  });
+
+  it("should surface image-to-PDF conversion failures", async () => {
+    const { PDFDocument } = await import("../../utils/pdfConfig");
+    vi.mocked(PDFDocument.create).mockRejectedValueOnce(new Error("create failed"));
+
+    await expect(
+      convertImagesToPdf([new File(["png"], "one.png", { type: "image/png" })]),
+    ).rejects.toThrow("create failed");
   });
 });

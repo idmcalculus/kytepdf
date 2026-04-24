@@ -6,13 +6,13 @@ test.describe("KytePDF E2E", () => {
   });
 
   test("should display the dashboard and tools", async ({ page }) => {
-    await expect(page.locator("h1")).toContainText("Kyte");
-    await expect(page.locator(".tool-card")).toHaveCount(15);
+    await expect(page.getByRole("heading", { name: "Kyte" })).toBeVisible();
+    await expect(page.locator(".tool-card")).toHaveCount(16);
   });
 
   test("should navigate to Compress tool", async ({ page }) => {
     await page.click('.tool-card[data-id="compress"]');
-    await expect(page.locator("h2")).toContainText("Compress PDF");
+    await expect(page.getByRole("heading", { name: "Compress PDF" })).toBeVisible();
   });
 
   test("should handle back to dashboard navigation", async ({ page }) => {
@@ -21,9 +21,9 @@ test.describe("KytePDF E2E", () => {
     await expect(page.locator(".dashboard-grid")).toBeVisible();
   });
 
-  test("should show account dialog", async ({ page }) => {
-    await page.click("#userAccountBtn");
-    await expect(page.locator("#globalDialog")).toBeVisible();
-    await expect(page.locator("#globalDialog")).toContainText("User Account");
+  test("should show about dialog", async ({ page }) => {
+    await page.click("#aboutBtn");
+    await expect(page.locator("#aboutOverlay")).toBeVisible();
+    await expect(page.locator("#aboutOverlay")).toContainText("About KytePDF");
   });
 });

@@ -2,6 +2,32 @@ import { describe, expect, it } from "vitest";
 import { mapError } from "../../utils/errorMapper";
 
 describe("errorMapper", () => {
+  it("should map PDFs without passwords", () => {
+    const error = "This PDF is not password-protected.";
+    const mapped = mapError(error);
+    expect(mapped).toBe("This PDF does not currently have a password.");
+  });
+
+  it("should map already protected PDFs", () => {
+    const error = "This PDF is already password-protected.";
+    const mapped = mapError(error);
+    expect(mapped).toBe(
+      "This PDF is already protected. Remove the current password before applying a new one.",
+    );
+  });
+
+  it("should map incorrect password errors", () => {
+    const error = "Password incorrect";
+    const mapped = mapError(error);
+    expect(mapped).toBe("The password is incorrect. Enter the current PDF password and try again.");
+  });
+
+  it("should map password-required errors", () => {
+    const error = "NEEDS PASSWORD";
+    const mapped = mapError(error);
+    expect(mapped).toBe("This PDF requires its current password before Kyte can unlock it.");
+  });
+
   it("should map password-protected errors", () => {
     const error = "The document is password protected";
     const mapped = mapError(error);

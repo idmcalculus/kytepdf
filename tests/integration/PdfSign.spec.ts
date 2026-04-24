@@ -50,6 +50,20 @@ describe("PdfSign", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
+  const asFileList = (file: File) =>
+    ({
+      0: file,
+      length: 1,
+      item: (_index: number) => file,
+    }) as unknown as FileList;
+
+  const loadPdfForSigning = async () => {
+    const file = new File(["test"], "test.pdf", { type: "application/pdf" });
+    await component.handleFiles(asFileList(file));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    return file;
+  };
+
   describe("render", () => {
     it("should render the sign component", async () => {
       expect(component.querySelector("h1")?.textContent).toBe("Sign PDF");
@@ -234,6 +248,14 @@ describe("PdfSign", () => {
 
       expect(component.querySelector("#pageIndicator")?.textContent).toContain("Page 1 of 3");
     });
+
+    it("should recreate a missing preview controller before loading", async () => {
+      (component as any).previewController = null;
+
+      await loadPdfForSigning();
+
+      expect((component as any).previewController).toBeTruthy();
+    });
   });
 
   describe("page navigation after file load", () => {
@@ -294,6 +316,31 @@ describe("PdfSign", () => {
 
       expect(component.querySelector("#signStatus")?.classList.contains("hidden")).toBe(false);
     });
+
+    it("should ignore empty typed signatures", async () => {
+      const typeTab = component.querySelector('.tab-btn[data-tab="type"]') as HTMLElement;
+      typeTab.click();
+
+      const nameInput = component.querySelector("#nameInput") as HTMLInputElement;
+      nameInput.value = "   ";
+      const saveBtn = component.querySelector("#saveTypedSigBtn") as HTMLButtonElement;
+      saveBtn.click();
+
+      expect(component.querySelector("#signStatus")?.classList.contains("hidden")).toBe(true);
+    });
+
+    it("should handle an unavailable canvas context for typed signatures", async () => {
+      const originalGetContext = HTMLCanvasElement.prototype.getContext;
+      const typeTab = component.querySelector('.tab-btn[data-tab="type"]') as HTMLElement;
+      typeTab.click();
+      (component.querySelector("#nameInput") as HTMLInputElement).value = "No Context";
+
+      HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValueOnce(null) as any;
+      (component.querySelector("#saveTypedSigBtn") as HTMLButtonElement).click();
+
+      expect(component.querySelector("#signStatus")?.classList.contains("hidden")).toBe(true);
+      HTMLCanvasElement.prototype.getContext = originalGetContext;
+    });
   });
 
   describe("startFinalize", () => {
@@ -326,6 +373,32 @@ describe("PdfSign", () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       expect(PDFDocument.load).toHaveBeenCalled();
+    });
+
+    it("should return early when finalize data is incomplete", async () => {
+      const finalizeBtn = component.querySelector("#finalizeBtn") as HTMLButtonElement;
+      finalizeBtn.disabled = false;
+
+      await component.startFinalize();
+
+      expect(finalizeBtn.disabled).toBe(false);
+      expect(component.querySelector("#progressSection")?.classList.contains("hidden")).toBe(true);
+    });
+
+    it("should surface signing errors and re-enable the finalize button", async () => {
+      const { PDFDocument } = await import("../../utils/pdfConfig");
+      await loadPdfForSigning();
+      (component as any).signatureImage = "data:image/png;base64,abc";
+      (component as any).sigPlacement = { page: 1, x: 0.1, y: 0.2, w: 0.3, h: 0.1 };
+      (PDFDocument.load as any).mockRejectedValueOnce(new Error("broken pdf"));
+
+      const finalizeBtn = component.querySelector("#finalizeBtn") as HTMLButtonElement;
+      await component.startFinalize();
+
+      expect((document.getElementById("globalDialog") as any).show).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "error" }),
+      );
+      expect(finalizeBtn.disabled).toBe(false);
     });
   });
 
@@ -376,6 +449,199 @@ describe("PdfSign", () => {
 
     it("should have handleFiles method", () => {
       expect(typeof component.handleFiles).toBe("function");
+    });
+
+    it("should delegate renderPage to the preview controller", async () => {
+      const render = vi.fn().mockResolvedValue(undefined);
+      (component as any).previewController = { render };
+
+      await component.renderPage(2);
+
+      expect(render).toHaveBeenCalledWith(2);
+    });
+  });
+
+  describe("drawing and placement interactions", () => {
+    it("should draw with mouse and touch input", () => {
+      const sigCanvas = component.querySelector("#sigCanvas") as HTMLCanvasElement;
+      Object.defineProperty(sigCanvas, "getBoundingClientRect", {
+        configurable: true,
+        value: () => ({ left: 10, top: 20, width: 400, height: 200 }),
+      });
+      const sigContext = {
+        beginPath: vi.fn(),
+        moveTo: vi.fn(),
+        lineTo: vi.fn(),
+        stroke: vi.fn(),
+      };
+      (component as any).sigContext = sigContext;
+
+      component.startDrawing(new MouseEvent("mousedown", { clientX: 110, clientY: 70 }));
+      component.draw(new MouseEvent("mousemove", { clientX: 210, clientY: 120 }));
+      window.dispatchEvent(new MouseEvent("mouseup"));
+
+      expect(sigContext.beginPath).toHaveBeenCalled();
+      expect(sigContext.moveTo).toHaveBeenCalledWith(100, 50);
+      expect(sigContext.lineTo).toHaveBeenCalledWith(200, 100);
+      expect((component as any).isDrawing).toBe(false);
+
+      const touchStart = new Event("touchstart", { bubbles: true, cancelable: true });
+      Object.defineProperty(touchStart, "touches", {
+        value: [{ clientX: 120, clientY: 80 }],
+      });
+      sigCanvas.dispatchEvent(touchStart);
+      expect((component as any).isDrawing).toBe(true);
+
+      const touchMove = new Event("touchmove", { bubbles: true, cancelable: true });
+      Object.defineProperty(touchMove, "touches", {
+        value: [{ clientX: 140, clientY: 90 }],
+      });
+      sigCanvas.dispatchEvent(touchMove);
+      sigCanvas.dispatchEvent(new Event("touchend"));
+      expect((component as any).isDrawing).toBe(false);
+    });
+
+    it("should place, drag, resize, and hide a signature preview on page changes", async () => {
+      await loadPdfForSigning();
+      (component as any).signatureImage = "data:image/png;base64,abc";
+      (component as any).sigAspectRatio = 3;
+
+      const canvas = component.querySelector("#pdfCanvas") as HTMLCanvasElement;
+      const preview = component.querySelector("#signaturePreview") as HTMLElement;
+      const wrapper = component.querySelector(".pdf-page-wrapper") as HTMLElement;
+      Object.defineProperty(canvas, "getBoundingClientRect", {
+        configurable: true,
+        value: () => ({ left: 0, top: 0, width: 300, height: 400 }),
+      });
+      Object.defineProperty(wrapper, "getBoundingClientRect", {
+        configurable: true,
+        value: () => ({ left: 0, top: 0, width: 300, height: 400 }),
+      });
+      Object.defineProperty(preview, "getBoundingClientRect", {
+        configurable: true,
+        value: () => ({
+          left: parseFloat(preview.style.left) || 60,
+          top: parseFloat(preview.style.top) || 80,
+          width: parseFloat(preview.style.width) || 180,
+          height: parseFloat(preview.style.height) || 60,
+        }),
+      });
+
+      canvas.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 150, clientY: 200 }));
+      expect(preview.classList.contains("hidden")).toBe(false);
+      expect((component.querySelector("#finalizeBtn") as HTMLButtonElement).disabled).toBe(false);
+
+      preview.dispatchEvent(
+        new MouseEvent("mousedown", { bubbles: true, clientX: 100, clientY: 120 }),
+      );
+      window.dispatchEvent(new MouseEvent("mousemove", { clientX: 125, clientY: 150 }));
+      expect(preview.style.cursor).toBe("grabbing");
+      expect((component as any).sigPlacement).toMatchObject({ page: 1 });
+      window.dispatchEvent(new MouseEvent("mouseup"));
+      expect(preview.style.cursor).toBe("grab");
+
+      const handle = preview.querySelector(".resize-handle") as HTMLElement;
+      handle.dispatchEvent(
+        new MouseEvent("mousedown", { bubbles: true, clientX: 100, clientY: 120 }),
+      );
+      window.dispatchEvent(new MouseEvent("mousemove", { clientX: 150, clientY: 150 }));
+      expect(parseFloat(preview.style.width)).toBeGreaterThanOrEqual(30);
+
+      component.changePage(1);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(preview.classList.contains("hidden")).toBe(true);
+    });
+
+    it("should pan the PDF container and ignore panning from interactive targets", () => {
+      const container = component.querySelector(".pdf-container") as HTMLElement;
+      const canvas = component.querySelector("#pdfCanvas") as HTMLCanvasElement;
+      Object.defineProperty(container, "offsetLeft", { configurable: true, value: 0 });
+      Object.defineProperty(container, "offsetTop", { configurable: true, value: 0 });
+      container.scrollLeft = 30;
+      container.scrollTop = 40;
+
+      canvas.dispatchEvent(
+        new MouseEvent("mousedown", { bubbles: true, clientX: 10, clientY: 10 }),
+      );
+      window.dispatchEvent(new MouseEvent("mousemove", { clientX: 40, clientY: 40 }));
+      expect(container.scrollLeft).toBe(30);
+
+      container.dispatchEvent(
+        new MouseEvent("mousedown", { bubbles: true, clientX: 10, clientY: 10 }),
+      );
+      window.dispatchEvent(
+        new MouseEvent("mousemove", { bubbles: true, cancelable: true, clientX: 20, clientY: 25 }),
+      );
+      expect(container.style.cursor).toBe("grabbing");
+      expect(container.scrollLeft).toBe(10);
+      expect(container.scrollTop).toBe(10);
+
+      window.dispatchEvent(new Event("mouseleave"));
+      expect(container.style.cursor).toBe("crosshair");
+    });
+  });
+
+  describe("session and error handling", () => {
+    it("should show and restore a saved signing session", async () => {
+      const { persistence } = await import("../../utils/persistence");
+      const saved = new File(["saved"], "saved.pdf", { type: "application/pdf" });
+      (persistence.get as any).mockResolvedValueOnce(saved);
+
+      await component.checkExistingSession();
+
+      expect(component.querySelector("#resumeContainer")?.classList.contains("hidden")).toBe(false);
+      expect(component.querySelector("#resumeBtn")?.textContent).toContain("saved.pdf");
+
+      (persistence.get as any).mockResolvedValueOnce(saved);
+      const handleSpy = vi.spyOn(component, "handleFiles").mockResolvedValue(undefined);
+      await component.restoreSession();
+
+      expect(handleSpy).toHaveBeenCalledWith([saved]);
+    });
+
+    it("should tolerate session lookup, restore, and save failures", async () => {
+      const { persistence } = await import("../../utils/persistence");
+
+      (persistence.get as any).mockRejectedValueOnce(new Error("lookup failed"));
+      await expect(component.checkExistingSession()).resolves.toBeUndefined();
+
+      (persistence.get as any).mockRejectedValueOnce(new Error("restore failed"));
+      await expect(component.restoreSession()).resolves.toBeUndefined();
+
+      (component as any).selectedFile = new File(["pdf"], "state.pdf", { type: "application/pdf" });
+      (persistence.set as any).mockRejectedValueOnce(new Error("save failed"));
+      await expect(component.saveSession()).resolves.toBeUndefined();
+    });
+
+    it("should ignore saveSession when no PDF is selected", async () => {
+      const { persistence } = await import("../../utils/persistence");
+      await component.saveSession();
+
+      expect(persistence.set).not.toHaveBeenCalledWith("pdf-sign", expect.any(File));
+    });
+
+    it("should reject invalid files and show preview load errors", async () => {
+      const { pdfjsLib } = await import("../../utils/pdfConfig");
+      const invalid = new File(["text"], "notes.txt", { type: "text/plain" });
+      await component.handleFiles(asFileList(invalid));
+      expect((component as any).selectedFile).toBeNull();
+
+      (pdfjsLib.getDocument as any).mockReturnValueOnce({
+        promise: Promise.reject(new Error("preview failed")),
+      });
+      await component.handleFiles(
+        asFileList(new File(["pdf"], "broken.pdf", { type: "application/pdf" })),
+      );
+
+      expect((document.getElementById("globalDialog") as any).show).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "error" }),
+      );
+    });
+
+    it("should return null when preview controller targets are missing", () => {
+      component.querySelector("#pdfCanvas")?.remove();
+
+      expect((component as any).createPreviewController()).toBeNull();
     });
   });
 });

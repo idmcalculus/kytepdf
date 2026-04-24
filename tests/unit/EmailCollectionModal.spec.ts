@@ -9,6 +9,9 @@ describe("EmailCollectionModal", () => {
   let modal: EmailCollectionModal;
 
   beforeEach(() => {
+    vi.useRealTimers();
+    document.body.innerHTML = '<div id="globalDialog"></div>';
+    (document.getElementById("globalDialog") as any).show = vi.fn();
     modal = new EmailCollectionModal();
     document.body.appendChild(modal);
   });
@@ -62,5 +65,29 @@ describe("EmailCollectionModal", () => {
     skipBtn.click();
 
     expect(spy).toHaveBeenCalled();
+  });
+
+  it("resolves submitted and skipped values and supports privacy/backdrop actions", async () => {
+    vi.useFakeTimers();
+    const dialog = document.getElementById("globalDialog") as any;
+
+    (modal.querySelector("#privacyPolicyLink") as HTMLAnchorElement).click();
+    expect(dialog.show).toHaveBeenCalledWith(expect.objectContaining({ title: "Privacy Policy" }));
+
+    const submitted = modal.show();
+    const input = modal.querySelector("#userEmail") as HTMLInputElement;
+    input.value = "person@example.com";
+    (modal.querySelector("#emailForm") as HTMLFormElement).dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+    vi.advanceTimersByTime(300);
+    await expect(submitted).resolves.toBe("person@example.com");
+
+    const skipped = modal.show();
+    const overlay = modal.querySelector("#emailOverlay") as HTMLElement;
+    overlay.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    vi.advanceTimersByTime(300);
+    await expect(skipped).resolves.toBeNull();
+    vi.useRealTimers();
   });
 });
