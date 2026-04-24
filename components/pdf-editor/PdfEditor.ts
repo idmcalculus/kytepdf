@@ -3,6 +3,7 @@ import { type HistoryAction, HistoryManager } from "../../utils/HistoryManager.t
 import { logger } from "../../utils/logger.ts";
 import { embedAllAnnotations } from "../../utils/pdfEngine.ts";
 import { loadPdf, renderPage } from "../../utils/pdfRenderer.ts";
+import { yieldToMain } from "../../utils/taskScheduler.ts";
 import { BaseComponent } from "../BaseComponent.ts";
 import { FreehandEditor } from "./FreehandEditor";
 import { HighlighterEditor } from "./HighlighterEditor";
@@ -1121,6 +1122,7 @@ export class PdfEditor extends BaseComponent {
       });
       el.addEventListener("blur", () => {
         setTimeout(() => {
+          if (typeof document === "undefined") return;
           if (document.activeElement !== el) {
             el.style.boxShadow = "none";
             deleteBtn.style.display = "none";
@@ -1316,6 +1318,7 @@ export class PdfEditor extends BaseComponent {
       const scale = TARGET_WIDTH / viewport.width;
 
       await renderPage(this.currentPdfDoc, i, canvas, scale);
+      await yieldToMain();
     }
   }
 }

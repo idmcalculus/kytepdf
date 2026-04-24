@@ -1,4 +1,4 @@
-import { degrees, PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { degrees, PDFDocument, rgb, StandardFonts } from "pdf-lib-with-encrypt";
 import * as pdfjsLib from "pdfjs-dist";
 import { config } from "./config.ts";
 

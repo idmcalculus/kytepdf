@@ -10,6 +10,23 @@ interface ErrorEntry {
 
 const ERROR_MAP: ErrorEntry[] = [
   {
+    pattern: /not password-protected/i,
+    userMessage: "This PDF does not currently have a password.",
+  },
+  {
+    pattern: /already password-protected/i,
+    userMessage:
+      "This PDF is already protected. Remove the current password before applying a new one.",
+  },
+  {
+    pattern: /password incorrect|incorrect password/i,
+    userMessage: "The password is incorrect. Enter the current PDF password and try again.",
+  },
+  {
+    pattern: /requires its current password|needs password|password required/i,
+    userMessage: "This PDF requires its current password before Kyte can unlock it.",
+  },
+  {
     pattern: /password|protected|encrypted/i,
     userMessage: "This PDF is password-protected. Please remove the password and try again.",
   },

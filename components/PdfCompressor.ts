@@ -1,7 +1,7 @@
 import { logger } from "../utils/logger.ts";
 import { compressPdf } from "../utils/pdfEngine.ts";
+import { getPdfPreviewErrorMessage, PdfPreviewController } from "../utils/pdfPreview.ts";
 import { calculateSavingsPercent, generateOutputFilename } from "../utils/pdfUtils.ts";
-import { PdfPreviewController } from "../utils/pdfPreview.ts";
 import { persistence } from "../utils/persistence.ts";
 import { BaseComponent } from "./BaseComponent.ts";
 
@@ -225,9 +225,7 @@ export class PdfCompressor extends BaseComponent {
       await this.previewController?.load(this.selectedFile);
     } catch (err) {
       logger.error("Preview load error", err);
-      this.showErrorDialog(
-        "Could not load PDF preview. The file might be corrupted, protected, or too complex for the browser.",
-      );
+      this.showErrorDialog(getPdfPreviewErrorMessage("preview"));
     }
 
     if (this.selectedRatio !== null) {

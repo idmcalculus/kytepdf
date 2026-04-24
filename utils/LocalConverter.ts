@@ -1,7 +1,8 @@
 import { Document, Packer, Paragraph, TextRun } from "docx";
 import * as XLSX from "xlsx";
 import { logger } from "./logger.ts";
-import { pdfjsLib } from "./pdfConfig.ts";
+import { loadProcessablePdfJsDocument } from "./pdfSecurity.ts";
+import { yieldToMain } from "./taskScheduler.ts";
 
 export type ConversionQuality = "good" | "fair" | "poor";
 
@@ -25,6 +26,11 @@ type LineGroup = {
 };
 
 export class LocalConverter {
+  private extractionCache = new WeakMap<
+    Uint8Array,
+    { items: TextItemRecord[]; pageCount: number }
+  >();
+
   async assessQuality(
     pdfBytes: Uint8Array,
     _targetFormat: "docx" | "xlsx",
@@ -108,7 +114,10 @@ export class LocalConverter {
   private async extractTextItems(
     pdfBytes: Uint8Array,
   ): Promise<{ items: TextItemRecord[]; pageCount: number }> {
-    const pdfDoc = await pdfjsLib.getDocument({ data: pdfBytes }).promise;
+    const cached = this.extractionCache.get(pdfBytes);
+    if (cached) return cached;
+
+    const { pdfDoc } = await loadProcessablePdfJsDocument(pdfBytes);
     const items: TextItemRecord[] = [];
 
     for (let pageIndex = 0; pageIndex < pdfDoc.numPages; pageIndex++) {
@@ -122,9 +131,15 @@ export class LocalConverter {
         const y = typeof transform?.[5] === "number" ? transform[5] : 0;
         items.push({ pageIndex, text, x, y });
       }
+
+      if ((pageIndex + 1) % 2 === 0) {
+        await yieldToMain();
+      }
     }
 
-    return { items, pageCount: pdfDoc.numPages };
+    const result = { items, pageCount: pdfDoc.numPages };
+    this.extractionCache.set(pdfBytes, result);
+    return result;
   }
 
   private buildParagraphs(items: TextItemRecord[]): string[] {

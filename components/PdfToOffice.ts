@@ -5,8 +5,8 @@ import {
   localConverter,
 } from "../utils/LocalConverter.ts";
 import { logger } from "../utils/logger.ts";
+import { getPdfPreviewErrorMessage, PdfPreviewController } from "../utils/pdfPreview.ts";
 import { generateOutputFilename } from "../utils/pdfUtils.ts";
-import { PdfPreviewController } from "../utils/pdfPreview.ts";
 import { persistence } from "../utils/persistence.ts";
 import { BaseComponent } from "./BaseComponent.ts";
 
@@ -19,6 +19,8 @@ export class PdfToOffice extends BaseComponent {
   private conversionMode: ConversionMode = "local";
   private lastLocalQuality: ConversionQuality | null = null;
   private previewController: PdfPreviewController | null = null;
+  private cachedPdfBytes: Uint8Array | null = null;
+  private cachedPdfFile: File | null = null;
 
   constructor(format: ConversionFormat = "docx") {
     super();
@@ -174,6 +176,10 @@ export class PdfToOffice extends BaseComponent {
     if (!this.validateFile(file)) return;
 
     this.selectedFile = file;
+    if (this.cachedPdfFile !== file) {
+      this.cachedPdfFile = file;
+      this.cachedPdfBytes = null;
+    }
     await persistence.set(this.toolKey, file);
 
     if (!this.previewController) {
@@ -190,9 +196,7 @@ export class PdfToOffice extends BaseComponent {
       await this.previewController?.load(this.selectedFile);
     } catch (err) {
       logger.error("Preview load error", err);
-      this.showErrorDialog(
-        "Could not load PDF preview. The file might be corrupted, protected, or too complex for the browser.",
-      );
+      this.showErrorDialog(getPdfPreviewErrorMessage("preview"));
     }
 
     this.updateModeUI();
@@ -365,8 +369,7 @@ export class PdfToOffice extends BaseComponent {
     }
 
     this.updateProgress(10, "Preparing local conversion...");
-    const arrayBuffer = await (this.selectedFile as File).arrayBuffer();
-    const pdfBytes = new Uint8Array(arrayBuffer);
+    const pdfBytes = await this.getCachedPdfBytes();
 
     let result: ConversionResult;
     if (this.targetFormat === "docx") {
@@ -404,6 +407,22 @@ export class PdfToOffice extends BaseComponent {
       quality: result.quality,
       warnings: result.warnings,
     });
+  }
+
+  private async getCachedPdfBytes() {
+    if (!this.selectedFile) {
+      throw new Error("No file selected for conversion.");
+    }
+
+    if (this.cachedPdfBytes && this.cachedPdfFile === this.selectedFile) {
+      return this.cachedPdfBytes;
+    }
+
+    const arrayBuffer = await (this.selectedFile as File).arrayBuffer();
+    const pdfBytes = new Uint8Array(arrayBuffer);
+    this.cachedPdfBytes = pdfBytes;
+    this.cachedPdfFile = this.selectedFile as File;
+    return pdfBytes;
   }
 }
 

@@ -72,7 +72,7 @@ export class ToolDashboard extends HTMLElement {
         name: "PDF to Word",
         desc: "Convert PDF documents into editable Word files.",
         icon: "file-text",
-        active: true,
+        active: false,
         isCloud: true,
         isHybrid: true,
       },
@@ -81,7 +81,7 @@ export class ToolDashboard extends HTMLElement {
         name: "Word to PDF",
         desc: "Transform DOCX files into professional PDFs.",
         icon: "file-up",
-        active: true,
+        active: false,
         isCloud: true,
       },
       {
@@ -89,7 +89,7 @@ export class ToolDashboard extends HTMLElement {
         name: "PDF to Sheets",
         desc: "Extract PDF tables into Excel or Google Sheets.",
         icon: "file-spreadsheet",
-        active: true,
+        active: false,
         isCloud: true,
         isHybrid: true,
       },
@@ -98,7 +98,7 @@ export class ToolDashboard extends HTMLElement {
         name: "PDF to PPT",
         desc: "Convert PDF pages into PowerPoint slides.",
         icon: "presentation",
-        active: true,
+        active: false,
         isCloud: true,
         isHybrid: true,
       },
@@ -113,9 +113,9 @@ export class ToolDashboard extends HTMLElement {
       {
         id: "create-pdf",
         name: "Create PDF",
-        desc: "Create a new PDF from scratch or templates.",
+        desc: "Build polished PDFs from templates with branding, structure, and live preview.",
         icon: "file-plus",
-        active: false,
+        active: true,
       },
       {
         id: "watermark",
@@ -129,7 +129,14 @@ export class ToolDashboard extends HTMLElement {
         name: "Protect PDF",
         desc: "Encrypt your PDF with a password.",
         icon: "lock",
-        active: false,
+        active: true,
+      },
+      {
+        id: "unprotect",
+        name: "Unlock PDF",
+        desc: "Remove a known password, or strip owner restrictions from PDFs that already open.",
+        icon: "lock-open",
+        active: true,
       },
     ];
   }
@@ -149,6 +156,8 @@ export class ToolDashboard extends HTMLElement {
   }
 
   render() {
+    const visibleTools = [...this.tools].sort((a, b) => Number(b.active) - Number(a.active));
+
     this.innerHTML = `
       <div class="dashboard-container">
         <div class="view-header">
@@ -158,22 +167,24 @@ export class ToolDashboard extends HTMLElement {
           </div>
           <div class="user-account-header">
             <button id="aboutBtn" class="header-link">About</button>
+            <!-- Account feature disabled for launch.
             <button id="userAccountBtn" class="account-pill">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
               <span>Account</span>
             </button>
+            -->
           </div>
         </div>
         <p style="color: var(--text-muted); margin-bottom: 2rem; font-size: 1.1rem; padding-left: 0.25rem;">The ultimate lightweight & private PDF toolkit.</p>
         
         <div class="dashboard-grid">
-          ${this.tools
+          ${visibleTools
             .map(
               (tool) => `
-            <div class="tool-card" data-id="${tool.id}">
+            <div class="tool-card ${tool.active ? "" : "coming-soon"}" data-id="${tool.id}" ${tool.active ? "" : 'aria-disabled="true"'}>
               ${
                 !tool.active
-                  ? '<span class="badge">Coming Soon</span>'
+                  ? '<span class="badge coming-soon">Coming Soon</span>'
                   : tool.isHybrid
                     ? `
                 <span class="badge hybrid-badge">
@@ -218,18 +229,6 @@ export class ToolDashboard extends HTMLElement {
         if ((window as any).showAbout) (window as any).showAbout();
       };
     }
-
-    const accountBtn = this.querySelector("#userAccountBtn") as HTMLElement;
-    accountBtn.onclick = () => {
-      const dialog = document.getElementById("globalDialog") as any;
-      dialog.show({
-        title: "User Account",
-        message:
-          "Optional cloud sync and cross-device history are coming soon! Your documents always stay local by default, but you'll be able to opt-in for sync later.",
-        type: "info",
-        confirmText: "Get Notified",
-      });
-    };
 
     // Initialize Lucide icons
     if ((window as any).lucide) {
@@ -351,6 +350,14 @@ export class ToolDashboard extends HTMLElement {
         return `${m.pagesExtracted} pages extracted`;
       case "Sign":
         return `Signed on page ${m.pageNumber}`;
+      case "Protect":
+        return `Password added (${m.permissionsRestricted} restriction${m.permissionsRestricted === 1 ? "" : "s"})`;
+      case "Unprotect":
+        return m.restrictionsRemoved ? "Restrictions removed" : "Password removed";
+      case "Create": {
+        const pageCount = m.pageCount || 1;
+        return `${m.template || "Document"} · ${pageCount} page${pageCount === 1 ? "" : "s"}`;
+      }
       default:
         return "";
     }

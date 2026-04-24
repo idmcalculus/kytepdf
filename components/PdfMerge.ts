@@ -1,5 +1,6 @@
 import { logger } from "../utils/logger.ts";
 import { PDFDocument } from "../utils/pdfConfig.ts";
+import { loadProcessablePdf } from "../utils/pdfSecurity.ts";
 import { moveArrayItem, swapArrayItems } from "../utils/pdfUtils.ts";
 import { persistence } from "../utils/persistence.ts";
 import { BaseComponent } from "./BaseComponent.ts";
@@ -306,7 +307,7 @@ export class PdfMerge extends BaseComponent {
         this.updateProgress(percent, `Processing: ${file.name}...`);
 
         const arrayBuffer = await file.arrayBuffer();
-        const pdf = await PDFDocument.load(arrayBuffer);
+        const { pdfDoc: pdf } = await loadProcessablePdf(arrayBuffer);
         const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
         copiedPages.forEach((page) => {
           mergedPdf.addPage(page);

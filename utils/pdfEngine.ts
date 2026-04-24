@@ -1,14 +1,16 @@
 import type { Annotation } from "./AnnotationManager.ts";
 import { adjustYForTextBaseline } from "./coordinates.ts";
 import { logger } from "./logger.ts";
-import { degrees, PDFDocument, pdfjsLib, rgb, StandardFonts } from "./pdfConfig.ts";
+import { degrees, PDFDocument, rgb, StandardFonts } from "./pdfConfig.ts";
+import { loadProcessablePdf, loadProcessablePdfJsDocument } from "./pdfSecurity.ts";
+import { yieldToMain } from "./taskScheduler.ts";
 
 export async function embedAllAnnotations(
   pdfData: Uint8Array,
   annotations: Annotation[],
 ): Promise<Uint8Array> {
   try {
-    const pdfDoc = await PDFDocument.load(pdfData);
+    const { pdfDoc } = await loadProcessablePdf(pdfData);
     const pages = pdfDoc.getPages();
 
     const toRgb = (hex: string) => {
@@ -16,6 +18,24 @@ export async function embedAllAnnotations(
       const g = parseInt(hex.slice(3, 5), 16) / 255 || 0;
       const b = parseInt(hex.slice(5, 7), 16) / 255 || 0;
       return { r, g, b };
+    };
+
+    const imageCache = new Map<
+      string,
+      Promise<Awaited<ReturnType<typeof pdfDoc.embedPng | typeof pdfDoc.embedJpg>>>
+    >();
+    const getEmbeddedImage = async (dataUrl: string) => {
+      const cached = imageCache.get(dataUrl);
+      if (cached) return cached;
+      const embedPromise = (async () => {
+        const imageBytes = await fetch(dataUrl).then((res) => res.arrayBuffer());
+        if (dataUrl.includes("image/png")) {
+          return await pdfDoc.embedPng(imageBytes);
+        }
+        return await pdfDoc.embedJpg(imageBytes);
+      })();
+      imageCache.set(dataUrl, embedPromise);
+      return embedPromise;
     };
 
     // Cache for embedded fonts to avoid redundant embedding
@@ -130,14 +150,7 @@ export async function embedAllAnnotations(
         const pdfX = ann.x;
         const pdfY = height - ann.y - (ann.height || 0);
 
-        // Convert Data URL to Bytes
-        const imageBytes = await fetch(ann.content).then((res) => res.arrayBuffer());
-        let embeddedImage: Awaited<ReturnType<typeof pdfDoc.embedPng | typeof pdfDoc.embedJpg>>;
-        if (ann.content.includes("image/png")) {
-          embeddedImage = await pdfDoc.embedPng(imageBytes);
-        } else {
-          embeddedImage = await pdfDoc.embedJpg(imageBytes);
-        }
+        const embeddedImage = await getEmbeddedImage(ann.content);
 
         page.drawImage(embeddedImage, {
           x: pdfX,
@@ -162,7 +175,7 @@ export async function embedTextAnnotations(
   annotations: Annotation[],
 ): Promise<Uint8Array> {
   try {
-    const pdfDoc = await PDFDocument.load(pdfData);
+    const { pdfDoc } = await loadProcessablePdf(pdfData);
     const pages = pdfDoc.getPages();
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
@@ -206,7 +219,7 @@ export async function embedShapeAnnotations(
   annotations: Annotation[],
 ): Promise<Uint8Array> {
   try {
-    const pdfDoc = await PDFDocument.load(pdfData);
+    const { pdfDoc } = await loadProcessablePdf(pdfData);
     const pages = pdfDoc.getPages();
 
     for (const ann of annotations) {
@@ -250,8 +263,13 @@ export async function compressPdf(
   onProgress: (progress: number, status: string) => void,
 ): Promise<Uint8Array | null> {
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const { pdfDoc: pdf } = await loadProcessablePdfJsDocument(arrayBuffer);
   const numPages = pdf.numPages;
+  const renderCanvas = document.createElement("canvas");
+  const renderContext = renderCanvas.getContext("2d");
+  if (!renderContext) {
+    throw new Error("Could not get 2D context from canvas");
+  }
 
   let minQuality = 0.01;
   let maxQuality = 0.95;
@@ -279,18 +297,12 @@ export async function compressPdf(
         const canvasWidth = Math.max(1, Math.floor(viewport.width));
         const canvasHeight = Math.max(1, Math.floor(viewport.height));
 
-        const canvas = document.createElement("canvas");
-        canvas.width = canvasWidth;
-        canvas.height = canvasHeight;
-
-        const context = canvas.getContext("2d");
-        if (!context) {
-          throw new Error("Could not get 2D context from canvas");
-        }
-        await page.render({ canvasContext: context, viewport, canvas }).promise;
+        renderCanvas.width = canvasWidth;
+        renderCanvas.height = canvasHeight;
+        await page.render({ canvasContext: renderContext, viewport, canvas: renderCanvas }).promise;
 
         const blob = await new Promise<Blob | null>((resolve) =>
-          canvas.toBlob(resolve, "image/jpeg", quality),
+          renderCanvas.toBlob(resolve, "image/jpeg", quality),
         );
         if (!blob) {
           throw new Error("Failed to create blob from canvas");
@@ -307,6 +319,10 @@ export async function compressPdf(
           width: canvasWidth,
           height: canvasHeight,
         });
+
+        if (i % 2 === 0) {
+          await yieldToMain();
+        }
       }
 
       const pdfBytes = await currentPdf.save();
@@ -351,6 +367,7 @@ export async function compressPdf(
     }
 
     iterations++;
+    await yieldToMain();
   }
 
   onProgress(100, "Finalizing...");
@@ -362,21 +379,20 @@ export async function convertPdfToImages(
   options: { format: "png" | "jpeg"; scale?: number },
 ): Promise<Blob[]> {
   try {
-    const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+    const { pdfDoc: pdf } = await loadProcessablePdfJsDocument(pdfData);
     const numPages = pdf.numPages;
     const images: Blob[] = [];
     const scale = options.scale || 2.0;
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Could not get 2D context from canvas");
 
     for (let i = 1; i <= numPages; i++) {
       const page = await pdf.getPage(i);
       const viewport = page.getViewport({ scale });
 
-      const canvas = document.createElement("canvas");
       canvas.width = Math.max(1, Math.floor(viewport.width));
       canvas.height = Math.max(1, Math.floor(viewport.height));
-
-      const context = canvas.getContext("2d");
-      if (!context) throw new Error("Could not get 2D context from canvas");
 
       await page.render({ canvasContext: context, viewport, canvas }).promise;
 
@@ -386,6 +402,10 @@ export async function convertPdfToImages(
 
       if (blob) {
         images.push(blob);
+      }
+
+      if (i % 2 === 0) {
+        await yieldToMain();
       }
     }
 

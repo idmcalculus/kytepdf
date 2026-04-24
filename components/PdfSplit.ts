@@ -1,11 +1,20 @@
 import { logger } from "../utils/logger.ts";
-import { PDFDocument, pdfjsLib } from "../utils/pdfConfig.ts";
+import { PDFDocument } from "../utils/pdfConfig.ts";
+import {
+  clearPreviewLoadingState,
+  getPdfPreviewErrorMessage,
+  loadPdfDocument,
+  PdfThumbnailGridController,
+  setPreviewLoadingState,
+} from "../utils/pdfPreview.ts";
+import { loadProcessablePdf } from "../utils/pdfSecurity.ts";
 import { formatSelectionInfo } from "../utils/pdfUtils.ts";
 import { persistence } from "../utils/persistence.ts";
 import { BaseComponent } from "./BaseComponent.ts";
 
 export class PdfSplit extends BaseComponent {
   private selectedPages: Set<number> = new Set();
+  private thumbnailController: PdfThumbnailGridController | null = null;
 
   render() {
     this.innerHTML = `
@@ -128,18 +137,16 @@ export class PdfSplit extends BaseComponent {
       (this.querySelector("#fileNameLabel") as HTMLElement).textContent = file.name;
       (this.querySelector("#dropZone") as HTMLElement).classList.add("hidden");
       (this.querySelector("#splitControls") as HTMLElement).classList.remove("hidden");
+      setPreviewLoadingState(this.querySelector("#pageGrid") as HTMLElement);
 
       this.saveSession();
 
-      const arrayBuffer = await file.arrayBuffer();
-      this.currentPdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      this.currentPdfDoc = await loadPdfDocument(file);
       this.selectedPages.clear();
       this.renderPageGrid();
     } catch (err) {
       logger.error("Split load error", err);
-      this.showErrorDialog(
-        "Could not load PDF. Please ensure it's a valid PDF file and not password protected.",
-      );
+      this.showErrorDialog(getPdfPreviewErrorMessage("document"));
     }
   }
 
@@ -147,6 +154,13 @@ export class PdfSplit extends BaseComponent {
     const pageGrid = this.querySelector("#pageGrid") as HTMLElement;
     pageGrid.innerHTML = "";
     const numPages = this.currentPdfDoc.numPages;
+
+    this.thumbnailController?.destroy();
+    this.thumbnailController = new PdfThumbnailGridController({
+      container: pageGrid,
+      pdfDoc: this.currentPdfDoc,
+      scale: 0.3,
+    });
 
     for (let i = 1; i <= numPages; i++) {
       const pageWrapper = document.createElement("div");
@@ -162,20 +176,13 @@ export class PdfSplit extends BaseComponent {
       pageGrid.appendChild(pageWrapper);
 
       pageWrapper.addEventListener("click", () => this.togglePage(i - 1, pageWrapper));
-      this.renderThumbnail(i, `page-canvas-${i}`);
+      const canvas = pageWrapper.querySelector("canvas") as HTMLCanvasElement | null;
+      if (canvas) {
+        this.thumbnailController.observe(pageWrapper, i, canvas);
+      }
     }
     this.updateSelectionInfo();
-  }
-
-  async renderThumbnail(pageNum: number, canvasId: string) {
-    if (!this.currentPdfDoc) return;
-    const page = await this.currentPdfDoc.getPage(pageNum);
-    const viewport = page.getViewport({ scale: 0.3 });
-    const canvas = this.querySelector(`#${canvasId}`) as HTMLCanvasElement;
-    const context = canvas.getContext("2d");
-    canvas.height = viewport.height;
-    canvas.width = viewport.width;
-    await page.render({ canvasContext: context as any, viewport, canvas }).promise;
+    clearPreviewLoadingState(pageGrid);
   }
 
   togglePage(pageNum: number, element: HTMLElement) {
@@ -230,7 +237,7 @@ export class PdfSplit extends BaseComponent {
       splitBtn.disabled = true;
       progressSection.classList.remove("hidden");
       const arrayBuffer = await this.selectedFile.arrayBuffer();
-      const originalPdf = await PDFDocument.load(arrayBuffer);
+      const { pdfDoc: originalPdf } = await loadProcessablePdf(arrayBuffer);
       const newPdf = await PDFDocument.create();
 
       const pagesToExtract = Array.from(this.selectedPages).sort((a, b) => a - b);

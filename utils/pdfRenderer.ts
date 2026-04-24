@@ -1,10 +1,10 @@
 import { logger } from "./logger.ts";
-import { pdfjsLib } from "./pdfConfig.ts";
+import { loadProcessablePdfJsDocument } from "./pdfSecurity.ts";
 
 export async function loadPdf(data: ArrayBuffer | Uint8Array) {
   try {
-    const loadingTask = pdfjsLib.getDocument({ data });
-    return await loadingTask.promise;
+    const { pdfDoc } = await loadProcessablePdfJsDocument(data);
+    return pdfDoc;
   } catch (error) {
     logger.error("Failed to load PDF document", error);
     throw error;

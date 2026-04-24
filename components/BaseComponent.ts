@@ -538,6 +538,10 @@ export class BaseComponent extends HTMLElement {
    * Returns true if we should proceed with the next action.
    */
   async ensureEmailCollected() {
+    // Email collection is disabled for launch.
+    const emailCollectionEnabled = import.meta.env.VITE_ENABLE_EMAIL_COLLECTION === "true";
+    if (!emailCollectionEnabled) return true;
+
     const alreadyCollected = localStorage.getItem("kyte_email_collected");
     if (alreadyCollected) return true;
 

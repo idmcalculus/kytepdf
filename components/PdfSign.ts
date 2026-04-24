@@ -1,5 +1,6 @@
 import { logger } from "../utils/logger.ts";
-import { PDFDocument, pdfjsLib } from "../utils/pdfConfig.ts";
+import { getPdfPreviewErrorMessage, PdfPreviewController } from "../utils/pdfPreview.ts";
+import { loadProcessablePdf } from "../utils/pdfSecurity.ts";
 import { calculateSignaturePlacement } from "../utils/pdfUtils.ts";
 import { persistence } from "../utils/persistence.ts";
 import { BaseComponent } from "./BaseComponent.ts";
@@ -19,6 +20,7 @@ export class PdfSign extends BaseComponent {
   private lastPos = { x: 0, y: 0 };
   private sigAspectRatio = 2;
   private sigPlacement: SigPlacement | null = null;
+  private previewController: PdfPreviewController | null = null;
 
   render() {
     this.innerHTML = `
@@ -596,6 +598,7 @@ export class PdfSign extends BaseComponent {
       pdfContainer.style.cursor = "crosshair";
     });
 
+    this.previewController = this.createPreviewController();
     (this.querySelector("#prevPage") as HTMLElement).addEventListener("click", () =>
       this.changePage(-1),
     );
@@ -700,43 +703,43 @@ export class PdfSign extends BaseComponent {
 
       this.saveSession();
 
-      const arrayBuffer = await file.arrayBuffer();
-      this.currentPdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      this.currentPageNum = 1;
-      this.renderPage(1);
+      if (!this.previewController) {
+        this.previewController = this.createPreviewController();
+      }
+      await this.previewController?.load(file);
     } catch (err) {
       logger.error("Sign load error", err);
-      this.showErrorDialog(
-        "Failed to load PDF. Please ensure it's a valid document and not password protected.",
-      );
+      this.showErrorDialog(getPdfPreviewErrorMessage("document"));
     }
   }
 
   async renderPage(pageNum: number) {
-    if (!this.currentPdfDoc) return;
-    const page = await this.currentPdfDoc.getPage(pageNum);
-    const viewport = page.getViewport({ scale: 0.3 });
-    const canvas = this.querySelector("#pdfCanvas") as HTMLCanvasElement;
-    const context = canvas.getContext("2d");
-    canvas.height = viewport.height;
-    canvas.width = viewport.width;
-    await page.render({ canvasContext: context as any, viewport, canvas }).promise;
-    (this.querySelector("#pageIndicator") as HTMLElement).textContent =
-      `Page ${pageNum} of ${this.currentPdfDoc.numPages}`;
-
-    (this.querySelector("#prevPage") as HTMLButtonElement).disabled = pageNum <= 1;
-    (this.querySelector("#nextPage") as HTMLButtonElement).disabled =
-      pageNum >= this.currentPdfDoc.numPages;
-    (this.querySelector("#signaturePreview") as HTMLElement).classList.add("hidden");
+    await this.previewController?.render(pageNum);
   }
 
   changePage(offset: number) {
-    if (!this.currentPdfDoc) return;
-    const newPage = this.currentPageNum + offset;
-    if (newPage >= 1 && newPage <= this.currentPdfDoc.numPages) {
-      this.currentPageNum = newPage;
-      this.renderPage(newPage);
-    }
+    void this.previewController?.render(this.currentPageNum + offset);
+  }
+
+  private createPreviewController() {
+    const canvas = this.querySelector("#pdfCanvas") as HTMLCanvasElement | null;
+    if (!canvas) return null;
+    const pageIndicator = this.querySelector("#pageIndicator") as HTMLElement | null;
+    const prevButton = this.querySelector("#prevPage") as HTMLButtonElement | null;
+    const nextButton = this.querySelector("#nextPage") as HTMLButtonElement | null;
+    const signaturePreview = this.querySelector("#signaturePreview") as HTMLElement | null;
+
+    return new PdfPreviewController({
+      canvas,
+      pageIndicator,
+      prevButton,
+      nextButton,
+      scale: 0.3,
+      onPageChange: (pageNum) => {
+        this.currentPageNum = pageNum;
+        signaturePreview?.classList.add("hidden");
+      },
+    });
   }
 
   placeSignature(e: MouseEvent) {
@@ -790,7 +793,7 @@ export class PdfSign extends BaseComponent {
     try {
       this.updateProgress(20, "Preparing document...");
       const arrayBuffer = await this.selectedFile.arrayBuffer();
-      const pdfDoc = await PDFDocument.load(arrayBuffer);
+      const { pdfDoc } = await loadProcessablePdf(arrayBuffer);
 
       this.updateProgress(50, "Embedding signature...");
       const sigImage = await pdfDoc.embedPng(this.signatureImage);

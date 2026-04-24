@@ -1,7 +1,13 @@
 import JSZip from "jszip";
 import { logger } from "../utils/logger.ts";
-import { pdfjsLib } from "../utils/pdfConfig.ts";
 import { convertPdfToImages } from "../utils/pdfEngine.ts";
+import {
+  clearPreviewLoadingState,
+  getPdfPreviewErrorMessage,
+  loadPdfDocument,
+  PdfThumbnailGridController,
+  setPreviewLoadingState,
+} from "../utils/pdfPreview.ts";
 import { generateOutputFilename } from "../utils/pdfUtils.ts";
 import { persistence } from "../utils/persistence.ts";
 import { BaseComponent } from "./BaseComponent.ts";
@@ -9,6 +15,7 @@ import { BaseComponent } from "./BaseComponent.ts";
 export class PdfToImage extends BaseComponent {
   protected toolKey = "pdf-to-image";
   private selectedPages: Set<number> = new Set();
+  private thumbnailController: PdfThumbnailGridController | null = null;
   private format: "png" | "jpeg" = "png";
   private scale = 2.0;
   private downloadMode: "selected-individual" | "selected-zip" | "all-individual" | "all-zip" =
@@ -217,12 +224,17 @@ export class PdfToImage extends BaseComponent {
   async renderThumbnails() {
     if (!this.selectedFile) return;
     const thumbnailGrid = this.querySelector("#thumbnailGrid") as HTMLElement;
-    thumbnailGrid.innerHTML =
-      '<p style="grid-column: 1/-1; text-align: center;">Loading pages...</p>';
+    setPreviewLoadingState(thumbnailGrid);
 
     try {
-      const data = await this.selectedFile.arrayBuffer();
-      this.currentPdfDoc = await pdfjsLib.getDocument({ data }).promise;
+      this.currentPdfDoc = await loadPdfDocument(this.selectedFile);
+      this.thumbnailController?.destroy();
+      this.thumbnailController = new PdfThumbnailGridController({
+        container: thumbnailGrid,
+        pdfDoc: this.currentPdfDoc,
+        scale: 0.3,
+        root: thumbnailGrid.closest(".preview-container"),
+      });
       thumbnailGrid.innerHTML = "";
 
       for (let i = 1; i <= this.currentPdfDoc.numPages; i++) {
@@ -239,13 +251,10 @@ export class PdfToImage extends BaseComponent {
 
         thumbnailGrid.appendChild(pageItem);
 
-        const page = await this.currentPdfDoc.getPage(i);
-        const canvas = pageItem.querySelector("canvas") as HTMLCanvasElement;
-        const viewport = page.getViewport({ scale: 0.3 });
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-        await page.render({ canvasContext: canvas.getContext("2d") as any, viewport, canvas })
-          .promise;
+        const canvas = pageItem.querySelector("canvas") as HTMLCanvasElement | null;
+        if (canvas) {
+          this.thumbnailController.observe(pageItem, i, canvas);
+        }
 
         pageItem.onclick = () => {
           if (this.selectedPages.has(i)) {
@@ -260,7 +269,9 @@ export class PdfToImage extends BaseComponent {
       }
     } catch (err) {
       logger.error("Failed to render thumbnails", err);
-      this.showErrorDialog("Failed to load PDF preview.");
+      this.showErrorDialog(getPdfPreviewErrorMessage("preview"));
+    } finally {
+      clearPreviewLoadingState(thumbnailGrid);
     }
   }
 
