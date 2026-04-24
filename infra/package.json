@@ -1,0 +1,19 @@
+{
+  "name": "kytepdf-infra",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "preview": "pulumi preview",
+    "up": "pulumi up"
+  },
+  "dependencies": {
+    "@pulumi/aws": "^6.79.0",
+    "@pulumi/awsx": "^2.14.0",
+    "@pulumi/pulumi": "^3.116.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}

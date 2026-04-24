@@ -1,0 +1,25 @@
+{
+  "name": "kytepdf-cloud-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LibreOffice + OCR gateway for KytePDF cloud conversions.",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.7",
+    "busboy": "^1.6.0",
+    "hono": "^4.11.3"
+  },
+  "devDependencies": {
+    "@types/busboy": "^1.5.4",
+    "@types/node": "^25.0.3",
+    "typescript": "^5.9.3",
+    "@vitest/coverage-v8": "^4.0.16",
+    "vitest": "^4.0.16"
+  }
+}
