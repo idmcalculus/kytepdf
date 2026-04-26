@@ -89,6 +89,33 @@ describe("GatewayConfig", () => {
 
     expect(config.corsOrigins).toBe("https://example.com");
   });
+
+  it("logs a warning when API key is missing outside production", () => {
+    const logger = new Logger();
+    const config = new GatewayConfig({ CLOUD_GATEWAY_API_KEY: "" } as NodeJS.ProcessEnv);
+    vi.spyOn(logger, "warn");
+    config.validate(logger);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("CLOUD_GATEWAY_API_KEY is empty"));
+  });
+
+  it("throws when API key is missing in production", () => {
+    const logger = new Logger();
+    const config = new GatewayConfig({ CLOUD_GATEWAY_API_KEY: "" } as NodeJS.ProcessEnv);
+    process.env.NODE_ENV = "production";
+    expect(() => config.validate(logger)).toThrow("CLOUD_GATEWAY_API_KEY is required in production.");
+    process.env.NODE_ENV = "test"; // Restore
+  });
+
+  it("throws when CORS origin is * in production", () => {
+    const logger = new Logger();
+    const config = new GatewayConfig({
+      CLOUD_GATEWAY_API_KEY: "secret",
+      CORS_ORIGIN: "*",
+    } as NodeJS.ProcessEnv);
+    process.env.NODE_ENV = "production";
+    expect(() => config.validate(logger)).toThrow("CORS_ORIGIN must not be '*' in production.");
+    process.env.NODE_ENV = "test"; // Restore
+  });
 });
 
 describe("TempStorage", () => {
@@ -109,12 +136,47 @@ describe("TempStorage", () => {
       await fs.rm(tempDir, { recursive: true, force: true });
     }
   });
+
+  it("rejects path traversal output files", async () => {
+    const storage = new TempStorage();
+    await expect(storage.readRegularFileInDir("/tmp/evil/file.pdf", "/tmp/good")).rejects.toThrow(HttpError);
+  });
+
+  it("handles non-file errors and generic fs errors", async () => {
+    const storage = new TempStorage();
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "kyte-storage-test-"));
+    const regular = path.join(tempDir, "output.pdf");
+
+    // ELOOP
+    const mockOpen = vi.spyOn(fs, "open").mockRejectedValue(Object.assign(new Error("loop"), { code: "ELOOP" }));
+    await expect(storage.readRegularFileInDir(regular, tempDir)).rejects.toThrow("Conversion failed. Please try again.");
+
+    // Generic error
+    mockOpen.mockRejectedValue(new Error("Random FS error"));
+    await expect(storage.readRegularFileInDir(regular, tempDir)).rejects.toThrow("Random FS error");
+
+    // Not a file
+    mockOpen.mockResolvedValue({
+      stat: async () => ({ isFile: () => false }),
+      close: async () => {},
+    } as unknown as fs.FileHandle);
+    await expect(storage.readRegularFileInDir(regular, tempDir)).rejects.toThrow("Conversion failed. Please try again.");
+
+    mockOpen.mockRestore();
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
 });
 
 describe("FilePolicy", () => {
   it("sanitizes filenames", () => {
     const policy = new FilePolicy();
     expect(policy.sanitizeFilename("bad/../file.pdf")).toBe("bad_.._file.pdf");
+  });
+
+  it("prefixes filenames starting with a dash or dot", () => {
+    const policy = new FilePolicy();
+    expect(policy.sanitizeFilename("-flag.pdf")).toBe("input_-flag.pdf");
+    expect(policy.sanitizeFilename(".hidden.pdf")).toBe("input_.hidden.pdf");
   });
 
   it("rejects unsupported input types", () => {

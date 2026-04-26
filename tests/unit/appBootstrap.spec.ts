@@ -12,6 +12,7 @@ import {
   setMainMarkup,
   showDashboard,
   TOOL_ROUTES,
+  bootstrapKytePdf,
 } from "../../utils/appBootstrap";
 
 const createLogger = () => ({
@@ -136,9 +137,16 @@ describe("appBootstrap", () => {
         register: vi.fn().mockResolvedValue(registration),
       },
     } as unknown as Navigator;
+    const dialogMock = {
+      show: vi.fn().mockResolvedValue(true),
+    };
+    const doc = {
+      getElementById: vi.fn((id: string) => id === "globalDialog" ? dialogMock : null),
+    };
     const win = {
       addEventListener: vi.fn((_event: string, cb: () => void) => loadCallbacks.push(cb)),
       location: { reload: vi.fn() },
+      document: doc,
     } as unknown as Window;
 
     installServiceWorkerRegistration({ logger, navigator: appNavigator, prod: true, window: win });
@@ -151,7 +159,13 @@ describe("appBootstrap", () => {
     expect(installing.postMessage).toHaveBeenCalledWith({ type: "SKIP_WAITING" });
 
     controllerCallbacks[0]();
-    controllerCallbacks[0]();
+    await Promise.resolve(); // Wait for the dialog promise
+    expect(dialogMock.show).toHaveBeenCalledWith(expect.objectContaining({ title: "Update Available" }));
+    expect(win.location.reload).toHaveBeenCalledTimes(1);
+
+    // Try again with rejected dialog
+    dialogMock.show.mockResolvedValueOnce(false);
+    controllerCallbacks[0](); // Note: hasRefreshedForServiceWorker is true now so it returns early
     expect(win.location.reload).toHaveBeenCalledTimes(1);
   });
 
@@ -163,6 +177,32 @@ describe("appBootstrap", () => {
     installServiceWorkerRegistration({ navigator: appNavigator, prod: true, window: win });
 
     expect(win.addEventListener).not.toHaveBeenCalled();
+  });
+
+  it("reloads immediately on service worker update if globalDialog is missing", async () => {
+    const logger = createLogger();
+    const controllerCallbacks: Array<() => void> = [];
+    const appNavigator = {
+      serviceWorker: {
+        addEventListener: vi.fn((_event: string, cb: () => void) => controllerCallbacks.push(cb)),
+        controller: {},
+        register: vi.fn().mockResolvedValue({ addEventListener: vi.fn(), update: vi.fn() }),
+      },
+    } as unknown as Navigator;
+    const doc = {
+      getElementById: vi.fn(() => null),
+    };
+    const win = {
+      addEventListener: vi.fn(),
+      location: { reload: vi.fn() },
+      document: doc,
+    } as unknown as Window;
+
+    installServiceWorkerRegistration({ logger, navigator: appNavigator, prod: true, window: win });
+    
+    // Trigger update
+    controllerCallbacks[0]();
+    expect(win.location.reload).toHaveBeenCalledTimes(1);
   });
 
   it("logs service worker registration failures", async () => {
@@ -263,5 +303,34 @@ describe("appBootstrap", () => {
   it("returns null when no background canvas is present", () => {
     document.getElementById("bg-canvas")?.remove();
     expect(installBackground()).toBeNull();
+  });
+
+  it("bootstraps the application by calling all installers", () => {
+    const logger = createLogger();
+    const appNavigator = {
+      serviceWorker: {
+        addEventListener: vi.fn(),
+        register: vi.fn().mockResolvedValue({ addEventListener: vi.fn(), update: vi.fn() }),
+      },
+    } as unknown as Navigator;
+    const doc = {
+      getElementById: vi.fn(() => null),
+    };
+    const win = {
+      addEventListener: vi.fn(),
+      location: { reload: vi.fn() },
+      document: doc,
+    } as unknown as Window;
+
+    const result = bootstrapKytePdf({
+      prod: true,
+      document: doc as unknown as Document,
+      logger,
+      navigator: appNavigator,
+      window: win,
+    });
+    
+    expect(logger.info).toHaveBeenCalledWith("KytePDF Application Starting");
+    expect(result).toBeNull(); // Because getElementById("bg-canvas") returns null
   });
 });

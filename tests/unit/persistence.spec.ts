@@ -269,14 +269,20 @@ describe("PersistenceManager", () => {
     expect(await estimatePromise).toBe(50);
   });
 
-  it("should estimate usage with array data", async () => {
+  it("should estimate usage with array data including edge cases", async () => {
     const estimatePromise = persistence.estimateUsage();
     mockRequest.onsuccess({ target: { result: mockDb } });
 
     await new Promise((resolve) => setTimeout(resolve, 10));
     const cursorReq = vi.mocked(mockStore.openCursor).mock.results[0].value;
     cursorReq.result = {
-      value: [{ size: 25 }, { size: 25 }],
+      value: [
+        { size: 25 }, 
+        { size: 25 }, 
+        { notSize: 10 }, // Missing size
+        null,            // Not an object
+        "string",        // Not an object
+      ],
       continue: vi.fn(() => {
         cursorReq.result = null;
         cursorReq.onsuccess({ target: cursorReq });
@@ -285,6 +291,24 @@ describe("PersistenceManager", () => {
     cursorReq.onsuccess({ target: cursorReq });
 
     expect(await estimatePromise).toBe(50);
+  });
+
+  it("should ignore invalid size types and objects without size", async () => {
+    const estimatePromise = persistence.estimateUsage();
+    mockRequest.onsuccess({ target: { result: mockDb } });
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const cursorReq = vi.mocked(mockStore.openCursor).mock.results[0].value;
+    cursorReq.result = {
+      value: { size: "100", data: { size: "50" }, other: 123 }, // Invalid types or missing size
+      continue: vi.fn(() => {
+        cursorReq.result = null;
+        cursorReq.onsuccess({ target: cursorReq });
+      }),
+    };
+    cursorReq.onsuccess({ target: cursorReq });
+
+    expect(await estimatePromise).toBe(0);
   });
 
   it("should resolve zero when usage estimation cursor fails", async () => {

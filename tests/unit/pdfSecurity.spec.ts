@@ -181,4 +181,75 @@ describe("pdfSecurity", () => {
       KNOWN_PASSWORD_REQUIRED_ERROR,
     );
   });
+
+  it("throws when generating owner password and crypto is unavailable", async () => {
+    pdfConfigMock.load.mockResolvedValueOnce({ encrypt: vi.fn(), save: vi.fn() });
+    const cryptoOriginal = globalThis.crypto;
+    Object.defineProperty(globalThis, "crypto", { value: undefined, configurable: true });
+
+    await expect(
+      protectPdf(new Uint8Array([1]), {
+        userPassword: "pass",
+        permissions: { allowPrinting: true, allowCopying: true, allowModifying: true, allowAnnotating: true },
+      })
+    ).rejects.toThrow("crypto.getRandomValues is not available");
+
+    Object.defineProperty(globalThis, "crypto", { value: cryptoOriginal, configurable: true });
+  });
+
+  it("throws immediately on non-encrypted load errors during isPdfEncrypted", async () => {
+    pdfConfigMock.load.mockRejectedValueOnce(new Error("File corrupted"));
+    await expect(isPdfEncrypted(new Uint8Array([1]))).rejects.toThrow("File corrupted");
+  });
+
+  it("throws immediately on non-encrypted load errors during getPdfSecurityState", async () => {
+    pdfConfigMock.load.mockRejectedValueOnce(new Error("File corrupted"));
+    await expect(getPdfSecurityState(new Uint8Array([1]))).rejects.toThrow("File corrupted");
+    
+    // Also test throwing from the second blank-password attempt
+    pdfConfigMock.load
+      .mockRejectedValueOnce(new Error("NEEDS PASSWORD"))
+      .mockRejectedValueOnce(new Error("Random inner failure"));
+    await expect(getPdfSecurityState(new Uint8Array([1]))).rejects.toThrow("Random inner failure");
+  });
+
+  it("rejects protecting when user password is empty", async () => {
+    await expect(
+      protectPdf(new Uint8Array([1]), {
+        userPassword: "",
+        permissions: { allowPrinting: true, allowCopying: true, allowModifying: true, allowAnnotating: true },
+      })
+    ).rejects.toThrow("Enter a password to protect this PDF.");
+  });
+
+  it("rejects protecting when owner password equals user password", async () => {
+    await expect(
+      protectPdf(new Uint8Array([1]), {
+        userPassword: "same",
+        ownerPassword: "same",
+        permissions: { allowPrinting: true, allowCopying: true, allowModifying: true, allowAnnotating: true },
+      })
+    ).rejects.toThrow("Owner password must be different");
+  });
+
+  it("throws immediately on non-encrypted load errors during protectPdf", async () => {
+    pdfConfigMock.load.mockRejectedValueOnce(new Error("Corrupt stream"));
+    await expect(
+      protectPdf(new Uint8Array([1]), {
+        userPassword: "pass",
+        permissions: { allowPrinting: true, allowCopying: true, allowModifying: true, allowAnnotating: true },
+      })
+    ).rejects.toThrow("Corrupt stream");
+  });
+
+  it("throws immediately on non-password errors during unprotectPdf", async () => {
+    // Return restriction-only
+    pdfConfigMock.load
+      .mockRejectedValueOnce(new Error("Input document is encrypted"))
+      .mockResolvedValueOnce({ save: vi.fn() });
+    
+    // The inner attempt throws unknown error
+    pdfConfigMock.load.mockRejectedValueOnce(new Error("System error"));
+    await expect(unprotectPdf(new Uint8Array([1]), "pass")).rejects.toThrow("System error");
+  });
 });

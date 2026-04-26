@@ -336,7 +336,8 @@ export function installBackground({
 }
 
 export function bootstrapKytePdf(options: BootstrapOptions) {
-  logger.info("KytePDF Application Starting");
+  const appLogger = options.logger || logger;
+  appLogger.info("KytePDF Application Starting");
   installGlobalActions(options);
   installServiceWorkerRegistration(options);
   installErrorHandlers(options);
