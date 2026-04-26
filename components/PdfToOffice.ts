@@ -173,7 +173,7 @@ export class PdfToOffice extends BaseComponent {
 
   async handleFiles(files: FileList) {
     const file = files[0];
-    if (!this.validateFile(file)) return;
+    if (!(await this.validateFile(file))) return;
 
     this.selectedFile = file;
     if (this.cachedPdfFile !== file) {
@@ -298,7 +298,7 @@ export class PdfToOffice extends BaseComponent {
   async restoreSession() {
     const saved = await persistence.get<File>(this.toolKey);
     if (saved) {
-      this.handleFiles([saved] as unknown as FileList);
+      await this.handleFiles([saved] as unknown as FileList);
     }
   }
 

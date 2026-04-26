@@ -49,13 +49,12 @@ const isPdfJsPasswordError = (error: unknown) =>
 const generateOwnerPassword = () => {
   const bytes = new Uint8Array(16);
 
-  if (globalThis.crypto?.getRandomValues) {
-    globalThis.crypto.getRandomValues(bytes);
-  } else {
-    for (let index = 0; index < bytes.length; index += 1) {
-      bytes[index] = Math.floor(Math.random() * 256);
-    }
+  if (!globalThis.crypto?.getRandomValues) {
+    throw new Error(
+      "crypto.getRandomValues is not available. Cannot generate a secure owner password.",
+    );
   }
+  globalThis.crypto.getRandomValues(bytes);
 
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 };

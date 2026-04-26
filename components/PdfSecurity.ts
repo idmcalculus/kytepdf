@@ -622,7 +622,12 @@ export class PdfSecurity extends BaseComponent {
   }
 
   private async applySelectedFiles(incomingFiles: File[], append: boolean) {
-    const validFiles = incomingFiles.filter((file) => this.validateFile(file));
+    const validFiles: File[] = [];
+    for (const file of incomingFiles) {
+      if (await this.validateFile(file)) {
+        validFiles.push(file);
+      }
+    }
     if (validFiles.length === 0) return;
 
     const nextFiles = append ? [...this.getSelectedFiles(), ...validFiles] : [...validFiles];

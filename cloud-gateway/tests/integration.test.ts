@@ -41,12 +41,14 @@ const createServer = (
       requestId: string,
     ) => Promise<string>;
   },
+  env: Partial<NodeJS.ProcessEnv> = {},
 ) => {
   const config = new GatewayConfig({
     PORT: "0",
     MAX_FILE_SIZE_MB: "5",
     CLOUD_GATEWAY_API_KEY: apiKey,
     CORS_ORIGIN: "*",
+    ...env,
   } as NodeJS.ProcessEnv);
   const logger = new Logger();
   const storage = new TempStorage();
@@ -117,6 +119,49 @@ describe("GatewayServer integration", () => {
     const server = createServer("");
     const response = await server.handle(buildRequest());
     expect(response.status).toBe(200);
+  });
+
+  it("rate limits conversion requests by API key", async () => {
+    const server = createServer("secret", undefined, { RATE_LIMIT_MAX_REQUESTS: "1" });
+
+    const first = await server.handle(buildRequest("secret"));
+    expect(first.status).toBe(200);
+
+    const second = await server.handle(buildRequest("secret"));
+    expect(second.status).toBe(429);
+    expect(second.headers.get("retry-after")).toBeTruthy();
+    const payload = await second.json();
+    expect(payload.code).toBe("RATE_LIMITED");
+  });
+
+  it("caps concurrent conversions", async () => {
+    let releaseFirst: (() => void) | undefined;
+    const conversionService = {
+      async convert(
+        payload: { fields: Record<string, string>; tempDir: string },
+        requestId: string,
+      ) {
+        await new Promise<void>((resolve) => {
+          releaseFirst = resolve;
+        });
+        const targetFormat = String(payload.fields.targetFormat || "").toLowerCase();
+        const outputPath = path.join(payload.tempDir, `converted-${requestId}.${targetFormat}`);
+        await fs.writeFile(outputPath, Buffer.from("converted"));
+        return outputPath;
+      },
+    };
+    const server = createServer("secret", conversionService, { MAX_CONCURRENT_CONVERSIONS: "1" });
+
+    const first = server.handle(buildRequest("secret"));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    const second = await server.handle(buildRequest("secret"));
+    expect(second.status).toBe(503);
+    const payload = await second.json();
+    expect(payload.code).toBe("SERVER_BUSY");
+
+    releaseFirst?.();
+    expect((await first).status).toBe(200);
   });
 
   it("returns a conversion error when service throws HttpError", async () => {

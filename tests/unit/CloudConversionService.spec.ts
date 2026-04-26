@@ -6,7 +6,6 @@ const loadService = async (overrides: { endpoint?: string; isProd?: boolean } = 
     config: {
       cloud: {
         apiEndpoint: overrides.endpoint ?? "",
-        apiKey: "secret-key",
       },
       isProd: overrides.isProd ?? false,
       logging: {
@@ -68,11 +67,13 @@ describe("CloudConversionService", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "https://gateway.example.com/convert",
       expect.objectContaining({
-        headers: { "X-Api-Key": "secret-key" },
         method: "POST",
         body: expect.any(FormData),
       }),
     );
+    // API key should NOT be sent from the client
+    const callArgs = fetchMock.mock.calls[0][1];
+    expect(callArgs.headers).toBeUndefined();
   });
 
   it("surfaces gateway errors and fetch failures", async () => {

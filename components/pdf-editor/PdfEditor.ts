@@ -1271,7 +1271,7 @@ export class PdfEditor extends BaseComponent {
   async handleFiles(files: FileList) {
     if (files.length === 0) return;
     const file = files[0];
-    if (this.validateFile(file)) {
+    if (await this.validateFile(file)) {
       this.selectedFile = file;
       logger.info("File loaded for editing", { name: file.name, size: file.size });
       const dropZoneContainer = this.querySelector("#editorDropZoneContainer");

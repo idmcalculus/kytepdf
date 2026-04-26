@@ -63,7 +63,7 @@ describe("appBootstrap", () => {
 
     (document.getElementById("cloudConsentModal") as any).show.mockClear();
     await expect((window as any).ensureCloudConsent()).resolves.toBe(true);
-    expect((document.getElementById("cloudConsentModal") as any).show).not.toHaveBeenCalled();
+    expect((document.getElementById("cloudConsentModal") as any).show).toHaveBeenCalled();
 
     sessionStorage.clear();
     document.getElementById("cloudConsentModal")?.remove();

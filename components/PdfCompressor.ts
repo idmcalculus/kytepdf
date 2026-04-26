@@ -202,7 +202,7 @@ export class PdfCompressor extends BaseComponent {
 
   async handleFiles(files: FileList) {
     const file = files[0];
-    if (!this.validateFile(file)) return;
+    if (!(await this.validateFile(file))) return;
 
     this.selectedFile = file;
     logger.info("File loaded for compression", { name: file.name, size: file.size });

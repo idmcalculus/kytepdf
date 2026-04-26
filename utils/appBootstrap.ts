@@ -65,14 +65,13 @@ export function installGlobalActions({
   };
 
   (win as any).ensureCloudConsent = async () => {
-    const hasConsent = storage.getItem("kyte_cloud_consent") === "true";
-    if (hasConsent) return true;
-
     const modal = doc.getElementById("cloudConsentModal") as any;
     if (!modal) return false;
 
     const confirmed = await modal.show();
     if (confirmed) {
+      // Informational only. Upload authorization depends on this user action,
+      // never on a pre-set sessionStorage value.
       storage.setItem("kyte_cloud_consent", "true");
     }
     return confirmed;
@@ -177,7 +176,22 @@ export function installServiceWorkerRegistration({
   appNavigator.serviceWorker.addEventListener("controllerchange", () => {
     if (hasRefreshedForServiceWorker) return;
     hasRefreshedForServiceWorker = true;
-    win.location.reload();
+    // LOW-02: Show a user-facing prompt instead of silently reloading
+    const dialog = win.document?.getElementById("globalDialog") as any;
+    if (dialog) {
+      dialog
+        .show({
+          title: "Update Available",
+          message: "A new version of KytePDF is ready. Reload to apply the update?",
+          type: "info",
+          showCancel: true,
+        })
+        .then((confirmed: boolean) => {
+          if (confirmed) win.location.reload();
+        });
+    } else {
+      win.location.reload();
+    }
   });
 }
 

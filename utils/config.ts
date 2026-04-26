@@ -20,7 +20,6 @@ interface AppMetadata {
 }
 
 interface CloudConfig {
-  apiKey: string;
   apiEndpoint: string;
 }
 
@@ -44,8 +43,8 @@ export const config: KyteConfig = {
 
   // Logging Configuration
   logging: {
-    // Only enable logging if not in production, or if explicitly enabled via localStorage
-    enabled: !isProd || localStorage.getItem("KYTE_DEBUG") === "true",
+    // Only enable logging if not in production, or if explicitly enabled via localStorage in dev
+    enabled: !isProd || (isDev && localStorage.getItem("KYTE_DEBUG") === "true"),
 
     // Default level
     defaultLevel: isProd ? "ERROR" : "DEBUG",
@@ -59,9 +58,11 @@ export const config: KyteConfig = {
     workerSrc: "/pdf.worker.min.js",
   },
 
-  // Cloud Conversion Gateway (e.g., Google Cloud Function or Azure Function)
+  // Cloud Conversion Gateway
+  // NOTE: API key is NOT embedded in the client bundle for security.
+  // Requests should be proxied through a backend-for-frontend (BFF)
+  // or use short-lived tokens issued by a server-side auth endpoint.
   cloud: {
-    apiKey: import.meta.env.VITE_CLOUD_GATEWAY_API_KEY || "",
     apiEndpoint: import.meta.env.VITE_CLOUD_GATEWAY_URL || "",
   },
 

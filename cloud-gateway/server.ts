@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { randomUUID, timingSafeEqual } from "node:crypto";
-import { createWriteStream } from "node:fs";
+import { createWriteStream, constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -98,12 +98,35 @@ class GatewayConfig {
   readonly maxFileSizeMb: number;
   readonly apiKey: string;
   readonly corsOrigin: string;
+  readonly rateLimitWindowMs: number;
+  readonly rateLimitMaxRequests: number;
+  readonly maxConcurrentConversions: number;
 
   constructor(env: NodeJS.ProcessEnv) {
     this.port = Number(env.PORT || 8080);
     this.maxFileSizeMb = Number(env.MAX_FILE_SIZE_MB || 50);
     this.apiKey = env.CLOUD_GATEWAY_API_KEY || "";
     this.corsOrigin = env.CORS_ORIGIN || "*";
+    this.rateLimitWindowMs = Number(env.RATE_LIMIT_WINDOW_MS || 60_000);
+    this.rateLimitMaxRequests = Number(env.RATE_LIMIT_MAX_REQUESTS || 30);
+    this.maxConcurrentConversions = Number(env.MAX_CONCURRENT_CONVERSIONS || 2);
+  }
+
+  /** Fail closed: refuse to start without an API key in production. */
+  validate(logger: Logger) {
+    if (!this.apiKey) {
+      if (process.env.NODE_ENV === "production") {
+        throw new Error(
+          "CLOUD_GATEWAY_API_KEY is required in production. Refusing to start without authentication.",
+        );
+      }
+      logger.warn(
+        "CLOUD_GATEWAY_API_KEY is empty — all requests will be unauthenticated. Set the variable before deploying.",
+      );
+    }
+    if (this.corsOrigin === "*" && process.env.NODE_ENV === "production") {
+      throw new Error("CORS_ORIGIN must not be '*' in production. Set it to your frontend domain.");
+    }
   }
 
   get maxFileBytes() {
@@ -136,13 +159,91 @@ class SecurityPolicy {
 
 class TempStorage {
   async createTempDir() {
-    return fs.mkdtemp(path.join(os.tmpdir(), "kyte-gateway-"));
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "kyte-gateway-"));
+    await fs.chmod(dir, 0o700);
+    return dir;
   }
 
   async cleanup(paths: string[]) {
     await Promise.all(paths.map((entry) => fs.rm(entry, { recursive: true, force: true }))).catch(
       () => undefined,
     );
+  }
+
+  async readRegularFileInDir(filePath: string, expectedDir: string) {
+    const resolvedPath = path.resolve(filePath);
+    const resolvedDir = path.resolve(expectedDir);
+    if (resolvedPath !== resolvedDir && !resolvedPath.startsWith(`${resolvedDir}${path.sep}`)) {
+      throw new HttpError(500, "INVALID_OUTPUT_PATH", "Conversion failed. Please try again.");
+    }
+
+    let handle: fs.FileHandle | null = null;
+    try {
+      handle = await fs.open(resolvedPath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+      const stat = await handle.stat();
+      if (!stat.isFile()) {
+        throw new HttpError(500, "INVALID_OUTPUT_FILE", "Conversion failed. Please try again.");
+      }
+      return await handle.readFile();
+    } catch (err: any) {
+      if (err instanceof HttpError) throw err;
+      if (err?.code === "ELOOP") {
+        throw new HttpError(500, "INVALID_OUTPUT_FILE", "Conversion failed. Please try again.");
+      }
+      throw err;
+    } finally {
+      await handle?.close().catch(() => undefined);
+    }
+  }
+}
+
+class RateLimiter {
+  private readonly hits = new Map<string, { count: number; resetAt: number }>();
+
+  constructor(
+    private readonly maxRequests: number,
+    private readonly windowMs: number,
+  ) {}
+
+  check(key: string) {
+    const now = Date.now();
+    const current = this.hits.get(key);
+    if (!current || current.resetAt <= now) {
+      this.hits.set(key, { count: 1, resetAt: now + this.windowMs });
+      return { allowed: true, retryAfterSeconds: 0 };
+    }
+
+    current.count += 1;
+    if (current.count <= this.maxRequests) {
+      return { allowed: true, retryAfterSeconds: 0 };
+    }
+
+    return {
+      allowed: false,
+      retryAfterSeconds: Math.max(1, Math.ceil((current.resetAt - now) / 1000)),
+    };
+  }
+}
+
+class ConversionSemaphore {
+  private active = 0;
+
+  constructor(private readonly maxConcurrent: number) {}
+
+  async run<T>(work: () => Promise<T>) {
+    if (this.active >= this.maxConcurrent) {
+      throw new HttpError(
+        503,
+        "SERVER_BUSY",
+        "Conversion service is busy. Please try again later.",
+      );
+    }
+    this.active += 1;
+    try {
+      return await work();
+    } finally {
+      this.active -= 1;
+    }
   }
 }
 
@@ -175,7 +276,12 @@ class FilePolicy {
   }
 
   sanitizeFilename(name: string) {
-    return name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    let sanitized = name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    // Prevent filenames starting with '-' from being interpreted as CLI flags
+    if (sanitized.startsWith("-") || sanitized.startsWith(".")) {
+      sanitized = `input_${sanitized}`;
+    }
+    return sanitized;
   }
 }
 
@@ -374,6 +480,7 @@ class LibreOfficeClient {
       formatArg,
       "--outdir",
       outDir,
+      "--",
       inputPath,
     ];
   }
@@ -446,6 +553,11 @@ class GatewayServer {
     private readonly conversionService: ConversionHandler,
     private readonly storage: TempStorage,
     private readonly serverRunner: ServerRunner = serve,
+    private readonly rateLimiter = new RateLimiter(
+      config.rateLimitMaxRequests,
+      config.rateLimitWindowMs,
+    ),
+    private readonly conversionSemaphore = new ConversionSemaphore(config.maxConcurrentConversions),
   ) {
     this.app = new Hono<{ Variables: AppVariables }>();
     this.registerMiddleware();
@@ -484,24 +596,47 @@ class GatewayServer {
         return this.jsonError(c, { error: "Unauthorized", code: "UNAUTHORIZED", requestId }, 401);
       }
 
+      const rateLimit = this.rateLimiter.check(this.rateLimitKey(c));
+      if (!rateLimit.allowed) {
+        c.header("Retry-After", String(rateLimit.retryAfterSeconds));
+        return this.jsonError(
+          c,
+          {
+            error: "Too many conversion requests. Please try again later.",
+            code: "RATE_LIMITED",
+            requestId,
+          },
+          429,
+        );
+      }
+
       let payload: MultipartPayload | null = null;
       try {
         payload = await this.parser.parse(c.req.raw, requestId);
-        const outputPath = await this.conversionService.convert(payload, requestId);
-        const outputBytes = await fs.readFile(outputPath);
+        const outputPath = await this.conversionSemaphore.run(() =>
+          this.conversionService.convert(payload as MultipartPayload, requestId),
+        );
+        const outputBytes = await this.storage.readRegularFileInDir(outputPath, payload.tempDir);
         const targetFormat = String(payload.fields.targetFormat || "").toLowerCase();
         const baseName = path.parse(payload.file.originalName).name || "converted";
         const downloadName = `${baseName}.${targetFormat}`;
+        const safeDownloadName = downloadName.replace(/[\r\n"]/g, "_");
 
         c.header("Content-Type", this.getMimeType(targetFormat));
-        c.header("Content-Disposition", `attachment; filename="${downloadName}"`);
+        c.header(
+          "Content-Disposition",
+          `attachment; filename="${safeDownloadName}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`,
+        );
         return c.body(outputBytes);
       } catch (err) {
         this.handleError(err, requestId);
         const status = err instanceof HttpError ? err.status : 500;
         const code = err instanceof HttpError ? err.code : "INTERNAL_ERROR";
+        // Only expose user-facing messages from HttpError; never leak internal details
         const message =
-          err instanceof HttpError ? err.message : "Conversion failed. Please try again.";
+          err instanceof HttpError && err.status < 500
+            ? err.message
+            : "Conversion failed. Please try again.";
         return this.jsonError(c, { error: message, code, requestId }, status);
       } finally {
         if (payload) {
@@ -524,7 +659,10 @@ class GatewayServer {
   }
 
   private ensureApiKey(c: Context, requestId: string) {
-    if (!this.config.apiKey) return true;
+    if (!this.config.apiKey) {
+      // In non-production, allow requests when no key is configured (with startup warning)
+      return true;
+    }
     const provided = c.req.header("x-api-key") || "";
     const expected = this.config.apiKey;
     const providedBuffer = Buffer.from(provided);
@@ -536,6 +674,14 @@ class GatewayServer {
       this.logger.warn("Unauthorized request", { requestId });
     }
     return allowed;
+  }
+
+  private rateLimitKey(c: Context) {
+    const apiKey = c.req.header("x-api-key");
+    if (apiKey) return `key:${apiKey}`;
+    const forwardedFor = c.req.header("x-forwarded-for")?.split(",")[0]?.trim();
+    const realIp = c.req.header("x-real-ip");
+    return `ip:${forwardedFor || realIp || "unknown"}`;
   }
 
   private getMimeType(targetFormat: string) {
@@ -579,6 +725,7 @@ class GatewayServer {
 const runBootstrap = (serverRunner: ServerRunner = serve) => {
   const logger = new Logger();
   const config = new GatewayConfig(process.env);
+  config.validate(logger);
   const storage = new TempStorage();
   const policy = new FilePolicy();
   const security = new SecurityPolicy();
@@ -619,6 +766,7 @@ export {
   Logger,
   MultipartParser,
   OcrClient,
+  RateLimiter,
   SecurityPolicy,
   TempStorage,
   runBootstrap,

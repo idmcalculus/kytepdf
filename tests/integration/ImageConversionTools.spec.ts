@@ -91,7 +91,7 @@ describe("image conversion components", () => {
         new File(["c"], "notes.txt", { type: "text/plain" }),
       ];
 
-      component.handleFiles(asFileList(files));
+      await component.handleFiles(asFileList(files));
       await flush();
 
       expect((component as any).files).toHaveLength(2);
@@ -123,7 +123,7 @@ describe("image conversion components", () => {
       const one = new File(["a"], "one.png", { type: "image/png" });
       const two = new File(["b"], "two.png", { type: "image/png" });
       const three = new File(["c"], "three.png", { type: "image/png" });
-      component.handleFiles(asFileList([one, two, three]));
+      await component.handleFiles(asFileList([one, two, three]));
 
       component.moveFile(2, -1);
       expect((component as any).files.map((file: File) => file.name)).toEqual([
@@ -224,7 +224,7 @@ describe("image conversion components", () => {
 
     it("converts images to a PDF and records the job", async () => {
       const component = await mountImageToPdf();
-      component.handleFiles(asFileList([new File(["a"], "one.png", { type: "image/png" })]));
+      await component.handleFiles(asFileList([new File(["a"], "one.png", { type: "image/png" })]));
 
       await component.startConversion();
 
@@ -246,7 +246,7 @@ describe("image conversion components", () => {
       await component.startConversion();
       expect(mocks.convertImagesToPdf).not.toHaveBeenCalled();
 
-      component.handleFiles(asFileList([new File(["a"], "one.png", { type: "image/png" })]));
+      await component.handleFiles(asFileList([new File(["a"], "one.png", { type: "image/png" })]));
       mocks.convertImagesToPdf.mockRejectedValueOnce(new Error("bad image"));
 
       await component.startConversion();

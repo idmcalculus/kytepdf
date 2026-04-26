@@ -128,7 +128,7 @@ export class PdfSplit extends BaseComponent {
 
   async handleFiles(files: FileList) {
     const file = files[0];
-    if (!this.validateFile(file)) return;
+    if (!(await this.validateFile(file))) return;
 
     try {
       this.selectedFile = file;

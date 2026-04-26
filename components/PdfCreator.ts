@@ -295,7 +295,12 @@ export class PdfCreator extends BaseComponent {
     logoInput?.addEventListener("change", async () => {
       const file = logoInput.files?.[0];
       if (!file) return;
-      if (!this.validateFile(file, { maxSizeMB: 5, allowedTypes: ["image/png", "image/jpeg"] })) {
+      if (
+        !(await this.validateFile(file, {
+          maxSizeMB: 5,
+          allowedTypes: ["image/png", "image/jpeg"],
+        }))
+      ) {
         logoInput.value = "";
         return;
       }

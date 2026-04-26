@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -63,6 +64,9 @@ describe("GatewayConfig", () => {
       MAX_FILE_SIZE_MB: "42",
       CLOUD_GATEWAY_API_KEY: "secret",
       CORS_ORIGIN: "https://example.com, https://app.example.com",
+      RATE_LIMIT_WINDOW_MS: "5000",
+      RATE_LIMIT_MAX_REQUESTS: "7",
+      MAX_CONCURRENT_CONVERSIONS: "3",
     } as NodeJS.ProcessEnv);
 
     expect(config.port).toBe(9090);
@@ -70,6 +74,9 @@ describe("GatewayConfig", () => {
     expect(config.maxFileBytes).toBe(42 * 1024 * 1024);
     expect(config.apiKey).toBe("secret");
     expect(config.corsOrigins).toEqual(["https://example.com", "https://app.example.com"]);
+    expect(config.rateLimitWindowMs).toBe(5000);
+    expect(config.rateLimitMaxRequests).toBe(7);
+    expect(config.maxConcurrentConversions).toBe(3);
   });
 
   it("returns a single origin when configured", () => {
@@ -81,6 +88,26 @@ describe("GatewayConfig", () => {
     } as NodeJS.ProcessEnv);
 
     expect(config.corsOrigins).toBe("https://example.com");
+  });
+});
+
+describe("TempStorage", () => {
+  it("reads regular files and rejects symlink outputs", async () => {
+    const storage = new TempStorage();
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "kyte-storage-test-"));
+    try {
+      const regular = path.join(tempDir, "output.pdf");
+      await fs.writeFile(regular, "ok");
+      await expect(storage.readRegularFileInDir(regular, tempDir)).resolves.toEqual(
+        Buffer.from("ok"),
+      );
+
+      const symlink = path.join(tempDir, "linked.pdf");
+      await fs.symlink(regular, symlink);
+      await expect(storage.readRegularFileInDir(symlink, tempDir)).rejects.toThrow(HttpError);
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
   });
 });
 

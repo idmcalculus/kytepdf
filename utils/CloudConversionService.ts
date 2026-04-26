@@ -10,11 +10,9 @@ export interface ConversionOptions {
 }
 
 class CloudConversionService {
-  private apiKey: string;
   private endpoint: string;
 
   constructor() {
-    this.apiKey = config.cloud.apiKey;
     this.endpoint = config.cloud.apiEndpoint;
   }
 
@@ -49,9 +47,8 @@ class CloudConversionService {
 
       const response = await fetch(this.endpoint, {
         method: "POST",
-        headers: {
-          "X-Api-Key": this.apiKey, // Optional security header
-        },
+        // NOTE: API key is NOT sent from the client. Requests should be
+        // authenticated via a BFF proxy or short-lived session tokens.
         body: formData,
       });
 

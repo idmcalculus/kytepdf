@@ -113,10 +113,13 @@ export class ImageToPdf extends BaseComponent {
     }
   }
 
-  handleFiles(newFiles: FileList) {
-    const validFiles = Array.from(newFiles).filter((file) =>
-      this.validateFile(file, { allowedTypes: ["image/png", "image/jpeg"] }),
-    );
+  async handleFiles(newFiles: FileList) {
+    const validFiles: File[] = [];
+    for (const file of Array.from(newFiles)) {
+      if (await this.validateFile(file, { allowedTypes: ["image/png", "image/jpeg"] })) {
+        validFiles.push(file);
+      }
+    }
 
     if (validFiles.length > 0) {
       this.files = [...this.files, ...validFiles];

@@ -293,7 +293,7 @@ export class ToolDashboard extends HTMLElement {
           <span class="job-tool-badge">${job.tool}</span>
           <span class="job-time">${new Date(job.timestamp).toLocaleDateString()}</span>
         </div>
-        <div class="job-filename" title="${job.fileName}">${job.fileName}</div>
+        <div class="job-filename" title="${this.escapeHtml(job.fileName)}">${this.escapeHtml(job.fileName)}</div>
         <div class="job-metrics">${this.formatJobMetrics(job)}</div>
         <div class="job-actions">
           <button class="job-btn job-btn-download" data-id="${job.id}">
@@ -370,6 +370,21 @@ export class ToolDashboard extends HTMLElement {
     const sizes = ["Bytes", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return `${parseFloat((bytes / k ** i).toFixed(dm))} ${sizes[i]}`;
+  }
+
+  private escapeHtml(str: string): string {
+    if (typeof str !== "string") return "";
+    return str.replace(
+      /[&<>"']/g,
+      (m) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[m] || m,
+    );
   }
 }
 

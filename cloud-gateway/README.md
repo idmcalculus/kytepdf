@@ -14,9 +14,12 @@ It runs on a Hono server with strict validation and structured logging.
 ## Environment Variables
 
 - `PORT` (default `8080`)
-- `CLOUD_GATEWAY_API_KEY` (optional, checked against `X-Api-Key`)
+- `CLOUD_GATEWAY_API_KEY` (required in production, checked against `X-Api-Key`)
 - `MAX_FILE_SIZE_MB` (default `50`)
-- `CORS_ORIGIN` (default `*`, supports comma-separated list)
+- `CORS_ORIGIN` (required to be non-wildcard in production, supports comma-separated list)
+- `RATE_LIMIT_WINDOW_MS` (default `60000`)
+- `RATE_LIMIT_MAX_REQUESTS` (default `30`)
+- `MAX_CONCURRENT_CONVERSIONS` (default `2`)
 
 ## Local Run
 
@@ -25,6 +28,9 @@ npm install
 npm run build
 node dist/server.js
 ```
+
+Do not expose `CLOUD_GATEWAY_API_KEY` in a browser bundle. Production traffic should come through
+a backend-for-frontend or an API gateway that injects the server-side key.
 
 ## Notes
 

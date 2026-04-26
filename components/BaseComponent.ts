@@ -242,9 +242,9 @@ export class BaseComponent extends HTMLElement {
       list.innerHTML = recentJobs
         .map(
           (job) => `
-        <button class="recent-file-chip" data-id="${job.id}" title="${job.fileName}">
+        <button class="recent-file-chip" data-id="${job.id}" title="${this.sanitize(job.fileName)}">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
-          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${job.fileName}</span>
+          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.sanitize(job.fileName)}</span>
         </button>
       `,
         )
@@ -323,7 +323,7 @@ export class BaseComponent extends HTMLElement {
    * @param options
    * @returns
    */
-  validateFile(
+  async validateFile(
     file: File,
     options: { maxSizeMB?: number; allowedTypes?: string[] } = {
       maxSizeMB: 100,
@@ -347,6 +347,21 @@ export class BaseComponent extends HTMLElement {
       logger.error(msg);
       this.showErrorDialog(msg);
       return false;
+    }
+
+    // Magic-byte validation for PDF files
+    if (options.allowedTypes?.includes("application/pdf") && file.type === "application/pdf") {
+      try {
+        const header = await file.slice(0, 5).text();
+        if (!header.startsWith("%PDF-")) {
+          const msg = "The file does not appear to be a valid PDF (invalid file header).";
+          logger.error(msg);
+          this.showErrorDialog(msg);
+          return false;
+        }
+      } catch {
+        // If we can't read the header, allow it through — subsequent processing will catch bad files
+      }
     }
 
     return true;
@@ -564,7 +579,7 @@ export class BaseComponent extends HTMLElement {
       const result = await emailModal.show();
       if (result) {
         localStorage.setItem("kyte_email_collected", "true");
-        logger.info("User provided email", { email: result });
+        logger.info("User provided email for notifications");
       } else {
         // Dismissed - Increment N logic
         let newN = n === 0 ? 3 : n + 1;
@@ -579,8 +594,12 @@ export class BaseComponent extends HTMLElement {
   }
 
   /**
-   * Records a completed job to IndexedDB history
+   * Records a completed job to IndexedDB history.
+   * Limits stored jobs to MAX_STORED_JOBS to prevent unbounded storage growth.
    */
+  private static readonly MAX_STORED_JOBS = 50;
+  private static readonly MAX_STORED_JOB_BYTES = 250 * 1024 * 1024;
+
   async recordJob(
     toolName: string,
     fileName: string,
@@ -596,6 +615,36 @@ export class BaseComponent extends HTMLElement {
         metadata: metadata,
       };
       await persistence.addJob(job);
+
+      // LRU eviction: remove oldest jobs if over count or total byte limits.
+      const allJobs = await persistence.getJobs();
+      let totalBytes = allJobs.reduce((sum, item) => sum + (item.fileSize || 0), 0);
+      let retainedCount = allJobs.length;
+      let evicted = 0;
+
+      for (let index = allJobs.length - 1; index >= 0; index--) {
+        if (
+          retainedCount <= BaseComponent.MAX_STORED_JOBS &&
+          totalBytes <= BaseComponent.MAX_STORED_JOB_BYTES
+        ) {
+          break;
+        }
+
+        const old = allJobs[index];
+        if (old?.id !== undefined) {
+          await persistence.deleteJob(old.id as number);
+          retainedCount -= 1;
+          totalBytes -= old.fileSize || 0;
+          evicted += 1;
+        }
+      }
+
+      if (evicted > 0) {
+        logger.debug(
+          `Evicted ${evicted} old jobs from history (limits: ${BaseComponent.MAX_STORED_JOBS} jobs, ${BaseComponent.MAX_STORED_JOB_BYTES} bytes)`,
+        );
+      }
+
       logger.info("Job recorded to history", { toolName, fileName, metadata });
       this.checkStorageUsage();
     } catch (err) {

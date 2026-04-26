@@ -201,13 +201,13 @@ export class PdfToImage extends BaseComponent {
   async restoreSession() {
     const savedFile = await persistence.get<File>(this.toolKey);
     if (savedFile) {
-      this.handleFiles([savedFile] as unknown as FileList);
+      await this.handleFiles([savedFile] as unknown as FileList);
     }
   }
 
   async handleFiles(files: FileList) {
     const file = files[0];
-    if (!this.validateFile(file)) return;
+    if (!(await this.validateFile(file))) return;
 
     this.selectedFile = file;
     await persistence.set(this.toolKey, file);
