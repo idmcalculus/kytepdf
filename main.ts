@@ -16,9 +16,11 @@ import "./components/AboutModal.ts";
 import "./components/EmailCollectionModal.ts";
 import "./components/CloudConsentModal.ts";
 import "./components/KyteFooter.ts";
-import * as lucide from "lucide";
+import { createIcons, icons } from "lucide";
 import { bootstrapKytePdf } from "./utils/appBootstrap.ts";
 
-(window as any).lucide = lucide;
+(window as any).lucide = {
+  createIcons: (options = {}) => createIcons({ icons, ...options }),
+};
 
 bootstrapKytePdf({ prod: import.meta.env.PROD });
