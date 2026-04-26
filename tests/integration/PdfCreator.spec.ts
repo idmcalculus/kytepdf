@@ -67,11 +67,14 @@ describe("PdfCreator", () => {
     const component = new PdfCreator();
     document.body.appendChild(component);
     // Wait for the initial draft to load and the first preview to be queued and executed
-    await vi.waitFor(() => {
-      if (creatorMocks.createPdfFromDraft.mock.calls.length === 0) {
-        throw new Error("Preview not generated yet");
-      }
-    }, { timeout: 2000 });
+    await vi.waitFor(
+      () => {
+        if (creatorMocks.createPdfFromDraft.mock.calls.length === 0) {
+          throw new Error("Preview not generated yet");
+        }
+      },
+      { timeout: 2000 },
+    );
     return component;
   };
 

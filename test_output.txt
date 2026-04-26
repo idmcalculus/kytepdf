@@ -1,0 +1,2054 @@
+
+ RUN  v4.0.16 /Users/idmcalculus/Downloads/kytepdf
+
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > render > should render the dashboard title 78ms
+ ✓ tests/unit/pdfEngine.spec.ts > pdfEngine > should compress a PDF successfully 194ms
+stdout | tests/integration/PdfSplit.spec.ts > PdfSplit > file handling and sessions > loads a file, renders thumbnails, and saves the session
+[KytePDF][2026-04-26T01:38:35.377Z][INFO] File loaded for splitting { name: 'pages.pdf', size: 51200 }
+
+stderr | tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > adds valid images, renders controls, and saves the session
+[KytePDF][2026-04-26T01:38:35.386Z][ERROR] Invalid file type: text/plain. Expected: image/png, image/jpeg 
+[KytePDF][2026-04-26T01:38:35.387Z][ERROR] Showing error dialog: An unexpected error occurred. {
+  original: 'Invalid file type: text/plain. Expected: image/png, image/jpeg'
+}
+
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > should handle file selection
+[KytePDF][2026-04-26T01:38:35.388Z][INFO] Files added for merging { count: 2, total: 2 }
+
+ ✓ tests/integration/PdfSplit.spec.ts > PdfSplit > render > renders the split component with hidden controls 117ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > formatBytes > should format bytes correctly 106ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > formatBytes > should handle decimal places 13ms
+stderr | tests/integration/PdfCreator.spec.ts
+Warning: Please use the `legacy` build in Node.js environments.
+
+stdout | tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > adds valid images, renders controls, and saves the session
+[KytePDF][2026-04-26T01:38:35.388Z][INFO] Images added for conversion { count: 2, total: 2 }
+
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > render > should render tool cards 27ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > render > should have subtitle with PDF text 41ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > tool cards > should have multiple tools listed 16ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > tool cards > renders coming soon cards after all active tools 17ms
+stdout | tests/integration/PdfSplit.spec.ts > PdfSplit > file handling and sessions > destroys the previous thumbnail controller when a new PDF is loaded
+[KytePDF][2026-04-26T01:38:35.447Z][INFO] File loaded for splitting { name: 'first.pdf', size: 12 }
+
+stdout | tests/integration/PdfCompressor.spec.ts > PdfCompressor > should handle file selection
+[KytePDF][2026-04-26T01:38:35.449Z][INFO] File loaded for compression { name: 'test.pdf', size: 12 }
+
+ ✓ tests/integration/PdfMerge.spec.ts > PdfMerge > should render the merge component 148ms
+ ✓ tests/integration/PdfMerge.spec.ts > PdfMerge > should handle file selection 72ms
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > should trigger add-more file input and ignore invalid selections
+[KytePDF][2026-04-26T01:38:35.458Z][DEBUG] Drop zone clicked, triggering file input 
+
+stderr | tests/integration/PdfMerge.spec.ts > PdfMerge > should trigger add-more file input and ignore invalid selections
+[KytePDF][2026-04-26T01:38:35.459Z][ERROR] Invalid file type: text/plain. Expected: application/pdf 
+[KytePDF][2026-04-26T01:38:35.460Z][ERROR] Showing error dialog: An unexpected error occurred. {
+  original: 'Invalid file type: text/plain. Expected: application/pdf'
+}
+
+stdout | tests/integration/PdfSplit.spec.ts > PdfSplit > file handling and sessions > destroys the previous thumbnail controller when a new PDF is loaded
+[KytePDF][2026-04-26T01:38:35.457Z][INFO] File loaded for splitting { name: 'second.pdf', size: 12 }
+
+stdout | tests/unit/PdfEditor.spec.ts > PdfEditor > should load and render PDF on file handle
+[KytePDF][2026-04-26T01:38:35.473Z][INFO] File loaded for editing { name: 'test.pdf', size: 13 }
+
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > should disable merge button with less than 2 files
+[KytePDF][2026-04-26T01:38:35.474Z][INFO] Files added for merging { count: 1, total: 1 }
+
+ ✓ tests/unit/pdfEngine.spec.ts > pdfEngine > should handle compression failure 9ms
+stderr | tests/integration/PdfSplit.spec.ts > PdfSplit > file handling and sessions > ignores invalid files and reports PDF load failures
+[KytePDF][2026-04-26T01:38:35.478Z][ERROR] Invalid file type: text/plain. Expected: application/pdf 
+[KytePDF][2026-04-26T01:38:35.478Z][ERROR] Showing error dialog: An unexpected error occurred. {
+  original: 'Invalid file type: text/plain. Expected: application/pdf'
+}
+
+ ✓ tests/integration/PdfSecurity.spec.ts > PdfSecurity > renders in protect mode by default 189ms
+ ✓ tests/integration/PdfSecurity.spec.ts > PdfSecurity > switches into unlock mode 59ms
+stdout | tests/integration/PdfSplit.spec.ts > PdfSplit > file handling and sessions > ignores invalid files and reports PDF load failures
+[KytePDF][2026-04-26T01:38:35.479Z][INFO] File loaded for splitting { name: 'broken.pdf', size: 12 }
+
+stderr | tests/integration/PdfSplit.spec.ts > PdfSplit > file handling and sessions > ignores invalid files and reports PDF load failures
+[KytePDF][2026-04-26T01:38:35.480Z][ERROR] Split load error Error: cannot parse
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfSplit.spec.ts:149:51
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+[KytePDF][2026-04-26T01:38:35.482Z][ERROR] Showing error dialog: An unexpected error occurred. { original: 'Preview error message' }
+
+stderr | tests/unit/BaseComponent.spec.ts > BaseComponent > validateFile > should reject non-PDF files
+[KytePDF][2026-04-26T01:38:35.481Z][ERROR] Invalid file type: text/plain. Expected: application/pdf 
+[KytePDF][2026-04-26T01:38:35.483Z][ERROR] Showing error dialog: An unexpected error occurred. {
+  original: 'Invalid file type: text/plain. Expected: application/pdf'
+}
+
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > enables protect action when passwords match
+[KytePDF][2026-04-26T01:38:35.492Z][INFO] Files loaded for PDF security { count: 1, total: 1, mode: 'protect' }
+
+stdout | tests/integration/PdfSplit.spec.ts > PdfSplit > file handling and sessions > shows, restores, ignores, and tolerates saved split sessions
+[KytePDF][2026-04-26T01:38:35.498Z][INFO] Restoring split session { name: 'saved.pdf' }
+
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > should enable merge button with 2+ files
+[KytePDF][2026-04-26T01:38:35.496Z][INFO] Files added for merging { count: 2, total: 2 }
+
+stderr | tests/integration/PdfSplit.spec.ts > PdfSplit > file handling and sessions > shows, restores, ignores, and tolerates saved split sessions
+[KytePDF][2026-04-26T01:38:35.498Z][ERROR] Failed to restore split session Error: restore failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfSplit.spec.ts:180:51
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+
+stderr | tests/integration/PdfSplit.spec.ts > PdfSplit > file handling and sessions > shows, restores, ignores, and tolerates saved split sessions
+[KytePDF][2026-04-26T01:38:35.499Z][ERROR] Failed to check for existing session Error: check failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfSplit.spec.ts:183:51
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+
+stderr | tests/unit/BaseComponent.spec.ts > BaseComponent > validateFile > should reject files over size limit
+[KytePDF][2026-04-26T01:38:35.504Z][ERROR] File is too large (200 MB). Max allowed: 100MB 
+[KytePDF][2026-04-26T01:38:35.504Z][ERROR] Showing error dialog: An unexpected error occurred. { original: 'File is too large (200 MB). Max allowed: 100MB' }
+
+ ✓ tests/integration/PdfSplit.spec.ts > PdfSplit > file handling and sessions > loads a file, renders thumbnails, and saves the session 134ms
+ ✓ tests/integration/PdfSplit.spec.ts > PdfSplit > file handling and sessions > destroys the previous thumbnail controller when a new PDF is loaded 35ms
+ ✓ tests/integration/PdfSplit.spec.ts > PdfSplit > file handling and sessions > ignores invalid files and reports PDF load failures 14ms
+ ✓ tests/integration/PdfSplit.spec.ts > PdfSplit > file handling and sessions > shows, restores, ignores, and tolerates saved split sessions 16ms
+stderr | tests/integration/PdfSplit.spec.ts > PdfSplit > file handling and sessions > handles save-session failures without blocking the component
+[KytePDF][2026-04-26T01:38:35.513Z][ERROR] Failed to save split session Error: quota
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfSplit.spec.ts:189:51
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:145:11
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:26
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1243:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1209:10)
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1653:37
+    at Traces.$ (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/vitest/dist/chunks/traces.U4xDYhzZ.js:115:27)
+    at trace (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/vitest/dist/chunks/test.B8ej_ZHS.js:239:21)
+    at runTest (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1653:12)
+
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > formatBytes > should handle custom decimal places 121ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > sanitize > should escape HTML angle brackets 9ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > sanitize > should escape ampersand 15ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > sanitize > should escape double quotes 13ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > validateFile > should accept valid PDF files 16ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > validateFile > should reject non-PDF files 19ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > validateFile > should reject files over size limit 21ms
+stderr | tests/unit/BaseComponent.spec.ts > BaseComponent > validateFile > should reject null file
+[KytePDF][2026-04-26T01:38:35.517Z][WARN] File validation failed: No file provided 
+
+stdout | tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > restores a saved image session
+[KytePDF][2026-04-26T01:38:35.518Z][INFO] Restoring image-to-pdf session { count: 1 }
+
+ ✓ tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > adds valid images, renders controls, and saves the session 168ms
+ ✓ tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > restores a saved image session 94ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > tool cards > should display tool descriptions 72ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > tool cards > should have icons on cards 22ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > tool cards > renders active cloud and hybrid badges when tools are enabled 20ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > tool selection > should emit tool-select event for edit tool 12ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > tool selection > should emit tool-select event when card is clicked 26ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > tool selection > does not emit for inactive cards 10ms
+ ✓ tests/integration/PdfCompressor.spec.ts > PdfCompressor > should render and show dropzone initially 181ms
+ ✓ tests/integration/PdfCompressor.spec.ts > PdfCompressor > should handle file selection 93ms
+stdout | tests/integration/PdfCompressor.spec.ts > PdfCompressor > should update target size when preset is changed
+[KytePDF][2026-04-26T01:38:35.528Z][INFO] File loaded for compression { name: 'test.pdf', size: 102400 }
+
+stdout | tests/unit/PdfEditor.spec.ts > PdfEditor > should navigate back to dashboard when back button is clicked
+[KytePDF][2026-04-26T01:38:35.527Z][DEBUG] Navigating back to dashboard 
+
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > should move files up/down in list
+[KytePDF][2026-04-26T01:38:35.529Z][INFO] Files added for merging { count: 2, total: 2 }
+
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > protects a PDF and records the job
+[KytePDF][2026-04-26T01:38:35.528Z][INFO] Files loaded for PDF security { count: 1, total: 1, mode: 'protect' }
+
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > protects a PDF and records the job
+[KytePDF][2026-04-26T01:38:35.539Z][INFO] Job recorded to history {
+  toolName: 'Protect',
+  fileName: 'secure_protected.pdf',
+  metadata: { permissionsRestricted: 3 }
+}
+
+stdout | tests/integration/PdfSplit.spec.ts > PdfSplit > page selection > toggles individual pages and updates split button state
+[KytePDF][2026-04-26T01:38:35.542Z][INFO] File loaded for splitting { name: 'test.pdf', size: 12 }
+
+stdout | tests/integration/PdfCompressor.spec.ts > PdfCompressor > should start compression and show success
+[KytePDF][2026-04-26T01:38:35.548Z][INFO] File loaded for compression { name: 'test.pdf', size: 12 }
+
+stdout | tests/integration/PdfCompressor.spec.ts > PdfCompressor > should start compression and show success
+[KytePDF][2026-04-26T01:38:35.552Z][INFO] Starting PDF compression { targetSizeKb: 0 }
+
+stdout | tests/integration/PdfCompressor.spec.ts > PdfCompressor > should start compression and show success
+[KytePDF][2026-04-26T01:38:35.554Z][INFO] Job recorded to history {
+  toolName: 'Compress',
+  fileName: 'test_compressed.pdf',
+  metadata: { originalSize: 12, finalSize: 3, savedPercent: 75 }
+}
+
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > should wire merge, resume, move, and remove buttons
+[KytePDF][2026-04-26T01:38:35.552Z][INFO] Files added for merging { count: 3, total: 3 }
+
+stdout | tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > moves, swaps, and removes files while keeping persistence in sync
+[KytePDF][2026-04-26T01:38:35.550Z][INFO] Images added for conversion { count: 3, total: 3 }
+
+ ✓ tests/integration/PdfMerge.spec.ts > PdfMerge > should trigger add-more file input and ignore invalid selections 63ms
+ ✓ tests/integration/PdfMerge.spec.ts > PdfMerge > should disable merge button with less than 2 files 16ms
+ ✓ tests/integration/PdfMerge.spec.ts > PdfMerge > should enable merge button with 2+ files 20ms
+ ✓ tests/integration/PdfMerge.spec.ts > PdfMerge > should move files up/down in list 43ms
+stdout | tests/unit/BaseComponent.spec.ts > BaseComponent > clearFullStorage > should call persistence delete when toolKey is provided
+[KytePDF][2026-04-26T01:38:35.565Z][INFO] Storage cleared and UI updated { toolKey: 'test-tool' }
+
+ ✓ tests/unit/PdfEditor.spec.ts > PdfEditor > should be defined 153ms
+ ✓ tests/unit/PdfEditor.spec.ts > PdfEditor > should load and render PDF on file handle 41ms
+ ✓ tests/unit/PdfEditor.spec.ts > PdfEditor > should navigate back to dashboard when back button is clicked 40ms
+stdout | tests/unit/PdfEditor.spec.ts > PdfEditor > should trigger file input when drop zone is clicked
+[KytePDF][2026-04-26T01:38:35.568Z][DEBUG] Drop zone clicked, triggering file input 
+[KytePDF][2026-04-26T01:38:35.568Z][DEBUG] Drop zone clicked, triggering file input 
+
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > unprotects a PDF in unlock mode
+[KytePDF][2026-04-26T01:38:35.565Z][INFO] Files loaded for PDF security { count: 1, total: 1, mode: 'unprotect' }
+
+stdout | tests/integration/PdfCompressor.spec.ts > PdfCompressor > preset buttons > should mark clicked preset as active
+[KytePDF][2026-04-26T01:38:35.591Z][INFO] File loaded for compression { name: 'test.pdf', size: 102400 }
+
+stdout | tests/integration/PdfSplit.spec.ts > PdfSplit > page selection > selects and clears all pages through controls and direct methods
+[KytePDF][2026-04-26T01:38:35.596Z][INFO] File loaded for splitting { name: 'test.pdf', size: 12 }
+
+stdout | tests/unit/BaseComponent.spec.ts > BaseComponent > clearFullStorage > should call clearSessions when no toolKey is provided
+[KytePDF][2026-04-26T01:38:35.603Z][INFO] Storage cleared and UI updated { toolKey: undefined }
+
+stderr | tests/integration/ToolDashboard.spec.ts > ToolDashboard > history > tolerates history load failures
+[KytePDF][2026-04-26T01:38:35.609Z][ERROR] Failed to load job history Error: indexeddb failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/ToolDashboard.spec.ts:233:60
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:145:11
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:26
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1243:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1209:10)
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1653:37
+    at Traces.$ (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/vitest/dist/chunks/traces.U4xDYhzZ.js:115:27)
+    at trace (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/vitest/dist/chunks/test.B8ej_ZHS.js:239:21)
+    at runTest (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1653:12)
+
+stdout | tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > handles image list button and drag interactions
+[KytePDF][2026-04-26T01:38:35.613Z][DEBUG] Drop zone clicked, triggering file input 
+
+ ✓ tests/integration/PdfSplit.spec.ts > PdfSplit > file handling and sessions > handles save-session failures without blocking the component 14ms
+stderr | tests/integration/PdfSplit.spec.ts > PdfSplit > startSplit > returns early without a file or selection
+[KytePDF][2026-04-26T01:38:35.614Z][WARN] Start split called without a file or selected pages 
+
+ ✓ tests/integration/PdfSplit.spec.ts > PdfSplit > page selection > toggles individual pages and updates split button state 49ms
+ ✓ tests/integration/PdfSplit.spec.ts > PdfSplit > page selection > selects and clears all pages through controls and direct methods 39ms
+stdout | tests/unit/PdfEditor.spec.ts > PdfEditor > should create a text annotation when clicking page with Add Text tool active
+[KytePDF][2026-04-26T01:38:35.614Z][INFO] File loaded for editing { name: 'test.pdf', size: 13 }
+
+stdout | tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > handles image list button and drag interactions
+[KytePDF][2026-04-26T01:38:35.613Z][INFO] Images added for conversion { count: 2, total: 2 }
+
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > should remove files from list
+[KytePDF][2026-04-26T01:38:35.618Z][INFO] Files added for merging { count: 2, total: 2 }
+
+stdout | tests/integration/PdfCompressor.spec.ts > PdfCompressor > preset buttons > should update target size based on preset ratio
+[KytePDF][2026-04-26T01:38:35.621Z][INFO] File loaded for compression { name: 'big.pdf', size: 204800 }
+
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > validateFile > should reject null file 12ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > validateFile > should reject files with invalid PDF header in browser environments 6ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > updateProgress > should update progress bar width 22ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > clearFullStorage > should call persistence delete when toolKey is provided 23ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > clearFullStorage > should call clearSessions when no toolKey is provided 40ms
+stdout | tests/integration/PdfSplit.spec.ts > PdfSplit > startSplit > extracts selected pages, updates progress, records history, and shows success
+[KytePDF][2026-04-26T01:38:35.626Z][INFO] File loaded for splitting { name: 'source.pdf', size: 12 }
+
+ ✓ tests/integration/PdfCompressor.spec.ts > PdfCompressor > should update target size when preset is changed 75ms
+ ✓ tests/integration/PdfCompressor.spec.ts > PdfCompressor > should start compression and show success 24ms
+ ✓ tests/integration/PdfCompressor.spec.ts > PdfCompressor > preset buttons > should have all preset buttons 15ms
+ ✓ tests/integration/PdfCompressor.spec.ts > PdfCompressor > preset buttons > should mark clicked preset as active 22ms
+ ✓ tests/integration/PdfCompressor.spec.ts > PdfCompressor > preset buttons > should update target size based on preset ratio 34ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > tool selection > requires cloud consent for active cloud-only tools 15ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > tool selection > calls the about callback from the header 6ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > history > should load history on init 17ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > history > should hide history section when no jobs 9ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > history > should show history section when jobs exist 40ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > history > tolerates history load failures 12ms
+stdout | tests/integration/PdfSplit.spec.ts > PdfSplit > startSplit > extracts selected pages, updates progress, records history, and shows success
+[KytePDF][2026-04-26T01:38:35.631Z][INFO] Starting PDF split/extraction { selectedPages: 5 }
+
+stdout | tests/unit/BaseComponent.spec.ts > BaseComponent > clearFullStorage > should hide storage warning
+[KytePDF][2026-04-26T01:38:35.632Z][INFO] Storage cleared and UI updated { toolKey: 'test-tool' }
+
+stdout | tests/integration/PdfSplit.spec.ts > PdfSplit > startSplit > extracts selected pages, updates progress, records history, and shows success
+[KytePDF][2026-04-26T01:38:35.632Z][INFO] Job recorded to history {
+  toolName: 'Split',
+  fileName: 'source_extracted.pdf',
+  metadata: { pagesExtracted: 5 }
+}
+
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > unprotects a PDF in unlock mode
+[KytePDF][2026-04-26T01:38:35.642Z][INFO] Job recorded to history {
+  toolName: 'Unprotect',
+  fileName: 'locked_unprotected.pdf',
+  metadata: { restrictionsRemoved: false, passwordRemoved: true }
+}
+
+ ✓ tests/integration/PdfSecurity.spec.ts > PdfSecurity > enables protect action when passwords match 64ms
+ ✓ tests/integration/PdfSecurity.spec.ts > PdfSecurity > protects a PDF and records the job 42ms
+ ✓ tests/integration/PdfSecurity.spec.ts > PdfSecurity > unprotects a PDF in unlock mode 103ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > render > should render the sign component 344ms
+ ✓ tests/unit/pdfEngine.spec.ts > pdfEngine > should call progress callback multiple times 173ms
+ ✓ tests/integration/PdfCreator.spec.ts > PdfCreator > renders the default report template 118ms
+ ✓ tests/integration/PdfMerge.spec.ts > PdfMerge > should wire merge, resume, move, and remove buttons 54ms
+ ✓ tests/integration/PdfMerge.spec.ts > PdfMerge > should remove files from list 31ms
+ ✓ tests/unit/PdfEditor.spec.ts > PdfEditor > should trigger file input when drop zone is clicked 41ms
+ ✓ tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > moves, swaps, and removes files while keeping persistence in sync 62ms
+ ✓ tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > handles image list button and drag interactions 33ms
+stdout | tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > restores from the resume button and runs conversion from the primary button
+[KytePDF][2026-04-26T01:38:35.671Z][INFO] Restoring image-to-pdf session { count: 1 }
+
+stdout | tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > restores from the resume button and runs conversion from the primary button
+[KytePDF][2026-04-26T01:38:35.673Z][INFO] Starting image-to-pdf conversion { fileCount: 1 }
+
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > should swap files
+[KytePDF][2026-04-26T01:38:35.671Z][INFO] Files added for merging { count: 3, total: 3 }
+
+stdout | tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > restores from the resume button and runs conversion from the primary button
+[KytePDF][2026-04-26T01:38:35.675Z][INFO] Job recorded to history {
+  toolName: 'Image to PDF',
+  fileName: 'converted_images.pdf',
+  metadata: { imageCount: 1 }
+}
+
+stdout | tests/unit/BaseComponent.spec.ts > BaseComponent > setupBaseListeners > should handle drag states, dropped files, and selected files
+[KytePDF][2026-04-26T01:38:35.682Z][INFO] Files dropped { count: 1 }
+[KytePDF][2026-04-26T01:38:35.682Z][INFO] Files selected via input { count: 1 }
+
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > surfaces restriction-only messaging and allows removing restrictions without a password
+[KytePDF][2026-04-26T01:38:35.681Z][INFO] Files loaded for PDF security { count: 1, total: 1, mode: 'unprotect' }
+
+ ✓ tests/integration/PdfSplit.spec.ts > PdfSplit > startSplit > returns early without a file or selection 12ms
+ ✓ tests/integration/PdfSplit.spec.ts > PdfSplit > startSplit > extracts selected pages, updates progress, records history, and shows success 19ms
+stdout | tests/integration/PdfSplit.spec.ts > PdfSplit > startSplit > extracts only explicitly selected pages in sorted order
+[KytePDF][2026-04-26T01:38:35.725Z][INFO] File loaded for splitting { name: 'test.pdf', size: 12 }
+
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > history > downloads and deletes individual history jobs 18ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > history > clears all history only after confirmation 15ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > history > hides history when the jobs list is missing 7ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > layout > should have tool grid or section 16ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > layout > should have header section 21ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > formatBytes > should format bytes correctly 39ms
+stderr | tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > tolerates image session lookup, restore, and save failures
+[KytePDF][2026-04-26T01:38:35.718Z][ERROR] Failed to check for existing session Error: lookup failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/ImageConversionTools.spec.ts:215:51
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+
+stderr | tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > tolerates image session lookup, restore, and save failures
+[KytePDF][2026-04-26T01:38:35.734Z][ERROR] Failed to restore session Error: restore failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/ImageConversionTools.spec.ts:218:51
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+
+stderr | tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > tolerates image session lookup, restore, and save failures
+[KytePDF][2026-04-26T01:38:35.735Z][ERROR] Failed to save session Error: save failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/ImageConversionTools.spec.ts:221:51
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+
+stdout | tests/integration/PdfSplit.spec.ts > PdfSplit > startSplit > extracts only explicitly selected pages in sorted order
+[KytePDF][2026-04-26T01:38:35.747Z][INFO] Starting PDF split/extraction { selectedPages: 2 }
+
+stdout | tests/integration/PdfSplit.spec.ts > PdfSplit > startSplit > extracts only explicitly selected pages in sorted order
+[KytePDF][2026-04-26T01:38:35.752Z][INFO] Job recorded to history {
+  toolName: 'Split',
+  fileName: 'test_extracted.pdf',
+  metadata: { pagesExtracted: 2 }
+}
+
+ ✓ tests/unit/pdfEngine.spec.ts > pdfEngine > should handle file with arrayBuffer 184ms
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > surfaces restriction-only messaging and allows removing restrictions without a password
+[KytePDF][2026-04-26T01:38:35.771Z][INFO] Job recorded to history {
+  toolName: 'Unprotect',
+  fileName: 'restricted_unrestricted.pdf',
+  metadata: { restrictionsRemoved: true, passwordRemoved: false }
+}
+
+ ✓ tests/integration/PdfSecurity.spec.ts > PdfSecurity > surfaces restriction-only messaging and allows removing restrictions without a password 131ms
+stdout | tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > converts images to a PDF and records the job
+[KytePDF][2026-04-26T01:38:35.778Z][INFO] Images added for conversion { count: 1, total: 1 }
+
+stdout | tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > converts images to a PDF and records the job
+[KytePDF][2026-04-26T01:38:35.783Z][INFO] Starting image-to-pdf conversion { fileCount: 1 }
+
+stdout | tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > converts images to a PDF and records the job
+[KytePDF][2026-04-26T01:38:35.787Z][INFO] Job recorded to history {
+  toolName: 'Image to PDF',
+  fileName: 'converted_images.pdf',
+  metadata: { imageCount: 1 }
+}
+
+stdout | tests/integration/PdfSplit.spec.ts > PdfSplit > startSplit > reports split failures and re-enables the split button
+[KytePDF][2026-04-26T01:38:35.792Z][INFO] File loaded for splitting { name: 'test.pdf', size: 12 }
+
+ ✓ tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > restores from the resume button and runs conversion from the primary button 58ms
+ ✓ tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > tolerates image session lookup, restore, and save failures 56ms
+ ✓ tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > converts images to a PDF and records the job 63ms
+ ✓ tests/unit/PdfEditor.spec.ts > PdfEditor > should create a text annotation when clicking page with Add Text tool active 149ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > formatJobMetrics > should format compress job metrics 23ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > formatJobMetrics > should format merge job metrics 18ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > formatJobMetrics > should format split job metrics 60ms
+stdout | tests/integration/PdfSplit.spec.ts > PdfSplit > startSplit > reports split failures and re-enables the split button
+[KytePDF][2026-04-26T01:38:35.832Z][INFO] Starting PDF split/extraction { selectedPages: 5 }
+
+stderr | tests/integration/PdfSplit.spec.ts > PdfSplit > startSplit > reports split failures and re-enables the split button
+[KytePDF][2026-04-26T01:38:35.832Z][ERROR] Split error Error: locked
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfSplit.spec.ts:285:54
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+[KytePDF][2026-04-26T01:38:35.832Z][ERROR] Showing error dialog: An unexpected error occurred. { original: 'Failed to extract pages. locked' }
+
+ ✓ tests/integration/PdfSplit.spec.ts > PdfSplit > startSplit > extracts only explicitly selected pages in sorted order 126ms
+ ✓ tests/integration/PdfSplit.spec.ts > PdfSplit > startSplit > reports split failures and re-enables the split button 75ms
+ ✓ tests/integration/PdfMerge.spec.ts > PdfMerge > should swap files 91ms
+ ✓ tests/unit/pdfEngine.spec.ts > pdfEngine > should embed text annotations into a PDF 59ms
+ ✓ tests/unit/pdfEngine.spec.ts > pdfEngine > should embed highlight and line annotations into a PDF 18ms
+ ✓ tests/unit/pdfEngine.spec.ts > pdfEngine > should embed text, rectangles, and cached images through the unified annotation path 27ms
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > should support drag-and-drop and touch reordering
+[KytePDF][2026-04-26T01:38:35.857Z][INFO] Files added for merging { count: 3, total: 3 }
+
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > clearFullStorage > should hide storage warning 30ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > setupBaseListeners > should setup drop zone 16ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > setupBaseListeners > should setup file input 17ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > setupBaseListeners > should handle drag states, dropped files, and selected files 12ms
+stdout | tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > does nothing without files and shows an error when conversion fails
+[KytePDF][2026-04-26T01:38:35.895Z][INFO] Images added for conversion { count: 1, total: 1 }
+
+stdout | tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > does nothing without files and shows an error when conversion fails
+[KytePDF][2026-04-26T01:38:35.897Z][INFO] Starting image-to-pdf conversion { fileCount: 1 }
+
+stderr | tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > does nothing without files and shows an error when conversion fails
+[KytePDF][2026-04-26T01:38:35.897Z][ERROR] Conversion error Error: bad image
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/ImageConversionTools.spec.ts:250:54
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+[KytePDF][2026-04-26T01:38:35.897Z][ERROR] Showing error dialog: An unexpected error occurred. { original: 'Failed to convert images to PDF.' }
+
+stdout | tests/integration/PdfCompressor.spec.ts > PdfCompressor > file info display > should display file name after loading
+[KytePDF][2026-04-26T01:38:35.898Z][INFO] File loaded for compression { name: 'test.pdf', size: 51200 }
+
+ ✓ tests/integration/PdfCompressor.spec.ts > PdfCompressor > compression controls > should have compress button 15ms
+ ✓ tests/integration/PdfCompressor.spec.ts > PdfCompressor > compression controls > should have target size input 19ms
+stdout | tests/unit/BaseComponent.spec.ts > BaseComponent > setupBaseListeners > should handle account, about, and clear-storage controls
+[KytePDF][2026-04-26T01:38:35.917Z][INFO] Storage cleared and UI updated { toolKey: 'test-tool' }
+
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > render > should render subtitle 133ms
+stdout | tests/integration/PdfCompressor.spec.ts > PdfCompressor > results display > should show final size after compression
+[KytePDF][2026-04-26T01:38:35.937Z][INFO] File loaded for compression { name: 'test.pdf', size: 4 }
+
+ ✓ tests/integration/ImageConversionTools.spec.ts > image conversion components > ImageToPdf > does nothing without files and shows an error when conversion fails 97ms
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > batches multiple unlocks into one zip archive
+[KytePDF][2026-04-26T01:38:35.922Z][INFO] Files loaded for PDF security { count: 2, total: 2, mode: 'unprotect' }
+
+stdout | tests/integration/PdfCompressor.spec.ts > PdfCompressor > results display > should show final size after compression
+[KytePDF][2026-04-26T01:38:35.940Z][INFO] Starting PDF compression { targetSizeKb: 0 }
+
+stdout | tests/integration/PdfCompressor.spec.ts > PdfCompressor > results display > should show final size after compression
+[KytePDF][2026-04-26T01:38:35.941Z][INFO] Job recorded to history {
+  toolName: 'Compress',
+  fileName: 'test_compressed.pdf',
+  metadata: { originalSize: 4, finalSize: 3, savedPercent: 25 }
+}
+
+ ✓ tests/integration/PdfCreator.spec.ts > PdfCreator > switches to the invoice template 116ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > formatJobMetrics > should format sign job metrics 34ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > formatJobMetrics > should format create job metrics 18ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > formatJobMetrics > should return empty string for unknown tool 31ms
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > formatJobMetrics > should return empty string if no metadata 6ms
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > session management > should save session when files are added
+[KytePDF][2026-04-26T01:38:35.973Z][INFO] Files added for merging { count: 1, total: 1 }
+
+ ✓ tests/integration/PdfMerge.spec.ts > PdfMerge > should support drag-and-drop and touch reordering 215ms
+ ✓ tests/integration/PdfMerge.spec.ts > PdfMerge > session management > should check for existing session on load 8ms
+stdout | tests/integration/PdfSplit.spec.ts > PdfSplit > startSplit > starts splitting from the split button click handler
+[KytePDF][2026-04-26T01:38:35.972Z][INFO] File loaded for splitting { name: 'test.pdf', size: 12 }
+
+stdout | tests/integration/PdfSplit.spec.ts > PdfSplit > startSplit > starts splitting from the split button click handler
+[KytePDF][2026-04-26T01:38:35.990Z][INFO] Starting PDF split/extraction { selectedPages: 5 }
+
+stdout | tests/integration/PdfSplit.spec.ts > PdfSplit > startSplit > starts splitting from the split button click handler
+[KytePDF][2026-04-26T01:38:35.992Z][INFO] Job recorded to history {
+  toolName: 'Split',
+  fileName: 'test_extracted.pdf',
+  metadata: { pagesExtracted: 5 }
+}
+
+ ✓ tests/integration/ToolDashboard.spec.ts > ToolDashboard > formatJobMetrics > should format protect, unprotect, and default create metadata 46ms
+ ✓ tests/integration/PdfSplit.spec.ts > PdfSplit > startSplit > starts splitting from the split button click handler 160ms
+ ✓ tests/integration/PdfCompressor.spec.ts > PdfCompressor > file info display > should display file name after loading 238ms
+stdout | tests/integration/PdfCompressor.spec.ts > PdfCompressor > results display > should show saved percentage
+[KytePDF][2026-04-26T01:38:36.025Z][INFO] File loaded for compression { name: 'test.pdf', size: 4 }
+
+stdout | tests/integration/PdfCompressor.spec.ts > PdfCompressor > results display > should show saved percentage
+[KytePDF][2026-04-26T01:38:36.029Z][INFO] Starting PDF compression { targetSizeKb: 0 }
+
+stdout | tests/integration/PdfCompressor.spec.ts > PdfCompressor > results display > should show saved percentage
+[KytePDF][2026-04-26T01:38:36.030Z][INFO] Job recorded to history {
+  toolName: 'Compress',
+  fileName: 'test_compressed.pdf',
+  metadata: { originalSize: 4, finalSize: 3, savedPercent: 25 }
+}
+
+ ✓ tests/integration/PdfCompressor.spec.ts > PdfCompressor > results display > should show final size after compression 55ms
+stdout | tests/unit/PdfEditor.spec.ts > PdfEditor > should create a rectangle annotation when clicking page with Rectangle tool active
+[KytePDF][2026-04-26T01:38:36.035Z][INFO] File loaded for editing { name: 'test.pdf', size: 13 }
+
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > setupBaseListeners > should handle account, about, and clear-storage controls 235ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > getDropZone > should render drop zone with correct text 37ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > getDropZone > should have file input 23ms
+ ✓ tests/unit/pdfEngine.spec.ts > pdfEngine > should embed rectangle-only annotations and ignore other annotation types 19ms
+ ✓ tests/unit/pdfEngine.spec.ts > pdfEngine > should propagate annotation embedding failures 6ms
+ ✓ tests/unit/pdfEngine.spec.ts > pdfEngine > should fail compression when canvas context or image blobs are unavailable 10ms
+ ✓ tests/unit/pdfEngine.spec.ts > pdfEngine > should yield while compressing multi-page PDFs and keep the best result after later errors 205ms
+ ✓ tests/unit/pdfEngine.spec.ts > pdfEngine > should convert PDF pages to image blobs and skip unavailable page blobs 26ms
+ ✓ tests/unit/pdfEngine.spec.ts > pdfEngine > should surface PDF-to-image rendering failures 1ms
+ ✓ tests/unit/pdfEngine.spec.ts > pdfEngine > should convert PNG and JPEG images into a PDF 1ms
+ ✓ tests/unit/pdfEngine.spec.ts > pdfEngine > should surface image-to-PDF conversion failures 1ms
+ ✓ tests/unit/PdfEditor.spec.ts > PdfEditor > should create a rectangle annotation when clicking page with Rectangle tool active 400ms
+stdout | tests/unit/PdfEditor.spec.ts > PdfEditor > should create a freehand annotation when drawing with Freehand tool active
+[KytePDF][2026-04-26T01:38:36.138Z][INFO] File loaded for editing { name: 'test.pdf', size: 13 }
+
+ ✓ tests/integration/PdfMerge.spec.ts > PdfMerge > session management > should save session when files are added 36ms
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > session management > should call persistence.delete when all files removed
+[KytePDF][2026-04-26T01:38:36.151Z][INFO] Files added for merging { count: 1, total: 1 }
+
+ ✓ tests/integration/PdfCompressor.spec.ts > PdfCompressor > results display > should show saved percentage 80ms
+ ✓ tests/integration/PdfCreator.spec.ts > PdfCreator > switches to the Harvard CV template 271ms
+stdout | tests/unit/PdfEditor.spec.ts > PdfEditor > should create a highlight annotation when drawing with Highlight tool active
+[KytePDF][2026-04-26T01:38:36.168Z][INFO] File loaded for editing { name: 'test.pdf', size: 13 }
+
+ ✓ tests/integration/ImageConversionTools.spec.ts > image conversion components > PdfToImage > loads a PDF, renders thumbnails, and toggles page selection 125ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > render > should have signature controls hidden initially 265ms
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > session management > should restore session when files are present
+[KytePDF][2026-04-26T01:38:36.174Z][INFO] Restoring merge session { count: 1 }
+
+stderr | tests/integration/PdfCompressor.spec.ts > PdfCompressor > session and preview recovery > shows a resume prompt when a saved compressor session exists
+[KytePDF][2026-04-26T01:38:36.160Z][ERROR] Failed to check for existing session Error: read failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfCompressor.spec.ts:211:56
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > batches multiple unlocks into one zip archive
+[KytePDF][2026-04-26T01:38:36.186Z][INFO] Job recorded to history {
+  toolName: 'Unprotect Batch',
+  fileName: 'unlocked_pdfs.zip',
+  metadata: {
+    batch: true,
+    fileCount: 2,
+    skippedCount: 0,
+    failedCount: 0,
+    restrictionsRemoved: 0,
+    passwordRemoved: 2
+  }
+}
+
+ ✓ tests/integration/PdfSecurity.spec.ts > PdfSecurity > batches multiple unlocks into one zip archive 419ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > getProgressSection > should render progress section 119ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > getProgressSection > should be hidden initially 21ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > getProgressSection > should have progress-fill element 11ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > showSuccess > should show success message 9ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > showSuccess > should handle null pdf bytes 28ms
+stderr | tests/integration/PdfMerge.spec.ts > PdfMerge > session management > should show, ignore, and tolerate session restore failures
+[KytePDF][2026-04-26T01:38:36.193Z][ERROR] Failed to restore session Error: restore failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfMerge.spec.ts:298:54
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+
+stderr | tests/integration/PdfMerge.spec.ts > PdfMerge > session management > should show, ignore, and tolerate session restore failures
+[KytePDF][2026-04-26T01:38:36.198Z][ERROR] Failed to check for existing session Error: check failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfMerge.spec.ts:301:54
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+
+stderr | tests/integration/PdfMerge.spec.ts > PdfMerge > session management > should show, ignore, and tolerate session restore failures
+[KytePDF][2026-04-26T01:38:36.198Z][ERROR] Failed to save session Error: save failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfMerge.spec.ts:304:54
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+
+stderr | tests/integration/ImageConversionTools.spec.ts > image conversion components > PdfToImage > warns when selected-page mode has no selected pages
+[KytePDF][2026-04-26T01:38:36.195Z][ERROR] Showing error dialog: An unexpected error occurred. { original: 'Please select at least one page from the gallery.' }
+
+stdout | tests/integration/PdfCompressor.spec.ts > PdfCompressor > session and preview recovery > restores a saved session and ignores missing or failed saved sessions
+[KytePDF][2026-04-26T01:38:36.206Z][INFO] Restoring compressor session { name: 'restored.pdf' }
+
+stderr | tests/integration/PdfCompressor.spec.ts > PdfCompressor > session and preview recovery > restores a saved session and ignores missing or failed saved sessions
+[KytePDF][2026-04-26T01:38:36.207Z][ERROR] Failed to restore compressor session Error: read failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfCompressor.spec.ts:229:56
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > startMerge > should call PDFDocument methods when merging
+[KytePDF][2026-04-26T01:38:36.209Z][INFO] Files added for merging { count: 2, total: 2 }
+
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > startMerge > should call PDFDocument methods when merging
+[KytePDF][2026-04-26T01:38:36.217Z][INFO] Starting PDF merge { fileCount: 2 }
+
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > startMerge > should call PDFDocument methods when merging
+[KytePDF][2026-04-26T01:38:36.218Z][INFO] Job recorded to history {
+  toolName: 'Merge',
+  fileName: 'merged_document.pdf',
+  metadata: { fileCount: 2, pageCount: 2 }
+}
+
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > shows batch download options only when more than one file is actively selected
+[KytePDF][2026-04-26T01:38:36.225Z][INFO] Files loaded for PDF security { count: 2, total: 2, mode: 'protect' }
+
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > startMerge > should record job after successful merge
+[KytePDF][2026-04-26T01:38:36.229Z][INFO] Files added for merging { count: 2, total: 2 }
+
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > startMerge > should record job after successful merge
+[KytePDF][2026-04-26T01:38:36.238Z][INFO] Starting PDF merge { fileCount: 2 }
+
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > startMerge > should record job after successful merge
+[KytePDF][2026-04-26T01:38:36.241Z][INFO] Job recorded to history {
+  toolName: 'Merge',
+  fileName: 'merged_document.pdf',
+  metadata: { fileCount: 2, pageCount: 2 }
+}
+
+stderr | tests/unit/BaseComponent.spec.ts > BaseComponent > dialog methods > should call showErrorDialog
+[KytePDF][2026-04-26T01:38:36.242Z][ERROR] Showing error dialog: An unexpected error occurred. { original: 'Error occurred' }
+
+ ✓ tests/unit/PdfEditor.spec.ts > PdfEditor > should create a freehand annotation when drawing with Freehand tool active 37ms
+ ✓ tests/unit/PdfEditor.spec.ts > PdfEditor > should create a highlight annotation when drawing with Highlight tool active 63ms
+stdout | tests/unit/PdfEditor.spec.ts > PdfEditor > should update highlight color via properties panel
+[KytePDF][2026-04-26T01:38:36.246Z][INFO] File loaded for editing { name: 'test.pdf', size: 13 }
+
+ ✓ tests/integration/PdfMerge.spec.ts > PdfMerge > session management > should call persistence.delete when all files removed 180ms
+ ✓ tests/integration/PdfMerge.spec.ts > PdfMerge > session management > should restore session when files are present 24ms
+ ✓ tests/integration/PdfMerge.spec.ts > PdfMerge > session management > should show, ignore, and tolerate session restore failures 18ms
+ ✓ tests/integration/PdfMerge.spec.ts > PdfMerge > startMerge > should call PDFDocument methods when merging 21ms
+stderr | tests/integration/PdfCompressor.spec.ts > PdfCompressor > session and preview recovery > handles session save failures without interrupting the user flow
+[KytePDF][2026-04-26T01:38:36.252Z][ERROR] Failed to save compressor session Error: quota
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfCompressor.spec.ts:235:56
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:145:11
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:26
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1243:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1209:10)
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1653:37
+    at Traces.$ (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/vitest/dist/chunks/traces.U4xDYhzZ.js:115:27)
+    at trace (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/vitest/dist/chunks/test.B8ej_ZHS.js:239:21)
+    at runTest (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1653:12)
+
+stdout | tests/integration/ImageConversionTools.spec.ts > image conversion components > PdfToImage > exports all pages as a ZIP and records the job
+[KytePDF][2026-04-26T01:38:36.255Z][INFO] Job recorded to history {
+  toolName: 'PDF to Image',
+  fileName: 'sample_images.zip',
+  metadata: { pageCount: 2, format: 'png', mode: 'all-zip' }
+}
+
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > downloads batch results as individual files when that mode is selected
+[KytePDF][2026-04-26T01:38:36.256Z][INFO] Files loaded for PDF security { count: 2, total: 2, mode: 'protect' }
+
+ ✓ tests/integration/PdfCreator.spec.ts > PdfCreator > places payment fields before line items in the invoice editor 228ms
+ ✓ tests/integration/PdfCreator.spec.ts > PdfCreator > updates invoice numeric fields without rerendering the editor 46ms
+ ✓ tests/integration/PdfCreator.spec.ts > PdfCreator > floats the preview on large screens and allows docking it back into the page 51ms
+ ✓ tests/integration/PdfCompressor.spec.ts > PdfCompressor > session and preview recovery > shows a resume prompt when a saved compressor session exists 142ms
+ ✓ tests/integration/PdfCompressor.spec.ts > PdfCompressor > session and preview recovery > restores a saved session and ignores missing or failed saved sessions 29ms
+ ✓ tests/integration/PdfCompressor.spec.ts > PdfCompressor > session and preview recovery > handles session save failures without interrupting the user flow 47ms
+stdout | tests/integration/PdfCompressor.spec.ts > PdfCompressor > session and preview recovery > recreates the preview controller and reports preview load failures
+[KytePDF][2026-04-26T01:38:36.281Z][INFO] File loaded for compression { name: 'broken-preview.pdf', size: 12 }
+
+stderr | tests/integration/PdfCompressor.spec.ts > PdfCompressor > session and preview recovery > recreates the preview controller and reports preview load failures
+[KytePDF][2026-04-26T01:38:36.283Z][ERROR] Preview load error Error: preview exploded
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfCompressor.spec.ts:244:47
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:145:11
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:26
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1243:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1209:10)
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1653:37
+    at Traces.$ (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/vitest/dist/chunks/traces.U4xDYhzZ.js:115:27)
+    at trace (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/vitest/dist/chunks/test.B8ej_ZHS.js:239:21)
+    at runTest (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1653:12)
+[KytePDF][2026-04-26T01:38:36.284Z][ERROR] Showing error dialog: An unexpected error occurred. { original: 'Preview failed' }
+
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > render > should have drop zone visible 245ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > finalize button > should have finalize button disabled initially 37ms
+ ✓ tests/integration/PdfSecurity.spec.ts > PdfSecurity > shows batch download options only when more than one file is actively selected 38ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > showSuccess > should collect email and save from the download link 55ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > dialog methods > should call showDialog with correct params 14ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > dialog methods > should call showErrorDialog 9ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > dialog methods > should call showSuccessDialog 8ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > dialog methods > should call showConfirmDialog and return result 41ms
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > startMerge > should show success message after merge
+[KytePDF][2026-04-26T01:38:36.302Z][INFO] Files added for merging { count: 2, total: 2 }
+
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > startMerge > should show success message after merge
+[KytePDF][2026-04-26T01:38:36.305Z][INFO] Starting PDF merge { fileCount: 2 }
+
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > startMerge > should show success message after merge
+[KytePDF][2026-04-26T01:38:36.306Z][INFO] Job recorded to history {
+  toolName: 'Merge',
+  fileName: 'merged_document.pdf',
+  metadata: { fileCount: 2, pageCount: 2 }
+}
+
+stdout | tests/unit/PdfEditor.spec.ts > PdfEditor > should create a strikethrough annotation when drawing with Strikethrough tool active
+[KytePDF][2026-04-26T01:38:36.307Z][INFO] File loaded for editing { name: 'test.pdf', size: 13 }
+
+ ✓ tests/integration/ImageConversionTools.spec.ts > image conversion components > PdfToImage > restores a saved PDF session 151ms
+ ✓ tests/integration/ImageConversionTools.spec.ts > image conversion components > PdfToImage > warns when selected-page mode has no selected pages 23ms
+ ✓ tests/integration/ImageConversionTools.spec.ts > image conversion components > PdfToImage > exports all pages as a ZIP and records the job 57ms
+ ✓ tests/integration/ImageConversionTools.spec.ts > image conversion components > PdfToImage > exports selected pages as individual JPEG files 14ms
+stdout | tests/integration/PdfCompressor.spec.ts > PdfCompressor > custom target handling and compression failures > shows custom size controls, disables empty custom submissions, and warns on aggressive targets
+[KytePDF][2026-04-26T01:38:36.323Z][INFO] File loaded for compression { name: 'large.pdf', size: 102400 }
+
+stderr | tests/unit/BaseComponent.spec.ts > BaseComponent > checkStorageUsage > should warn when browser storage quota is almost full
+[KytePDF][2026-04-26T01:38:36.329Z][WARN] Browser storage is almost full { globalUsage: 900, quota: 1000 }
+[KytePDF][2026-04-26T01:38:36.329Z][ERROR] Showing error dialog: Your browser's storage is full. Please clear some space and try again. {
+  original: 'Browser storage is almost full. Please clear your saved files to ensure proper operation.'
+}
+
+stdout | tests/unit/PdfEditor.spec.ts > PdfEditor > should create an underline annotation when drawing with Underline tool active
+[KytePDF][2026-04-26T01:38:36.336Z][INFO] File loaded for editing { name: 'test.pdf', size: 13 }
+
+stderr | tests/unit/BaseComponent.spec.ts > BaseComponent > checkStorageUsage > should tolerate storage usage failures
+[KytePDF][2026-04-26T01:38:36.338Z][WARN] Could not check storage usage Error: storage failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/unit/BaseComponent.spec.ts:367:64
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+
+stderr | tests/integration/PdfCompressor.spec.ts > PdfCompressor > custom target handling and compression failures > returns early when compression starts without a selected file
+[KytePDF][2026-04-26T01:38:36.346Z][WARN] Start compression called without a selected file 
+
+stdout | tests/unit/BaseComponent.spec.ts > BaseComponent > recordJob > should call persistence.addJob
+[KytePDF][2026-04-26T01:38:36.349Z][INFO] Job recorded to history { toolName: 'Test', fileName: 'test.pdf', metadata: { test: true } }
+
+ ✓ tests/unit/PdfEditor.spec.ts > PdfEditor > should update highlight color via properties panel 43ms
+ ✓ tests/unit/PdfEditor.spec.ts > PdfEditor > should create a strikethrough annotation when drawing with Strikethrough tool active 56ms
+ ✓ tests/unit/PdfEditor.spec.ts > PdfEditor > should create an underline annotation when drawing with Underline tool active 34ms
+ ✓ tests/integration/PdfMerge.spec.ts > PdfMerge > startMerge > should record job after successful merge 73ms
+ ✓ tests/integration/PdfMerge.spec.ts > PdfMerge > startMerge > should show success message after merge 64ms
+stdout | tests/unit/BaseComponent.spec.ts > BaseComponent > recordJob > should evict oldest jobs over storage limits
+[KytePDF][2026-04-26T01:38:36.361Z][DEBUG] Evicted 2 old jobs from history (limits: 50 jobs, 262144000 bytes) 
+[KytePDF][2026-04-26T01:38:36.361Z][INFO] Job recorded to history { toolName: 'Test', fileName: 'test.pdf', metadata: { test: true } }
+
+stderr | tests/unit/BaseComponent.spec.ts > BaseComponent > recordJob > should tolerate record failures
+[KytePDF][2026-04-26T01:38:36.370Z][ERROR] Failed to record job Error: indexeddb failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/unit/BaseComponent.spec.ts:400:57
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+
+ ✓ tests/integration/PdfCreator.spec.ts > PdfCreator > anchors the floating preview as a body overlay instead of inside the glass card 71ms
+ ✓ tests/integration/PdfCreator.spec.ts > PdfCreator > renders the floating preview banner directly below the draft status bar 34ms
+stderr | tests/integration/PdfMerge.spec.ts > PdfMerge > startMerge > should return early with fewer than two files and report merge failures
+[KytePDF][2026-04-26T01:38:36.375Z][WARN] Start merge called with fewer than 2 files 
+
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > startMerge > should return early with fewer than two files and report merge failures
+[KytePDF][2026-04-26T01:38:36.376Z][INFO] Files added for merging { count: 2, total: 2 }
+
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > startMerge > should return early with fewer than two files and report merge failures
+[KytePDF][2026-04-26T01:38:36.381Z][INFO] Starting PDF merge { fileCount: 2 }
+
+stderr | tests/integration/PdfMerge.spec.ts > PdfMerge > startMerge > should return early with fewer than two files and report merge failures
+[KytePDF][2026-04-26T01:38:36.381Z][ERROR] Merge error Error: merge failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfMerge.spec.ts:365:57
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+[KytePDF][2026-04-26T01:38:36.382Z][ERROR] Showing error dialog: This PDF is password-protected. Please remove the password and try again. {
+  original: 'Failed to merge PDFs. Please ensure all files are valid and not password protected.'
+}
+
+ ✓ tests/integration/PdfCompressor.spec.ts > PdfCompressor > session and preview recovery > recreates the preview controller and reports preview load failures 35ms
+ ✓ tests/integration/PdfCompressor.spec.ts > PdfCompressor > session and preview recovery > wires preview navigation buttons to the controller 23ms
+ ✓ tests/integration/PdfCompressor.spec.ts > PdfCompressor > custom target handling and compression failures > shows custom size controls, disables empty custom submissions, and warns on aggressive targets 18ms
+ ✓ tests/integration/PdfCompressor.spec.ts > PdfCompressor > custom target handling and compression failures > returns early when compression starts without a selected file 16ms
+stdout | tests/integration/PdfCompressor.spec.ts > PdfCompressor > custom target handling and compression failures > reports missing compressor output and thrown compression failures
+[KytePDF][2026-04-26T01:38:36.394Z][INFO] File loaded for compression { name: 'failure.pdf', size: 65536 }
+
+stdout | tests/integration/PdfCompressor.spec.ts > PdfCompressor > custom target handling and compression failures > reports missing compressor output and thrown compression failures
+[KytePDF][2026-04-26T01:38:36.395Z][INFO] Starting PDF compression { targetSizeKb: 26 }
+
+stdout | tests/unit/BaseComponent.spec.ts > BaseComponent > renderRecentFiles > should render recent jobs and restore one as a file
+[KytePDF][2026-04-26T01:38:36.395Z][INFO] Reusing recent file from history { name: 'two.pdf' }
+
+stderr | tests/integration/PdfCompressor.spec.ts > PdfCompressor > custom target handling and compression failures > reports missing compressor output and thrown compression failures
+[KytePDF][2026-04-26T01:38:36.395Z][ERROR] Compression error Error: Compression failed to produce output
+    at PdfCompressor.startCompression (/Users/idmcalculus/Downloads/kytepdf/components/PdfCompressor.ts:310:35)
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfCompressor.spec.ts:314:7
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+[KytePDF][2026-04-26T01:38:36.396Z][ERROR] Showing error dialog: An unexpected error occurred. {
+  original: 'An error occurred during compression. Compression failed to produce output'
+}
+
+stdout | tests/integration/PdfCompressor.spec.ts > PdfCompressor > custom target handling and compression failures > reports missing compressor output and thrown compression failures
+[KytePDF][2026-04-26T01:38:36.396Z][INFO] Starting PDF compression { targetSizeKb: 26 }
+
+stderr | tests/integration/PdfCompressor.spec.ts > PdfCompressor > custom target handling and compression failures > reports missing compressor output and thrown compression failures
+[KytePDF][2026-04-26T01:38:36.396Z][ERROR] Compression error Error: engine unavailable
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfCompressor.spec.ts:324:52
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+[KytePDF][2026-04-26T01:38:36.396Z][ERROR] Showing error dialog: An unexpected error occurred. {
+  original: 'An error occurred during compression. engine unavailable'
+}
+
+ ✓ tests/integration/PdfCompressor.spec.ts > PdfCompressor > custom target handling and compression failures > reports missing compressor output and thrown compression failures 51ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > checkStorageUsage > should hide storage warning when usage is 0 11ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > checkStorageUsage > should show storage warning when usage is positive 13ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > checkStorageUsage > should warn when browser storage quota is almost full 14ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > checkStorageUsage > should tolerate storage usage failures 12ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > recordJob > should call persistence.addJob 9ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > recordJob > should evict oldest jobs over storage limits 12ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > recordJob > should tolerate record failures 8ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > getBackButton > should render back button element 7ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > renderRecentFiles > should render recent jobs and restore one as a file 19ms
+stderr | tests/unit/BaseComponent.spec.ts > BaseComponent > renderRecentFiles > should tolerate recent file lookup failures
+[KytePDF][2026-04-26T01:38:36.403Z][ERROR] Failed to render recent files Error: jobs failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/unit/BaseComponent.spec.ts:437:58
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > tab switching > should switch to type tab 92ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > tab switching > should switch back to draw tab 47ms
+stdout | tests/integration/PdfCreator.spec.ts > PdfCreator > creates a PDF and records the job
+[KytePDF][2026-04-26T01:38:36.409Z][INFO] Job recorded to history {
+  toolName: 'Create',
+  fileName: 'draft.pdf',
+  metadata: { template: 'Project Report', pageCount: 2 }
+}
+
+stdout | tests/unit/BaseComponent.spec.ts > BaseComponent > savePdf > should reject empty save content
+[KytePDF][2026-04-26T01:38:36.411Z][INFO] Attempting to save file { suggestedName: 'test_modified.pdf', size: undefined }
+
+stderr | tests/unit/BaseComponent.spec.ts > BaseComponent > savePdf > should reject empty save content
+[KytePDF][2026-04-26T01:38:36.412Z][ERROR] Save error: Error: No content to save
+    at TestComponent.savePdf (/Users/idmcalculus/Downloads/kytepdf/components/BaseComponent.ts:422:15)
+    at /Users/idmcalculus/Downloads/kytepdf/tests/unit/BaseComponent.spec.ts:445:30
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:145:11
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:26
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1243:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1209:10)
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1653:37
+    at Traces.$ (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/vitest/dist/chunks/traces.U4xDYhzZ.js:115:27)
+    at trace (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/vitest/dist/chunks/test.B8ej_ZHS.js:239:21)
+[KytePDF][2026-04-26T01:38:36.413Z][ERROR] Showing error dialog: An unexpected error occurred. { original: 'Failed to save PDF: No content to save' }
+
+stdout | tests/unit/BaseComponent.spec.ts > BaseComponent > savePdf > should save with the File System Access API
+[KytePDF][2026-04-26T01:38:36.421Z][INFO] Attempting to save file { suggestedName: 'draft_signed.pdf', size: 2 }
+
+stdout | tests/unit/BaseComponent.spec.ts > BaseComponent > savePdf > should save with the File System Access API
+[KytePDF][2026-04-26T01:38:36.421Z][INFO] File saved successfully via File System Access API 
+
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > file list UI > should display file names in list
+[KytePDF][2026-04-26T01:38:36.427Z][INFO] Files added for merging { count: 2, total: 2 }
+
+stdout | tests/unit/BaseComponent.spec.ts > BaseComponent > savePdf > should return false when the native save dialog is aborted
+[KytePDF][2026-04-26T01:38:36.430Z][INFO] Attempting to save file { suggestedName: 'draft_modified.pdf', size: 1 }
+
+stdout | tests/unit/BaseComponent.spec.ts > BaseComponent > savePdf > should return false when the native save dialog is aborted
+[KytePDF][2026-04-26T01:38:36.430Z][INFO] Save operation aborted by user 
+
+stdout | tests/unit/PdfEditor.spec.ts > PdfEditor > should trigger undo on Ctrl+Z
+[KytePDF][2026-04-26T01:38:36.386Z][INFO] Annotation removed { id: '86ea48fd-e7fa-48cd-866b-35789f26b385' }
+[KytePDF][2026-04-26T01:38:36.390Z][INFO] Annotation removed { id: '5dfdfae3-e6c0-40ff-9821-2f20d9243dc5' }
+[KytePDF][2026-04-26T01:38:36.391Z][INFO] Annotation removed { id: 'e76e2189-3baf-4ee3-9ecc-39de4ca85c11' }
+[KytePDF][2026-04-26T01:38:36.399Z][INFO] Annotation removed { id: '669f7762-9013-446a-98b3-8523c67fbf14' }
+[KytePDF][2026-04-26T01:38:36.434Z][INFO] Annotation removed { id: '2aa0d7f2-a5d6-42d5-bd72-1f2bf94aff11' }
+[KytePDF][2026-04-26T01:38:36.443Z][INFO] Annotation removed { id: 'f635fe7b-6c0d-47f3-87ef-31ec1364cc7a' }
+
+stdout | tests/integration/PdfMerge.spec.ts > PdfMerge > file list UI > should display file list items
+[KytePDF][2026-04-26T01:38:36.442Z][INFO] Files added for merging { count: 2, total: 2 }
+
+stdout | tests/unit/BaseComponent.spec.ts > BaseComponent > savePdf > should fall back to an anchor download when native save is unavailable
+[KytePDF][2026-04-26T01:38:36.447Z][INFO] Attempting to save file { suggestedName: 'archive.zip', size: 1 }
+[KytePDF][2026-04-26T01:38:36.448Z][INFO] File download triggered via anchor link 
+
+ ✓ tests/integration/PdfMerge.spec.ts > PdfMerge > startMerge > should return early with fewer than two files and report merge failures 31ms
+ ✓ tests/integration/PdfMerge.spec.ts > PdfMerge > file list UI > should display file names in list 41ms
+ ✓ tests/integration/PdfMerge.spec.ts > PdfMerge > file list UI > should display file list items 19ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > renderRecentFiles > should tolerate recent file lookup failures 6ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > savePdf > should reject empty save content 10ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > savePdf > should save with the File System Access API 9ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > savePdf > should return false when the native save dialog is aborted 8ms
+ ✓ tests/unit/BaseComponent.spec.ts > BaseComponent > savePdf > should fall back to an anchor download when native save is unavailable 18ms
+ ✓ tests/unit/PdfEditor.spec.ts > PdfEditor > should trigger undo on Ctrl+Z 95ms
+ ✓ tests/integration/PdfCreator.spec.ts > PdfCreator > creates a PDF and records the job 40ms
+ ✓ tests/integration/PdfCreator.spec.ts > PdfCreator > restores a saved draft from persistence 24ms
+ ✓ tests/integration/PdfCreator.spec.ts > PdfCreator > restores a saved CV draft with custom section labels 37ms
+ ✓ tests/integration/PdfSecurity.spec.ts > PdfSecurity > downloads batch results as individual files when that mode is selected 260ms
+stdout | tests/integration/PdfSign.spec.ts > PdfSign > signature actions > should save drawn signature
+[KytePDF][2026-04-26T01:38:36.506Z][DEBUG] Drawn signature saved { aspectRatio: 2 }
+
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > tab switching > should mark active tab correctly 58ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > signature actions > should clear signature canvas and reset state 60ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > signature actions > should save drawn signature 41ms
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > uses the left pane selection state as the active batch
+[KytePDF][2026-04-26T01:38:36.517Z][INFO] Files loaded for PDF security { count: 2, total: 2, mode: 'protect' }
+
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > uses the left pane selection state as the active batch
+[KytePDF][2026-04-26T01:38:36.524Z][INFO] Job recorded to history {
+  toolName: 'Protect',
+  fileName: 'locked-a_protected.pdf',
+  metadata: { permissionsRestricted: 3 }
+}
+
+ ✓ tests/integration/ImageConversionTools.spec.ts > image conversion components > PdfToImage > updates controls and exports all pages as individual files 263ms
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > uses the shared password only for files that need it in a mixed batch
+[KytePDF][2026-04-26T01:38:36.536Z][INFO] Files loaded for PDF security { count: 2, total: 2, mode: 'unprotect' }
+
+stderr | tests/integration/ImageConversionTools.spec.ts > image conversion components > PdfToImage > re-renders thumbnails, handles empty exports, and converts from the button handler
+[KytePDF][2026-04-26T01:38:36.548Z][ERROR] Conversion failed Error: button failure
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/ImageConversionTools.spec.ts:403:54
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+[KytePDF][2026-04-26T01:38:36.548Z][ERROR] Showing error dialog: An unexpected error occurred. { original: 'Conversion failed: button failure' }
+
+stderr | tests/integration/ImageConversionTools.spec.ts > image conversion components > PdfToImage > re-renders thumbnails, handles empty exports, and converts from the button handler
+[KytePDF][2026-04-26T01:38:36.550Z][ERROR] Conversion failed Error: No pages found for export
+    at PdfToImage.handleConvert (/Users/idmcalculus/Downloads/kytepdf/components/PdfToImage.ts:312:15)
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/ImageConversionTools.spec.ts:409:7
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+[KytePDF][2026-04-26T01:38:36.551Z][ERROR] Showing error dialog: An unexpected error occurred. { original: 'Conversion failed: No pages found for export' }
+
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > uses the shared password only for files that need it in a mixed batch
+[KytePDF][2026-04-26T01:38:36.609Z][INFO] Job recorded to history {
+  toolName: 'Unprotect Batch',
+  fileName: 'unlocked_pdfs.zip',
+  metadata: {
+    batch: true,
+    fileCount: 2,
+    skippedCount: 0,
+    failedCount: 0,
+    restrictionsRemoved: 1,
+    passwordRemoved: 1
+  }
+}
+
+ ✓ tests/integration/PdfSecurity.spec.ts > PdfSecurity > uses the left pane selection state as the active batch 34ms
+ ✓ tests/integration/PdfSecurity.spec.ts > PdfSecurity > uses the shared password only for files that need it in a mixed batch 86ms
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > wires file action buttons and reset state
+[KytePDF][2026-04-26T01:38:36.630Z][DEBUG] Drop zone clicked, triggering file input 
+
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > wires file action buttons and reset state
+[KytePDF][2026-04-26T01:38:36.631Z][INFO] Files loaded for PDF security { count: 2, total: 2, mode: 'protect' }
+
+ ✓ tests/integration/PdfCreator.spec.ts > PdfCreator > updates document settings, chrome actions, logo upload, and reset 65ms
+stdout | tests/unit/PdfEditor.spec.ts > PdfEditor > should support Cmd shortcuts for undo and redo
+[KytePDF][2026-04-26T01:38:36.520Z][INFO] Annotation removed { id: '86ea48fd-e7fa-48cd-866b-35789f26b385' }
+[KytePDF][2026-04-26T01:38:36.520Z][INFO] Annotation removed { id: '5dfdfae3-e6c0-40ff-9821-2f20d9243dc5' }
+[KytePDF][2026-04-26T01:38:36.521Z][INFO] Annotation removed { id: 'e76e2189-3baf-4ee3-9ecc-39de4ca85c11' }
+[KytePDF][2026-04-26T01:38:36.521Z][INFO] Annotation removed { id: '669f7762-9013-446a-98b3-8523c67fbf14' }
+[KytePDF][2026-04-26T01:38:36.524Z][INFO] Annotation removed { id: '2aa0d7f2-a5d6-42d5-bd72-1f2bf94aff11' }
+[KytePDF][2026-04-26T01:38:36.525Z][INFO] Annotation removed { id: 'f635fe7b-6c0d-47f3-87ef-31ec1364cc7a' }
+
+ ✓ tests/unit/PdfEditor.spec.ts > PdfEditor > should trigger redo on Ctrl+Shift+Z 53ms
+ ✓ tests/unit/PdfEditor.spec.ts > PdfEditor > should support Cmd shortcuts for undo and redo 174ms
+ ✓ tests/integration/ImageConversionTools.spec.ts > image conversion components > PdfToImage > re-renders thumbnails, handles empty exports, and converts from the button handler 17ms
+ ✓ tests/integration/ImageConversionTools.spec.ts > image conversion components > PdfToImage > shows and restores existing PDF-to-image sessions 15ms
+stderr | tests/integration/ImageConversionTools.spec.ts > image conversion components > PdfToImage > tolerates PDF-to-image session lookup failures
+[KytePDF][2026-04-26T01:38:36.681Z][ERROR] Failed to check for existing session Error: lookup failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/ImageConversionTools.spec.ts:431:51
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+
+stdout | tests/unit/PdfEditor.spec.ts > PdfEditor > should route image upload through the image tool and update image properties
+[KytePDF][2026-04-26T01:38:36.690Z][INFO] File loaded for editing { name: 'test.pdf', size: 13 }
+
+stderr | tests/integration/ImageConversionTools.spec.ts > image conversion components > PdfToImage > handles thumbnail and conversion failures
+[KytePDF][2026-04-26T01:38:36.700Z][ERROR] Failed to render thumbnails Error: preview failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/ImageConversionTools.spec.ts:436:51
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:145:11
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:26
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1243:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1209:10)
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1653:37
+    at Traces.$ (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/vitest/dist/chunks/traces.U4xDYhzZ.js:115:27)
+    at trace (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/vitest/dist/chunks/test.B8ej_ZHS.js:239:21)
+    at runTest (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1653:12)
+[KytePDF][2026-04-26T01:38:36.701Z][ERROR] Showing error dialog: An unexpected error occurred. { original: 'Preview failed' }
+
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > clears selected files only after confirmation
+[KytePDF][2026-04-26T01:38:36.700Z][INFO] Files loaded for PDF security { count: 1, total: 1, mode: 'protect' }
+
+stderr | tests/integration/ImageConversionTools.spec.ts > image conversion components > PdfToImage > handles thumbnail and conversion failures
+[KytePDF][2026-04-26T01:38:36.702Z][ERROR] Conversion failed Error: render failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/ImageConversionTools.spec.ts:446:54
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+[KytePDF][2026-04-26T01:38:36.702Z][ERROR] Showing error dialog: An unexpected error occurred. { original: 'Conversion failed: render failed' }
+
+ ✓ tests/integration/ImageConversionTools.spec.ts > image conversion components > PdfToImage > tolerates PDF-to-image session lookup failures 115ms
+ ✓ tests/integration/ImageConversionTools.spec.ts > image conversion components > PdfToImage > handles thumbnail and conversion failures 21ms
+ ✓ tests/integration/PdfSecurity.spec.ts > PdfSecurity > wires file action buttons and reset state 81ms
+ ✓ tests/integration/PdfSecurity.spec.ts > PdfSecurity > clears selected files only after confirmation 15ms
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > covers validation summaries for owner password and unprotected unlock batches
+[KytePDF][2026-04-26T01:38:36.722Z][INFO] Files loaded for PDF security { count: 1, total: 1, mode: 'protect' }
+
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > status indicators > should have signature status hidden initially 106ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > status indicators > should have step badge visible 74ms
+stdout | tests/unit/PdfEditor.spec.ts > PdfEditor > should update text, rectangle, line, and highlight annotations from property controls
+[KytePDF][2026-04-26T01:38:36.743Z][INFO] File loaded for editing { name: 'test.pdf', size: 13 }
+
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > covers validation summaries for owner password and unprotected unlock batches
+[KytePDF][2026-04-26T01:38:36.744Z][INFO] Files loaded for PDF security { count: 2, total: 2, mode: 'unprotect' }
+
+ ✓ tests/integration/PdfCreator.spec.ts > PdfCreator > edits report collections and prevents invalid collection moves 155ms
+ ✓ tests/integration/PdfCreator.spec.ts > PdfCreator > edits letter paragraphs and repeatable controls 71ms
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > exposes pure state helpers for selection metadata and saved files
+[KytePDF][2026-04-26T01:38:36.775Z][INFO] Files loaded for PDF security { count: 2, total: 2, mode: 'protect' }
+
+ ✓ tests/unit/PdfEditor.spec.ts > PdfEditor > should route image upload through the image tool and update image properties 55ms
+ ✓ tests/unit/PdfEditor.spec.ts > PdfEditor > should update text, rectangle, line, and highlight annotations from property controls 45ms
+stdout | tests/unit/PdfEditor.spec.ts > PdfEditor > should apply history actions for add, remove, and update operations
+[KytePDF][2026-04-26T01:38:36.829Z][INFO] File loaded for editing { name: 'test.pdf', size: 13 }
+
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > page navigation > should have page navigation buttons 54ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > page navigation > should show page indicator 30ms
+ ✓ tests/integration/PdfSecurity.spec.ts > PdfSecurity > covers validation summaries for owner password and unprotected unlock batches 59ms
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > handles saved-session restore states and persistence failures
+[KytePDF][2026-04-26T01:38:36.846Z][INFO] Restoring PDF security session { count: 1, mode: 'protect' }
+
+ ✓ tests/integration/PdfSecurity.spec.ts > PdfSecurity > exposes pure state helpers for selection metadata and saved files 49ms
+stdout | tests/unit/PdfEditor.spec.ts > PdfEditor > should apply history actions for add, remove, and update operations
+[KytePDF][2026-04-26T01:38:36.837Z][INFO] Annotation removed { id: 'history-text' }
+[KytePDF][2026-04-26T01:38:36.840Z][INFO] Annotation removed { id: 'history-text' }
+
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > handles saved-session restore states and persistence failures
+[KytePDF][2026-04-26T01:38:36.847Z][INFO] Files loaded for PDF security { count: 1, total: 1, mode: 'protect' }
+
+stderr | tests/integration/PdfSecurity.spec.ts > PdfSecurity > handles saved-session restore states and persistence failures
+[KytePDF][2026-04-26T01:38:36.856Z][ERROR] Failed to save PDF security session Error: set failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfSecurity.spec.ts:461:52
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+
+stderr | tests/integration/PdfSecurity.spec.ts > PdfSecurity > handles saved-session restore states and persistence failures
+[KytePDF][2026-04-26T01:38:36.859Z][ERROR] Failed to check for PDF security session Error: get failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfSecurity.spec.ts:464:52
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+
+stderr | tests/integration/PdfSecurity.spec.ts > PdfSecurity > handles saved-session restore states and persistence failures
+[KytePDF][2026-04-26T01:38:36.859Z][ERROR] Failed to restore PDF security session Error: restore failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfSecurity.spec.ts:467:52
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+
+stdout | tests/unit/PdfEditor.spec.ts > PdfEditor > should preserve and restore text selection around history controls
+[KytePDF][2026-04-26T01:38:36.888Z][INFO] File loaded for editing { name: 'test.pdf', size: 13 }
+
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > surfaces unlock inspection failures and stops refreshing when mode changes
+[KytePDF][2026-04-26T01:38:36.889Z][INFO] Files loaded for PDF security { count: 1, total: 1, mode: 'unprotect' }
+
+stderr | tests/integration/PdfSecurity.spec.ts > PdfSecurity > surfaces unlock inspection failures and stops refreshing when mode changes
+[KytePDF][2026-04-26T01:38:36.897Z][ERROR] Failed to inspect PDF security state {
+  error: Error: inspection failed
+      at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfSecurity.spec.ts:481:56
+      at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20,
+  fileName: 'locked.pdf'
+}
+
+ ✓ tests/unit/PdfEditor.spec.ts > PdfEditor > should apply history actions for add, remove, and update operations 78ms
+ ✓ tests/unit/PdfEditor.spec.ts > PdfEditor > should preserve and restore text selection around history controls 68ms
+stdout | tests/unit/PdfEditor.spec.ts > PdfEditor > should remove selected annotations from delete shortcuts and delete buttons
+[KytePDF][2026-04-26T01:38:36.946Z][INFO] File loaded for editing { name: 'test.pdf', size: 13 }
+
+ ✓ tests/integration/PdfSecurity.spec.ts > PdfSecurity > handles saved-session restore states and persistence failures 44ms
+ ✓ tests/integration/PdfSecurity.spec.ts > PdfSecurity > surfaces unlock inspection failures and stops refreshing when mode changes 43ms
+stdout | tests/unit/PdfEditor.spec.ts > PdfEditor > should remove selected annotations from delete shortcuts and delete buttons
+[KytePDF][2026-04-26T01:38:36.961Z][INFO] Annotation removed { id: 'a83ff3e5-c56d-4e9b-89dc-138d0a4a8a2d' }
+[KytePDF][2026-04-26T01:38:36.961Z][INFO] Annotation removed { id: 'b556ed8c-4f31-4a85-a1ae-7e9812a697b5' }
+[KytePDF][2026-04-26T01:38:36.962Z][INFO] Annotation removed { id: '9961af6e-addc-4faf-bf34-15d9cefbb879' }
+[KytePDF][2026-04-26T01:38:36.962Z][INFO] Annotation removed { id: '96517646-a8da-4226-a345-ad00b043b451' }
+[KytePDF][2026-04-26T01:38:36.962Z][INFO] Annotation removed { id: 'c2dff9a1-a2b2-424f-a65e-bc8eab8a0903' }
+[KytePDF][2026-04-26T01:38:36.967Z][INFO] Annotation removed { id: 'a4c2eac2-6368-4132-9ffc-48e27a09ff84' }
+
+stdout | tests/unit/PdfEditor.spec.ts > PdfEditor > should record drag and resize history for transformed annotations
+[KytePDF][2026-04-26T01:38:36.975Z][INFO] File loaded for editing { name: 'test.pdf', size: 13 }
+
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > type signature > should have name input field 74ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > type signature > should have font selector buttons 24ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > type signature > should switch active font on click 57ms
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > continues batch processing around skipped files and per-file failures
+[KytePDF][2026-04-26T01:38:37.007Z][INFO] Files loaded for PDF security { count: 2, total: 2, mode: 'unprotect' }
+
+stdout | tests/unit/PdfEditor.spec.ts > PdfEditor > should save embedded annotations and report cancellation or failures
+[KytePDF][2026-04-26T01:38:37.021Z][INFO] File loaded for editing { name: 'test.pdf', size: 13 }
+
+stderr | tests/unit/PdfEditor.spec.ts > PdfEditor > should save embedded annotations and report cancellation or failures
+[KytePDF][2026-04-26T01:38:37.029Z][ERROR] Failed to save edited PDF Error: embed failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/unit/PdfEditor.spec.ts:753:58
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+[KytePDF][2026-04-26T01:38:37.030Z][ERROR] Showing error dialog: An unexpected error occurred. { original: 'An error occurred while saving the PDF.' }
+
+ ✓ tests/unit/PdfEditor.spec.ts > PdfEditor > should ignore history shortcuts while typing in form fields 18ms
+ ✓ tests/unit/PdfEditor.spec.ts > PdfEditor > should remove selected annotations from delete shortcuts and delete buttons 30ms
+ ✓ tests/unit/PdfEditor.spec.ts > PdfEditor > should record drag and resize history for transformed annotations 44ms
+ ✓ tests/unit/PdfEditor.spec.ts > PdfEditor > should save embedded annotations and report cancellation or failures 19ms
+stderr | tests/unit/PdfEditor.spec.ts > PdfEditor > should handle empty, invalid, and failed loads without rendering
+[KytePDF][2026-04-26T01:38:37.046Z][ERROR] Invalid file type: text/plain. Expected: application/pdf 
+[KytePDF][2026-04-26T01:38:37.047Z][ERROR] Showing error dialog: An unexpected error occurred. {
+  original: 'Invalid file type: text/plain. Expected: application/pdf'
+}
+
+stdout | tests/unit/PdfEditor.spec.ts > PdfEditor > should handle empty, invalid, and failed loads without rendering
+[KytePDF][2026-04-26T01:38:37.047Z][INFO] File loaded for editing { name: 'test.pdf', size: 13 }
+
+stderr | tests/unit/PdfEditor.spec.ts > PdfEditor > should handle empty, invalid, and failed loads without rendering
+[KytePDF][2026-04-26T01:38:37.050Z][ERROR] Failed to load PDF Error: bad pdf
+    at /Users/idmcalculus/Downloads/kytepdf/tests/unit/PdfEditor.spec.ts:768:46
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+[KytePDF][2026-04-26T01:38:37.050Z][ERROR] Showing error dialog: An unexpected error occurred. { original: 'Failed to load PDF document.' }
+
+ ✓ tests/integration/PdfSecurity.spec.ts > PdfSecurity > reports batch failure variants without successful output 49ms
+ ✓ tests/integration/PdfSecurity.spec.ts > PdfSecurity > reports partial batch results with skipped and failed files 16ms
+ ✓ tests/integration/PdfSecurity.spec.ts > PdfSecurity > continues batch processing around skipped files and per-file failures 72ms
+stdout | tests/integration/PdfSecurity.spec.ts > PdfSecurity > handles top-level security action errors
+[KytePDF][2026-04-26T01:38:37.051Z][INFO] Files loaded for PDF security { count: 1, total: 1, mode: 'protect' }
+
+stderr | tests/integration/PdfSecurity.spec.ts > PdfSecurity > handles top-level security action errors
+[KytePDF][2026-04-26T01:38:37.053Z][ERROR] PDF security action failed {
+  error: Error: This PDF is already password-protected. Remove the current password before adding a new one.
+      at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfSecurity.spec.ts:622:7
+      at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20,
+  mode: 'protect'
+}
+
+stderr | tests/integration/PdfSecurity.spec.ts > PdfSecurity > handles top-level security action errors
+[KytePDF][2026-04-26T01:38:37.054Z][ERROR] PDF security action failed {
+  error: Error: unexpected failure
+      at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfSecurity.spec.ts:631:47
+      at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20,
+  mode: 'protect'
+}
+[KytePDF][2026-04-26T01:38:37.054Z][ERROR] Showing error dialog: An unexpected error occurred. {
+  original: Error: unexpected failure
+      at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfSecurity.spec.ts:631:47
+      at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+}
+
+ ✓ tests/unit/PdfEditor.spec.ts > PdfEditor > should handle empty, invalid, and failed loads without rendering 20ms
+ ✓ tests/integration/PdfSecurity.spec.ts > PdfSecurity > handles top-level security action errors 16ms
+ ✓ tests/integration/PdfCreator.spec.ts > PdfCreator > edits invoice fields, totals, and line item controls 159ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > type signature > should unmark previous active font 58ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > draw signature > should have signature canvas 43ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > draw signature > should have save signature button 49ms
+ ✓ tests/integration/PdfCreator.spec.ts > PdfCreator > edits CV fields, dynamic headings, and repeatable controls 258ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > draw signature > should have clear button 31ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > PDF preview > should have pdf canvas 23ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > PDF preview > should have signature preview element 21ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > controls card > should have controls card 25ms
+ ✓ tests/integration/OfficeToPdf.spec.ts > OfficeToPdf > renders and configures Office file input 95ms
+stdout | tests/integration/PdfSign.spec.ts > PdfSign > file handling > should load PDF file and show sign layout
+[KytePDF][2026-04-26T01:38:37.298Z][INFO] File loaded for signing { name: 'test.pdf' }
+
+stderr | tests/integration/OfficeToPdf.spec.ts > OfficeToPdf > rejects unsupported files and accepts supported Office files
+[KytePDF][2026-04-26T01:38:37.314Z][ERROR] Showing error dialog: An unexpected error occurred. {
+  original: 'Invalid file type: .txt. Supported formats: Word, PPT, Excel.'
+}
+
+stderr | tests/integration/PdfToOfficeExtended.spec.ts > PdfToOffice extended behavior > uses the format attribute and disables unavailable local mode
+[KytePDF][2026-04-26T01:38:37.351Z][ERROR] Showing error dialog: An unexpected error occurred. { original: 'Local conversion is not available for PPT yet.' }
+
+ ✓ tests/integration/PdfToOfficeExtended.spec.ts > PdfToOffice extended behavior > maps format labels and local support 6ms
+ ✓ tests/integration/PdfToOfficeExtended.spec.ts > PdfToOffice extended behavior > uses the format attribute and disables unavailable local mode 102ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > controls card > should have signature tabs 80ms
+ ✓ tests/integration/OfficeToPdf.spec.ts > OfficeToPdf > rejects unsupported files and accepts supported Office files 62ms
+ ✓ tests/integration/OfficeToPdf.spec.ts > OfficeToPdf > shows and restores saved sessions 47ms
+stderr | tests/integration/FinalConversionSuite.spec.ts
+Warning: Please use the `legacy` build in Node.js environments.
+
+stdout | tests/integration/OfficeToPdf.spec.ts > OfficeToPdf > converts the selected Office file and records history
+[KytePDF][2026-04-26T01:38:37.383Z][INFO] Job recorded to history {
+  toolName: 'Office to PDF',
+  fileName: 'budget.xlsx_converted.pdf',
+  metadata: { originalFormat: 'xlsx' }
+}
+
+stderr | tests/integration/PdfToOfficeExtended.spec.ts > PdfToOffice extended behavior > loads previews, handles preview failures, and restores sessions
+[KytePDF][2026-04-26T01:38:37.388Z][ERROR] Preview load error Error: preview failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfToOfficeExtended.spec.ts:130:46
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+[KytePDF][2026-04-26T01:38:37.390Z][ERROR] Showing error dialog: An unexpected error occurred. { original: 'Preview error message' }
+
+stderr | tests/integration/OfficeToPdf.spec.ts > OfficeToPdf > does nothing without a file and recovers after conversion errors
+[KytePDF][2026-04-26T01:38:37.403Z][ERROR] Cloud conversion failed Error: gateway down
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/OfficeToPdf.spec.ts:128:68
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+[KytePDF][2026-04-26T01:38:37.405Z][ERROR] Showing error dialog: An unexpected error occurred. { original: 'Conversion failed: gateway down' }
+
+ ✓ tests/integration/OfficeToPdf.spec.ts > OfficeToPdf > converts the selected Office file and records history 17ms
+ ✓ tests/integration/OfficeToPdf.spec.ts > OfficeToPdf > does nothing without a file and recovers after conversion errors 21ms
+stdout | tests/integration/PdfSign.spec.ts > PdfSign > file handling > should update page indicator when file loads
+[KytePDF][2026-04-26T01:38:37.426Z][INFO] File loaded for signing { name: 'test.pdf' }
+
+stdout | tests/unit/persistence.spec.ts > PersistenceManager > should initialize the database
+[KytePDF][2026-04-26T01:38:37.435Z][INFO] Persistence IndexedDB initialized 
+
+stdout | tests/unit/persistence.spec.ts > PersistenceManager > should create missing object stores during upgrades
+[KytePDF][2026-04-26T01:38:37.437Z][INFO] Persistence IndexedDB initialized 
+
+stderr | tests/unit/persistence.spec.ts > PersistenceManager > should reject when IndexedDB fails to open
+[KytePDF][2026-04-26T01:38:37.439Z][ERROR] IndexedDB error Error: open failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/unit/persistence.spec.ts:77:19
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:145:11
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:26
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1243:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1209:10)
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1653:37
+    at Traces.$ (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/vitest/dist/chunks/traces.U4xDYhzZ.js:115:27)
+    at trace (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/vitest/dist/chunks/test.B8ej_ZHS.js:239:21)
+    at runTest (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1653:12)
+
+stdout | tests/unit/persistence.spec.ts > PersistenceManager > should set data
+[KytePDF][2026-04-26T01:38:37.443Z][INFO] Persistence IndexedDB initialized 
+
+stdout | tests/unit/persistence.spec.ts > PersistenceManager > should reject set failures
+[KytePDF][2026-04-26T01:38:37.445Z][INFO] Persistence IndexedDB initialized 
+
+stdout | tests/unit/persistence.spec.ts > PersistenceManager > should get data
+[KytePDF][2026-04-26T01:38:37.447Z][INFO] Persistence IndexedDB initialized 
+
+stdout | tests/unit/persistence.spec.ts > PersistenceManager > should reject get failures
+[KytePDF][2026-04-26T01:38:37.447Z][INFO] Persistence IndexedDB initialized 
+
+stdout | tests/unit/persistence.spec.ts > PersistenceManager > should delete data
+[KytePDF][2026-04-26T01:38:37.449Z][INFO] Persistence IndexedDB initialized 
+
+stdout | tests/unit/persistence.spec.ts > PersistenceManager > should reject delete failures
+[KytePDF][2026-04-26T01:38:37.457Z][INFO] Persistence IndexedDB initialized 
+
+stdout | tests/unit/persistence.spec.ts > PersistenceManager > should add a job
+[KytePDF][2026-04-26T01:38:37.459Z][INFO] Persistence IndexedDB initialized 
+
+stdout | tests/unit/persistence.spec.ts > PersistenceManager > should reject add job failures
+[KytePDF][2026-04-26T01:38:37.461Z][INFO] Persistence IndexedDB initialized 
+
+stdout | tests/unit/persistence.spec.ts > PersistenceManager > should get all jobs sorted by timestamp
+[KytePDF][2026-04-26T01:38:37.463Z][INFO] Persistence IndexedDB initialized 
+
+stdout | tests/unit/persistence.spec.ts > PersistenceManager > should reject get jobs failures
+[KytePDF][2026-04-26T01:38:37.466Z][INFO] Persistence IndexedDB initialized 
+
+stdout | tests/unit/persistence.spec.ts > PersistenceManager > should delete a job
+[KytePDF][2026-04-26T01:38:37.468Z][INFO] Persistence IndexedDB initialized 
+
+stdout | tests/integration/PdfToOfficeExtended.spec.ts > PdfToOffice extended behavior > runs local Word and Excel conversions and reuses cached PDF bytes
+[KytePDF][2026-04-26T01:38:37.467Z][INFO] Job recorded to history {
+  toolName: 'PDF to Word',
+  fileName: 'sample_converted.docx',
+  metadata: {
+    ocr: false,
+    format: 'docx',
+    mode: 'local',
+    quality: 'good',
+    warnings: []
+  }
+}
+
+stdout | tests/integration/PdfToOfficeExtended.spec.ts > PdfToOffice extended behavior > runs local Word and Excel conversions and reuses cached PDF bytes
+[KytePDF][2026-04-26T01:38:37.468Z][INFO] Job recorded to history {
+  toolName: 'PDF to Word',
+  fileName: 'sample_converted.docx',
+  metadata: {
+    ocr: false,
+    format: 'docx',
+    mode: 'local',
+    quality: 'good',
+    warnings: []
+  }
+}
+
+stdout | tests/unit/persistence.spec.ts > PersistenceManager > should reject delete job failures
+[KytePDF][2026-04-26T01:38:37.470Z][INFO] Persistence IndexedDB initialized 
+
+stdout | tests/unit/persistence.spec.ts > PersistenceManager > should estimate usage
+[KytePDF][2026-04-26T01:38:37.473Z][INFO] Persistence IndexedDB initialized 
+
+ ✓ tests/integration/PdfToOfficeExtended.spec.ts > PdfToOffice extended behavior > loads previews, handles preview failures, and restores sessions 38ms
+stdout | tests/unit/persistence.spec.ts > PersistenceManager > should estimate usage with nested data
+[KytePDF][2026-04-26T01:38:37.487Z][INFO] Persistence IndexedDB initialized 
+
+stdout | tests/integration/PdfToOfficeExtended.spec.ts > PdfToOffice extended behavior > runs local Word and Excel conversions and reuses cached PDF bytes
+[KytePDF][2026-04-26T01:38:37.493Z][INFO] Job recorded to history {
+  toolName: 'PDF to Excel (Sheets)',
+  fileName: 'table_converted.xlsx',
+  metadata: {
+    ocr: false,
+    format: 'xlsx',
+    mode: 'local',
+    quality: 'fair',
+    warnings: [ 'Some layout fidelity may be reduced in local mode.' ]
+  }
+}
+
+stdout | tests/unit/persistence.spec.ts > PersistenceManager > should estimate usage with array data including edge cases
+[KytePDF][2026-04-26T01:38:37.499Z][INFO] Persistence IndexedDB initialized 
+
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > file handling > should load PDF file and show sign layout 142ms
+stdout | tests/unit/persistence.spec.ts > PersistenceManager > should ignore invalid size types and objects without size
+[KytePDF][2026-04-26T01:38:37.512Z][INFO] Persistence IndexedDB initialized 
+
+stdout | tests/unit/persistence.spec.ts > PersistenceManager > should resolve zero when usage estimation cursor fails
+[KytePDF][2026-04-26T01:38:37.525Z][INFO] Persistence IndexedDB initialized 
+
+stdout | tests/unit/persistence.spec.ts > PersistenceManager > should clear sessions
+[KytePDF][2026-04-26T01:38:37.526Z][INFO] Persistence IndexedDB initialized 
+
+stderr | tests/integration/PdfToOfficeExtended.spec.ts > PdfToOffice extended behavior > handles local conversion failures and missing files
+[KytePDF][2026-04-26T01:38:37.525Z][ERROR] Conversion failed Error: Local conversion failed.
+    at PdfToOffice.handleLocalConvert (/Users/idmcalculus/Downloads/kytepdf/components/PdfToOffice.ts:386:13)
+    at PdfToOffice.handleConvert (/Users/idmcalculus/Downloads/kytepdf/components/PdfToOffice.ts:317:9)
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfToOfficeExtended.spec.ts:190:5
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+[KytePDF][2026-04-26T01:38:37.526Z][ERROR] Showing error dialog: An unexpected error occurred. { original: 'Conversion failed: Local conversion failed.' }
+
+stderr | tests/unit/persistence.spec.ts > PersistenceManager > should clear sessions
+[KytePDF][2026-04-26T01:38:37.528Z][WARN] All temporary session data cleared from IndexedDB 
+
+stdout | tests/unit/persistence.spec.ts > PersistenceManager > should reject clear session failures
+[KytePDF][2026-04-26T01:38:37.530Z][INFO] Persistence IndexedDB initialized 
+
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should initialize the database 4ms
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should create missing object stores during upgrades 2ms
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should reject when IndexedDB fails to open 4ms
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should set data 2ms
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should reject set failures 2ms
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should get data 1ms
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should reject get failures 2ms
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should delete data 3ms
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should reject delete failures 7ms
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should add a job 2ms
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should reject add job failures 2ms
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should get all jobs sorted by timestamp 2ms
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should reject get jobs failures 3ms
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should delete a job 2ms
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should reject delete job failures 3ms
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should estimate usage 14ms
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should estimate usage with nested data 12ms
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should estimate usage with array data including edge cases 12ms
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should ignore invalid size types and objects without size 13ms
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should resolve zero when usage estimation cursor fails 1ms
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should get storage usage via navigator 1ms
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should return default values when navigator.storage unavailable 0ms
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should clear sessions 2ms
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should reject clear session failures 3ms
+stdout | tests/unit/persistence.spec.ts > PersistenceManager > should clear all data
+[KytePDF][2026-04-26T01:38:37.534Z][INFO] Persistence IndexedDB initialized 
+
+stderr | tests/unit/persistence.spec.ts > PersistenceManager > should clear all data
+[KytePDF][2026-04-26T01:38:37.537Z][WARN] All session and job data cleared from IndexedDB 
+
+stdout | tests/unit/persistence.spec.ts > PersistenceManager > should reject clear all failures
+[KytePDF][2026-04-26T01:38:37.537Z][INFO] Persistence IndexedDB initialized 
+
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should clear all data 5ms
+ ✓ tests/unit/persistence.spec.ts > PersistenceManager > should reject clear all failures 2ms
+stdout | tests/integration/PdfToOfficeExtended.spec.ts > PdfToOffice extended behavior > runs cloud conversion with OCR, consent handling, and gateway failures
+[KytePDF][2026-04-26T01:38:37.571Z][INFO] Job recorded to history {
+  toolName: 'PDF to Word',
+  fileName: 'sample_converted.docx',
+  metadata: { ocr: true, format: 'docx', mode: 'cloud' }
+}
+
+stdout | tests/integration/PdfSign.spec.ts > PdfSign > file handling > should recreate a missing preview controller before loading
+[KytePDF][2026-04-26T01:38:37.571Z][INFO] File loaded for signing { name: 'test.pdf' }
+
+stderr | tests/integration/PdfToOfficeExtended.spec.ts > PdfToOffice extended behavior > runs cloud conversion with OCR, consent handling, and gateway failures
+[KytePDF][2026-04-26T01:38:37.574Z][ERROR] Conversion failed Error: gateway failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfToOfficeExtended.spec.ts:228:68
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+[KytePDF][2026-04-26T01:38:37.575Z][ERROR] Showing error dialog: An unexpected error occurred. { original: 'Conversion failed: gateway failed' }
+
+ ✓ tests/integration/PdfToOfficeExtended.spec.ts > PdfToOffice extended behavior > runs local Word and Excel conversions and reuses cached PDF bytes 100ms
+ ✓ tests/integration/PdfToOfficeExtended.spec.ts > PdfToOffice extended behavior > handles local conversion failures and missing files 35ms
+ ✓ tests/integration/PdfToOfficeExtended.spec.ts > PdfToOffice extended behavior > runs cloud conversion with OCR, consent handling, and gateway failures 46ms
+stderr | tests/integration/PdfToOfficeHybridFlow.spec.ts
+Warning: Please use the `legacy` build in Node.js environments.
+
+stderr | tests/integration/EmailTrigger.spec.ts
+Warning: Please use the `legacy` build in Node.js environments.
+
+ ✓ tests/integration/PdfCreator.spec.ts > PdfCreator > covers repeatable-control guard paths for reports, invoices, and CVs 423ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > file handling > should update page indicator when file loads 133ms
+stderr | tests/integration/PdfCreator.spec.ts > PdfCreator > handles draft persistence, preview, creation failures, drag, resize, and teardown
+[KytePDF][2026-04-26T01:38:37.627Z][ERROR] Preview generation failed Error: preview failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfCreator.spec.ts:712:59
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+
+stderr | tests/integration/PdfCreator.spec.ts > PdfCreator > handles draft persistence, preview, creation failures, drag, resize, and teardown
+[KytePDF][2026-04-26T01:38:37.639Z][ERROR] Failed to save create-pdf draft Error: storage failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfCreator.spec.ts:718:52
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+
+stderr | tests/integration/PdfCreator.spec.ts > PdfCreator > handles draft persistence, preview, creation failures, drag, resize, and teardown
+[KytePDF][2026-04-26T01:38:37.640Z][ERROR] Failed to create PDF Error: create failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfCreator.spec.ts:724:59
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+[KytePDF][2026-04-26T01:38:37.641Z][ERROR] Showing error dialog: An unexpected error occurred. {
+  original: 'Failed to create PDF. Please review the document fields and try again.'
+}
+
+stderr | tests/integration/PdfCreator.spec.ts > PdfCreator > covers guarded creator actions, preview controls, and logo read failures
+[KytePDF][2026-04-26T01:38:37.676Z][ERROR] Invalid file type: text/plain. Expected: image/png, image/jpeg 
+[KytePDF][2026-04-26T01:38:37.676Z][ERROR] Showing error dialog: An unexpected error occurred. {
+  original: 'Invalid file type: text/plain. Expected: image/png, image/jpeg'
+}
+
+stderr | tests/integration/PdfCreator.spec.ts > PdfCreator > covers guarded creator actions, preview controls, and logo read failures
+[KytePDF][2026-04-26T01:38:37.677Z][ERROR] Failed to process logo upload Error: read failed
+    at ErrorFileReader.<instance_members_initializer> (/Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfCreator.spec.ts:792:15)
+    at new ErrorFileReader (/Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfCreator.spec.ts:791:5)
+    at /Users/idmcalculus/Downloads/kytepdf/components/PdfCreator.ts:2074:22
+    at new Promise (<anonymous>)
+    at PdfCreator.fileToDataUrl (/Users/idmcalculus/Downloads/kytepdf/components/PdfCreator.ts:2073:12)
+    at HTMLInputElement.<anonymous> (/Users/idmcalculus/Downloads/kytepdf/components/PdfCreator.ts:309:45)
+[KytePDF][2026-04-26T01:38:37.680Z][ERROR] Showing error dialog: An unexpected error occurred. { original: 'Could not read the selected logo.' }
+
+stdout | tests/integration/PdfToOfficeHybridFlow.spec.ts > PdfToOffice hybrid conversion flow > selects local mode and runs local conversion
+[KytePDF][2026-04-26T01:38:37.708Z][INFO] Persistence IndexedDB initialized 
+
+stdout | tests/integration/PdfToOfficeHybridFlow.spec.ts > PdfToOffice hybrid conversion flow > selects local mode and runs local conversion
+[KytePDF][2026-04-26T01:38:37.709Z][INFO] Persistence IndexedDB initialized 
+
+stdout | tests/integration/PdfSign.spec.ts > PdfSign > page navigation after file load > should navigate to next page
+[KytePDF][2026-04-26T01:38:37.712Z][INFO] File loaded for signing { name: 'test.pdf' }
+
+stderr | tests/integration/PdfCreator.spec.ts > PdfCreator > normalizes sparse saved report and letter drafts and tolerates restore failures
+[KytePDF][2026-04-26T01:38:37.714Z][ERROR] Failed to restore create-pdf draft Error: restore failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfCreator.spec.ts:848:52
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:145:11
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:26
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1243:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1209:10)
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1653:37
+    at Traces.$ (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/vitest/dist/chunks/traces.U4xDYhzZ.js:115:27)
+    at trace (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/vitest/dist/chunks/test.B8ej_ZHS.js:239:21)
+    at runTest (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1653:12)
+
+ ✓ tests/integration/PdfCreator.spec.ts > PdfCreator > handles draft persistence, preview, creation failures, drag, resize, and teardown 44ms
+ ✓ tests/integration/PdfCreator.spec.ts > PdfCreator > covers guarded creator actions, preview controls, and logo read failures 49ms
+stdout | tests/integration/PdfToOfficeHybridFlow.spec.ts > PdfToOffice hybrid conversion flow > selects local mode and runs local conversion
+[KytePDF][2026-04-26T01:38:37.715Z][INFO] Persistence IndexedDB initialized 
+
+stdout | tests/integration/PdfToOfficeHybridFlow.spec.ts > PdfToOffice hybrid conversion flow > selects local mode and runs local conversion
+[KytePDF][2026-04-26T01:38:37.716Z][INFO] Persistence IndexedDB initialized 
+
+ ✓ tests/unit/pdfCreator.spec.ts > pdfCreator > calculates invoice totals from all line items 5ms
+ ✓ tests/unit/pdfCreator.spec.ts > pdfCreator > treats non-finite invoice values as zero 1ms
+ ✓ tests/unit/pdfCreator.spec.ts > pdfCreator > falls back to a generated id when crypto UUID is unavailable 2ms
+ ✓ tests/unit/pdfCreator.spec.ts > pdfCreator > creates a multipage report when content exceeds a single page 6ms
+ ✓ tests/unit/pdfCreator.spec.ts > pdfCreator > wraps blank paragraphs and long words in report content 1ms
+ ✓ tests/unit/pdfCreator.spec.ts > pdfCreator > uses editable section labels in the Harvard CV renderer 2ms
+ ✓ tests/unit/pdfCreator.spec.ts > pdfCreator > renders Harvard CV logos, single-line extra sections, and partial date ranges 2ms
+ ✓ tests/unit/pdfCreator.spec.ts > pdfCreator > creates a modern CV PDF from the shared CV draft 1ms
+ ✓ tests/unit/pdfCreator.spec.ts > pdfCreator > renders modern CV logo and single-line extra sections 1ms
+ ✓ tests/unit/pdfCreator.spec.ts > pdfCreator > aligns modern CV date labels to a fixed column 1ms
+ ✓ tests/unit/pdfCreator.spec.ts > pdfCreator > creates an invoice PDF with a sanitized output name 16ms
+ ✓ tests/unit/pdfCreator.spec.ts > pdfCreator > right-aligns invoice rate and amount columns to consistent edges 5ms
+ ✓ tests/unit/pdfCreator.spec.ts > pdfCreator > centers invoice quantity values inside the quantity column 2ms
+ ✓ tests/unit/pdfCreator.spec.ts > pdfCreator > renders invoice rows and total as contiguous table blocks without overlap 3ms
+ ✓ tests/unit/pdfCreator.spec.ts > pdfCreator > renders optional payment details after the total block and before notes 3ms
+ ✓ tests/unit/pdfCreator.spec.ts > pdfCreator > places the invoice business name beside the logo in the header 1ms
+ ✓ tests/unit/pdfCreator.spec.ts > pdfCreator > shrinks long invoice business names and paginates tall invoice rows 3ms
+ ✓ tests/unit/pdfCreator.spec.ts > pdfCreator > aligns the logo, company name, and invoice label on the same header centerline 1ms
+ ✓ tests/unit/pdfCreator.spec.ts > pdfCreator > creates a business letter PDF 1ms
+ ✓ tests/unit/pdfCreator.spec.ts > pdfCreator > falls back when the primary save returns no content 0ms
+ ✓ tests/unit/pdfCreator.spec.ts > pdfCreator > uses base64 serialization when save fallbacks are empty 2ms
+ ✓ tests/unit/pdfCreator.spec.ts > pdfCreator > rejects invalid logos and empty serialized output 6ms
+stdout | tests/integration/PdfToOfficeHybridFlow.spec.ts > PdfToOffice hybrid conversion flow > selects local mode and runs local conversion
+[KytePDF][2026-04-26T01:38:37.719Z][INFO] Job recorded to history {
+  toolName: 'PDF to Word',
+  fileName: 'sample_converted.docx',
+  metadata: {
+    ocr: false,
+    format: 'docx',
+    mode: 'local',
+    quality: 'good',
+    warnings: []
+  }
+}
+
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > file handling > should recreate a missing preview controller before loading 138ms
+ ✓ tests/integration/FinalConversionSuite.spec.ts > Final Conversion Suite E2E (Integration) > should render PdfToImage and accept a PDF file 132ms
+ ✓ tests/integration/PdfCreator.spec.ts > PdfCreator > normalizes sparse saved report and letter drafts and tolerates restore failures 80ms
+ ✓ tests/integration/EmailTrigger.spec.ts > Email Trigger Integration > should show email modal when download is clicked and email not collected 125ms
+ ✓ tests/integration/EmailTrigger.spec.ts > Email Trigger Integration > should not show email modal if already collected 35ms
+ ✓ tests/integration/PdfToOfficeHybridFlow.spec.ts > PdfToOffice hybrid conversion flow > selects local mode and runs local conversion 132ms
+ ✓ tests/integration/PdfToOfficeHybridFlow.spec.ts > PdfToOffice hybrid conversion flow > requests consent before cloud conversion 45ms
+stdout | tests/integration/PdfToOfficeHybridFlow.spec.ts > PdfToOffice hybrid conversion flow > shows quality warning after poor local conversion
+[KytePDF][2026-04-26T01:38:37.821Z][INFO] Job recorded to history {
+  toolName: 'PDF to Word',
+  fileName: 'sample_converted.docx',
+  metadata: {
+    ocr: false,
+    format: 'docx',
+    mode: 'local',
+    quality: 'poor',
+    warnings: [ 'Low text coverage.' ]
+  }
+}
+
+ ✓ tests/integration/PdfToOfficeHybridFlow.spec.ts > PdfToOffice hybrid conversion flow > shows quality warning after poor local conversion 58ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > page navigation after file load > should navigate to next page 194ms
+stdout | tests/integration/PdfSign.spec.ts > PdfSign > page navigation after file load > should navigate to previous page
+[KytePDF][2026-04-26T01:38:37.898Z][INFO] File loaded for signing { name: 'test.pdf' }
+
+ ✓ tests/integration/FinalConversionSuite.spec.ts > Final Conversion Suite E2E (Integration) > should render ImageToPdf and accept images 41ms
+ ✓ tests/integration/FinalConversionSuite.spec.ts > Final Conversion Suite E2E (Integration) > should render PdfCreator 37ms
+ ✓ tests/integration/FinalConversionSuite.spec.ts > Final Conversion Suite E2E (Integration) > should render PdfToOffice with correct format 13ms
+ ✓ tests/integration/FinalConversionSuite.spec.ts > Final Conversion Suite E2E (Integration) > should render OfficeToPdf 37ms
+ ✓ tests/unit/AboutModal.spec.ts > AboutModal > should be hidden by default 18ms
+ ✓ tests/unit/AboutModal.spec.ts > AboutModal > should show when show() is called 8ms
+ ✓ tests/unit/AboutModal.spec.ts > AboutModal > should contain the project copy 5ms
+ ✓ tests/unit/AboutModal.spec.ts > AboutModal > should contain credits and social links 8ms
+ ✓ tests/unit/AboutModal.spec.ts > AboutModal > should contain the Buy me a coffee button 3ms
+ ✓ tests/unit/AboutModal.spec.ts > AboutModal > should hide when hide() is called 4ms
+ ✓ tests/unit/AboutModal.spec.ts > AboutModal > hides from the close button and overlay backdrop 10ms
+ ✓ tests/integration/FinalConversionSuite.spec.ts > Final Conversion Suite E2E (Integration) > should render PdfSecurity 27ms
+stdout | Logger._log (/Users/idmcalculus/Downloads/kytepdf/utils/logger.ts:45:17)
+[KytePDF][2026-04-26T01:38:37.938Z][INFO] Persistence IndexedDB initialized 
+
+stdout | Logger._log (/Users/idmcalculus/Downloads/kytepdf/utils/logger.ts:45:17)
+[KytePDF][2026-04-26T01:38:37.942Z][INFO] Persistence IndexedDB initialized 
+
+stdout | Logger._log (/Users/idmcalculus/Downloads/kytepdf/utils/logger.ts:45:17)
+[KytePDF][2026-04-26T01:38:37.943Z][INFO] Persistence IndexedDB initialized 
+
+stdout | Logger._log (/Users/idmcalculus/Downloads/kytepdf/utils/logger.ts:45:17)
+[KytePDF][2026-04-26T01:38:37.943Z][INFO] Persistence IndexedDB initialized 
+
+stdout | Logger._log (/Users/idmcalculus/Downloads/kytepdf/utils/logger.ts:45:17)
+[KytePDF][2026-04-26T01:38:37.943Z][INFO] Persistence IndexedDB initialized 
+
+stdout | Logger._log (/Users/idmcalculus/Downloads/kytepdf/utils/logger.ts:45:17)
+[KytePDF][2026-04-26T01:38:37.943Z][INFO] Persistence IndexedDB initialized 
+
+stdout | Logger._log (/Users/idmcalculus/Downloads/kytepdf/utils/logger.ts:45:17)
+[KytePDF][2026-04-26T01:38:37.944Z][INFO] Persistence IndexedDB initialized 
+
+stdout | Logger._log (/Users/idmcalculus/Downloads/kytepdf/utils/logger.ts:45:17)
+[KytePDF][2026-04-26T01:38:37.944Z][INFO] Persistence IndexedDB initialized 
+
+stdout | Logger._log (/Users/idmcalculus/Downloads/kytepdf/utils/logger.ts:45:17)
+[KytePDF][2026-04-26T01:38:37.944Z][INFO] Persistence IndexedDB initialized 
+
+stdout | Logger._log (/Users/idmcalculus/Downloads/kytepdf/utils/logger.ts:45:17)
+[KytePDF][2026-04-26T01:38:37.944Z][INFO] Persistence IndexedDB initialized 
+
+stdout | Logger._log (/Users/idmcalculus/Downloads/kytepdf/utils/logger.ts:45:17)
+[KytePDF][2026-04-26T01:38:37.945Z][INFO] Persistence IndexedDB initialized 
+
+stdout | Logger._log (/Users/idmcalculus/Downloads/kytepdf/utils/logger.ts:45:17)
+[KytePDF][2026-04-26T01:38:37.945Z][INFO] Persistence IndexedDB initialized 
+
+stdout | Logger._log (/Users/idmcalculus/Downloads/kytepdf/utils/logger.ts:45:17)
+[KytePDF][2026-04-26T01:38:37.945Z][INFO] Persistence IndexedDB initialized 
+
+stdout | Logger._log (/Users/idmcalculus/Downloads/kytepdf/utils/logger.ts:45:17)
+[KytePDF][2026-04-26T01:38:37.945Z][INFO] Persistence IndexedDB initialized 
+
+stdout | Logger._log (/Users/idmcalculus/Downloads/kytepdf/utils/logger.ts:45:17)
+[KytePDF][2026-04-26T01:38:37.945Z][INFO] Persistence IndexedDB initialized 
+
+stdout | Logger._log (/Users/idmcalculus/Downloads/kytepdf/utils/logger.ts:45:17)
+[KytePDF][2026-04-26T01:38:37.945Z][INFO] Persistence IndexedDB initialized 
+
+stdout | Logger._log (/Users/idmcalculus/Downloads/kytepdf/utils/logger.ts:45:17)
+[KytePDF][2026-04-26T01:38:37.945Z][INFO] Persistence IndexedDB initialized 
+
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getFileLabel > singular for count 1 3ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getFileLabel > plural for count > 1 1ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getFileLabel > accepts custom singular and plural 1ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getToolKey > returns pdf-protect for protect mode 1ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getToolKey > returns pdf-unprotect for unprotect mode 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getOppositeToolKey > returns unprotect key when in protect mode 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getOppositeToolKey > returns protect key when in unprotect mode 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > countUnlockStates > counts each state correctly 1ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > countUnlockStates > returns all zeros for empty array 3ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > countUnlockStates > property: sum of counts equals input length 5ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getSelectionPanelMeta > returns upload prompt when totalCount is 0 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getSelectionPanelMeta > returns select-at-least-one when selected is 0 but total > 0 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getSelectionPanelMeta > protect mode — 1 selected returns singular copy message 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getSelectionPanelMeta > protect mode — multiple, zip download mode 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getSelectionPanelMeta > protect mode — multiple, individual download mode 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getSelectionPanelMeta > unprotect mode — checking in progress 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getSelectionPanelMeta > unprotect mode — mixed password-required and restriction-only 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getSelectionPanelMeta > unprotect mode — all already open 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getSelectionPanelMeta > unprotect mode — partial selection info in prefix 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getProtectValidationMessage > prompts to upload when fileCount 0 1ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getProtectValidationMessage > prompts to select when selectedCount 0 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getProtectValidationMessage > prompts for password when openPassword empty 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getProtectValidationMessage > rejects short password < 4 chars 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getProtectValidationMessage > prompts to confirm when confirmPassword empty 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getProtectValidationMessage > reports mismatch 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getProtectValidationMessage > rejects same open and owner password 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getProtectValidationMessage > returns Ready with permissions count 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getProtectValidationMessage > returns Ready with zero permissions message 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getProtectValidationMessage > Ready uses singular for 1 permission 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getUnprotectValidationMessage > upload prompt when no files 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getUnprotectValidationMessage > select prompt when selected 0 but total > 0 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getUnprotectValidationMessage > checking message when counts.checking > 0 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getUnprotectValidationMessage > no-protection message when nothing to do 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getUnprotectValidationMessage > prompts for password when passwordRequired > 0 and no password given 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getUnprotectValidationMessage > Ready for single restriction-only file 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getUnprotectValidationMessage > Ready for single password-required file with password given 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getUnprotectValidationMessage > Ready for batch with mixed states 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > isActionReady > returns true when message starts with Ready and files present 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > isActionReady > returns false when no active files 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > isActionReady > returns false when message does not start with Ready 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > shouldShowPasswordMismatch > true in protect mode with filled mismatched passwords 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > shouldShowPasswordMismatch > false when passwords match 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > shouldShowPasswordMismatch > false in unprotect mode even when passwords differ 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > shouldShowPasswordMismatch > false when confirmPassword is empty 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getUnlockHelpText > protect mode always returns the standard unlock note 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getUnlockHelpText > unprotect no files — prompts to select 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getUnlockHelpText > still checking 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getUnlockHelpText > needs password + has restriction-only — mixed message 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getUnlockHelpText > needs password only 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getUnlockHelpText > restriction only 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getUnlockHelpText > all already unprotected 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getUnlockActionLabel > returns 'Unlock PDF' when no files 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getUnlockActionLabel > returns 'Unlock PDFs' when multiple need password 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getUnlockActionLabel > returns 'Remove Known Password' for single file needing password 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getUnlockActionLabel > returns 'Remove Restrictions' when only restriction-only files 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > buildBatchSuccessDetails > protect mode — zip — reports file count 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > buildBatchSuccessDetails > protect mode — individual — reports individual downloads 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > buildBatchSuccessDetails > unprotect mode — reports password-removed count 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > buildBatchSuccessDetails > includes skipped count 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > buildBatchSuccessDetails > includes failure count 1ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > buildBatchArchiveName > returns protected_pdfs.zip for protect mode 1ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > buildBatchArchiveName > returns unrestricted_pdfs.zip when all restriction-only 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > buildBatchArchiveName > returns unlocked_pdfs.zip for mixed results 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > buildBatchCompletionMessage > no failures — just the summary 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > buildBatchCompletionMessage > with failures — appends failure preview 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > buildBatchCompletionMessage > truncates after 3 failures with '+ N more' 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > areAllFailuresSameMessage > returns true when all failures share the message 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > areAllFailuresSameMessage > returns false when failures have mixed messages 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > areAllFailuresSameMessage > returns false for empty array 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getSingleSuccessTitle > protect mode 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getSingleSuccessTitle > restriction-only unprotect 1ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getSingleSuccessTitle > password-required unprotect 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getSingleSuccessDetail > protect mode 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getSingleSuccessDetail > restriction-only unprotect 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > getSingleSuccessDetail > password-required unprotect 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > initFileSelections > creates fresh selections on non-append 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > initFileSelections > appends to existing selections 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > initUnlockStates > protect mode — all unprotected 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > initUnlockStates > unprotect mode — all checking 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > initUnlockStates > empty list 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > toggleFileSelection > flips true to false 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > toggleFileSelection > flips false to true 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > toggleFileSelection > returns unchanged array for out-of-bounds index 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > toggleFileSelection > does not mutate original 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > setAllFileSelections > sets all to true 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > setAllFileSelections > sets all to false 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > setAllFileSelections > empty 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > removeFileAtIndex > removes the item at the given index 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > removeFileAtIndex > removes the first item 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > removeFileAtIndex > removes the last item 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > removeFileAtIndex > does not mutate the original 0ms
+ ✓ tests/unit/pdfSecurityWorkflow.spec.ts > removeFileAtIndex > property: length decreases by 1 7ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > page navigation after file load > should navigate to previous page 236ms
+stdout | tests/integration/PdfSign.spec.ts > PdfSign > typed signature > should save typed signature when button clicked
+[KytePDF][2026-04-26T01:38:38.155Z][INFO] Creating typed signature { textLength: 9, font: "'Dancing Script', cursive" }
+
+stderr | tests/integration/PdfSign.spec.ts > PdfSign > typed signature > should ignore empty typed signatures
+[KytePDF][2026-04-26T01:38:38.178Z][WARN] Empty typed signature 
+
+stdout | tests/integration/PdfSign.spec.ts > PdfSign > typed signature > should handle an unavailable canvas context for typed signatures
+[KytePDF][2026-04-26T01:38:38.202Z][INFO] Creating typed signature { textLength: 10, font: "'Dancing Script', cursive" }
+
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > typed signature > should update name input value 23ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > typed signature > should save typed signature when button clicked 31ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > typed signature > should ignore empty typed signatures 21ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > typed signature > should handle an unavailable canvas context for typed signatures 26ms
+stdout | tests/integration/PdfSign.spec.ts > PdfSign > startFinalize > should call PDFDocument.load when finalizing
+[KytePDF][2026-04-26T01:38:38.225Z][INFO] File loaded for signing { name: 'test.pdf' }
+
+stdout | tests/integration/PdfSign.spec.ts > PdfSign > startFinalize > should call PDFDocument.load when finalizing
+[KytePDF][2026-04-26T01:38:38.326Z][DEBUG] Drawn signature saved { aspectRatio: 2 }
+
+stdout | tests/integration/PdfSign.spec.ts > PdfSign > startFinalize > should call PDFDocument.load when finalizing
+[KytePDF][2026-04-26T01:38:38.331Z][INFO] Starting PDF signing / finalized { page: 1 }
+
+stdout | tests/integration/PdfSign.spec.ts > PdfSign > startFinalize > should call PDFDocument.load when finalizing
+[KytePDF][2026-04-26T01:38:38.333Z][INFO] Job recorded to history {
+  toolName: 'Sign',
+  fileName: 'test_signed.pdf',
+  metadata: { pageNumber: 1 }
+}
+
+stderr | tests/integration/PdfSign.spec.ts > PdfSign > startFinalize > should return early when finalize data is incomplete
+[KytePDF][2026-04-26T01:38:38.416Z][WARN] Start finalize called without necessary data 
+
+ ✓ tests/unit/KyteDialog.spec.ts > KyteDialog > renders hidden by default 13ms
+ ✓ tests/unit/KyteDialog.spec.ts > KyteDialog > shows content, theme, icon, and custom button labels 9ms
+ ✓ tests/unit/KyteDialog.spec.ts > KyteDialog > resolves true when confirmed and hides after transition 6ms
+ ✓ tests/unit/KyteDialog.spec.ts > KyteDialog > resolves false when cancelled or overlay is clicked 5ms
+ ✓ tests/unit/KyteDialog.spec.ts > KyteDialog > falls back to the info icon for unknown types 1ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > startFinalize > should call PDFDocument.load when finalizing 180ms
+stdout | tests/integration/PdfSign.spec.ts > PdfSign > startFinalize > should surface signing errors and re-enable the finalize button
+[KytePDF][2026-04-26T01:38:38.442Z][INFO] File loaded for signing { name: 'test.pdf' }
+
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > startFinalize > should return early when finalize data is incomplete 32ms
+ ✓ tests/unit/CloudConversionService.spec.ts > CloudConversionService > returns mock bytes in development when no gateway is configured 24ms
+ ✓ tests/unit/CloudConversionService.spec.ts > CloudConversionService > throws in production when no gateway is configured 4ms
+ ✓ tests/unit/CloudConversionService.spec.ts > CloudConversionService > posts form data to the configured gateway 5ms
+ ✓ tests/unit/CloudConversionService.spec.ts > CloudConversionService > surfaces gateway errors and fetch failures 2ms
+ ✓ tests/unit/CloudConversionService.spec.ts > CloudConversionService > performs OCR through convertFile 2ms
+stdout | tests/integration/PdfSign.spec.ts > PdfSign > startFinalize > should surface signing errors and re-enable the finalize button
+[KytePDF][2026-04-26T01:38:38.544Z][INFO] Starting PDF signing / finalized { page: 1 }
+
+stderr | tests/integration/PdfSign.spec.ts > PdfSign > startFinalize > should surface signing errors and re-enable the finalize button
+[KytePDF][2026-04-26T01:38:38.545Z][ERROR] Sign error Error: broken pdf
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfSign.spec.ts:393:55
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+[KytePDF][2026-04-26T01:38:38.547Z][ERROR] Showing error dialog: An unexpected error occurred. { original: 'Failed to sign PDF. broken pdf' }
+
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > startFinalize > should surface signing errors and re-enable the finalize button 132ms
+stderr | tests/unit/pdfCreatorWorkflow.spec.ts
+Warning: Please use the `legacy` build in Node.js environments.
+
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > signature clearing > should hide signature preview on clear 24ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > signature clearing > should disable finalize button on clear 21ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > canvas elements > should have signature canvas with correct attributes 29ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > canvas elements > should have PDF canvas 21ms
+ ✓ tests/unit/CloudConsentModal.spec.ts > CloudConsentModal > should be hidden by default 28ms
+ ✓ tests/unit/CloudConsentModal.spec.ts > CloudConsentModal > should return true when accepted 18ms
+ ✓ tests/unit/CloudConsentModal.spec.ts > CloudConsentModal > should return false when cancelled 4ms
+ ✓ tests/unit/CloudConsentModal.spec.ts > CloudConsentModal > opens policy details and dismisses from the backdrop 11ms
+ ✓ tests/unit/EmailCollectionModal.spec.ts > EmailCollectionModal > should be hidden by default 13ms
+ ✓ tests/unit/EmailCollectionModal.spec.ts > EmailCollectionModal > should show when show() is called 5ms
+ ✓ tests/unit/EmailCollectionModal.spec.ts > EmailCollectionModal > should validate email format 11ms
+ ✓ tests/unit/EmailCollectionModal.spec.ts > EmailCollectionModal > should emit 'email-submitted' event with email on success 10ms
+ ✓ tests/unit/EmailCollectionModal.spec.ts > EmailCollectionModal > should emit 'modal-dismissed' when skipped 2ms
+ ✓ tests/unit/EmailCollectionModal.spec.ts > EmailCollectionModal > resolves submitted and skipped values and supports privacy/backdrop actions 8ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > getDraftStatusText > returns idle text for "idle" 3ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > getDraftStatusText > returns saving text for "saving" 1ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > getDraftStatusText > returns saved text for "saved" 1ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > getDraftStatusText > returns restored text for "restored" 3ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > computeSummaryText > includes template label, page size and orientation 4ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > computeSummaryText > includes page count when known 1ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > computeSummaryText > uses singular 'page' for 1 page 2ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > computeSummaryText > falls back when pageCount is null 1ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > computePreviewMetaText > returns pages + filename when both available 2ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > computePreviewMetaText > returns pages ready when only count available 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > computePreviewMetaText > returns default text when nothing available 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > normalizeDraft > fills defaults for completely empty object 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > normalizeDraft > preserves existing template 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > normalizeDraft > preserves existing report sections when non-empty 1ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > normalizeDraft > falls back to defaults when report.sections is empty array 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > normalizeDraft > normalizes null/undefined fields in invoice line items 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > normalizeDraft > preserves paymentDetails and paymentLink 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > normalizeDraft > normalizes null cv experience fields 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > normalizeDraft > property: normalizeDraft is idempotent on a valid full draft 21ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > removeCollectionItem > removes the item with the given id 1ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > removeCollectionItem > returns null when removing the last item 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > removeCollectionItem > returns the original array when id not found 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > moveCollectionItem > moves item up 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > moveCollectionItem > moves item down 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > moveCollectionItem > no-op when moving first item up 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > moveCollectionItem > no-op when moving last item down 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > moveCollectionItem > no-op when id not found moving down 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > addReportSection > appends a new section 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > addReportSection > does not mutate the original draft 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > removeReportSection > removes an existing section 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > removeReportSection > returns null when section is the last one 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > moveReportSection > moves a section up 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > addLetterParagraph > appends a new paragraph 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > removeLetterParagraph > returns null on last paragraph 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > moveLetterParagraph > moves a paragraph down 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > addInvoiceItem > appends a new line item 1ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > removeInvoiceItem > returns null on last item 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > moveInvoiceItem > moves an item up 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > CV experience mutations > addCvExperience appends 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > CV experience mutations > removeCvExperience returns null on last item 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > CV experience mutations > moveCvExperience moves up 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > CV education mutations > addCvEducation appends 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > CV education mutations > removeCvEducation returns null on last item 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > CV education mutations > moveCvEducation is a no-op on single item 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > CV extra section mutations > addCvExtraSection appends 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > CV extra section mutations > removeCvExtraSection removes correctly 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > CV extra section mutations > moveCvExtraSection down works 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > applyTemplateChange > changes the template 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > applyTemplateChange > preserves other draft fields 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > canFloatPreview > returns true at exactly the breakpoint (1280) 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > canFloatPreview > returns false below the breakpoint 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > canFloatPreview > returns true above the breakpoint 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > clampFloatingPreviewPosition > clamps x to gutter minimum (24) 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > clampFloatingPreviewPosition > clamps y to gutter minimum (24) 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > clampFloatingPreviewPosition > clamps x to maxX (viewport - width - gutter) 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > clampFloatingPreviewPosition > clamps y to maxY (viewport - height - gutter) 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > clampFloatingPreviewPosition > passes through positions already in bounds 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > clampFloatingPreviewPosition > property: clamped result is always within bounds 3ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > getDefaultFloatingPreviewPosition > anchors to provided anchorRight 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > getDefaultFloatingPreviewPosition > uses viewport right edge when anchorRight is null 0ms
+ ✓ tests/unit/pdfCreatorWorkflow.spec.ts > getDefaultFloatingPreviewPosition > top position is FLOATING_PREVIEW_TOP (112) when in bounds 0ms
+ ✓ tests/unit/KyteFooter.spec.ts > KyteFooter > should render Jaydeetech branding with correct link 12ms
+ ✓ tests/unit/KyteFooter.spec.ts > KyteFooter > should render the copyright notice for 2025 2ms
+ ✓ tests/unit/KyteFooter.spec.ts > KyteFooter > should have centered content class 2ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > methods > should have startDrawing method 23ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > methods > should have stopDrawing method 25ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > methods > should have renderPage method 21ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > methods > should have handleFiles method 27ms
+ ✓ tests/unit/pdfPreview.spec.ts > PdfPreviewController > loads and renders the first page with nav state 6ms
+ ✓ tests/unit/pdfPreview.spec.ts > PdfPreviewController > renders a requested page and updates nav state 2ms
+ ✓ tests/unit/pdfPreview.spec.ts > PdfPreviewController > ignores invalid render requests and supports prev/next navigation 4ms
+ ✓ tests/unit/pdfPreview.spec.ts > PdfPreviewController > uses cached pages, evicts old cache entries, and handles destroy failures 2ms
+ ✓ tests/unit/pdfPreview.spec.ts > PdfPreviewController > destroys stale documents when overlapping loads resolve out of order 1ms
+ ✓ tests/unit/pdfPreview.spec.ts > pdfPreview helpers > loads a document from bytes 1ms
+ ✓ tests/unit/pdfPreview.spec.ts > pdfPreview helpers > loads a document from ArrayBuffer and File sources 2ms
+ ✓ tests/unit/pdfPreview.spec.ts > pdfPreview helpers > renders a page to a canvas 1ms
+ ✓ tests/unit/pdfPreview.spec.ts > pdfPreview helpers > returns false when rendering has no document or no canvas context 1ms
+ ✓ tests/unit/pdfPreview.spec.ts > pdfPreview helpers > sets and clears loading state and returns context-specific error messages 4ms
+ ✓ tests/unit/pdfPreview.spec.ts > PdfThumbnailGridController > renders immediately without IntersectionObserver 1ms
+ ✓ tests/unit/pdfPreview.spec.ts > PdfThumbnailGridController > renders intersecting thumbnails through IntersectionObserver and disconnects on destroy 4ms
+ ✓ tests/unit/pdfPreview.spec.ts > PdfThumbnailGridController > ignores duplicate and failed thumbnail renders 4ms
+stdout | tests/integration/PdfSign.spec.ts > PdfSign > drawing and placement interactions > should place, drag, resize, and hide a signature preview on page changes
+[KytePDF][2026-04-26T01:38:38.830Z][INFO] File loaded for signing { name: 'test.pdf' }
+
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > swapArrayItems > should swap two items by index 5ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > swapArrayItems > should handle adjacent swaps 2ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > swapArrayItems > should not modify original array 1ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > moveArrayItem > should move item forward 2ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > moveArrayItem > should move item backward 2ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > moveArrayItem > should return same array if move is out of bounds 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > parsePageRange > should parse single page numbers 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > parsePageRange > should parse page ranges 1ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > parsePageRange > should parse mixed format 1ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > parsePageRange > should respect max pages limit 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > parsePageRange > should handle invalid input gracefully 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > parsePageRange > should deduplicate overlapping ranges 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > formatSelectionInfo > should format singular correctly 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > formatSelectionInfo > should format plural correctly 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > calculateSignaturePlacement > should calculate relative placement 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > generateOutputFilename > should add suffix before .pdf extension 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > generateOutputFilename > should handle uppercase extension 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > calculateSavingsPercent > should calculate percentage correctly 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > calculateSavingsPercent > should never return negative 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > sortJobsByTimestamp > should sort jobs newest first 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > sortJobsByTimestamp > should not mutate original array 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > sortJobsByTimestamp > should handle empty array 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > filterValidFiles > should filter valid PDF files 1ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > filterValidFiles > should accept .pdf extension even without mime type 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > filterValidFiles > should reject files over size limit 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > filterValidFiles > should use default 100MB limit 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > formatFileSize > should format bytes 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > formatFileSize > should format kilobytes 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > formatFileSize > should format megabytes 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > formatFileSize > should format gigabytes 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > formatFileSize > should respect decimal places 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > formatTimestamp > should format recent timestamps as 'Just now' 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > formatTimestamp > should format minutes ago 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > formatTimestamp > should format hours ago 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > formatTimestamp > should format days ago 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > formatTimestamp > should format old dates as locale string 12ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > formatTimestamp > should handle singular forms 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > buildFileListItemHTML > should build file item HTML 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > buildFileListItemHTML > should disable up button for first item 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > buildFileListItemHTML > should disable down button for last item 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > buildJobCardHTML > should build job card HTML 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > buildJobCardHTML > should use defaults for missing fields 0ms
+ ✓ tests/unit/pdfUtils.spec.ts > pdfUtils > buildJobCardHTML > should omit size if not provided 0ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > methods > should delegate renderPage to the preview controller 29ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > drawing and placement interactions > should draw with mouse and touch input 32ms
+ ✓ tests/unit/appBootstrap.spec.ts > appBootstrap > sets dashboard and tool route markup 9ms
+ ✓ tests/unit/appBootstrap.spec.ts > appBootstrap > installs global about and cloud consent actions 2ms
+ ✓ tests/unit/appBootstrap.spec.ts > appBootstrap > installs runtime and promise rejection error handlers 5ms
+ ✓ tests/unit/appBootstrap.spec.ts > appBootstrap > routes tool selection and dashboard events 2ms
+ ✓ tests/unit/appBootstrap.spec.ts > appBootstrap > registers and refreshes the production service worker 1ms
+ ✓ tests/unit/appBootstrap.spec.ts > appBootstrap > skips service worker registration outside production or unsupported browsers 1ms
+ ✓ tests/unit/appBootstrap.spec.ts > appBootstrap > reloads immediately on service worker update if globalDialog is missing 3ms
+ ✓ tests/unit/appBootstrap.spec.ts > appBootstrap > logs service worker registration failures 1ms
+ ✓ tests/unit/appBootstrap.spec.ts > appBootstrap > updates and draws background particles 2ms
+ ✓ tests/unit/appBootstrap.spec.ts > appBootstrap > creates a controllable background animator 4ms
+ ✓ tests/unit/appBootstrap.spec.ts > appBootstrap > returns null when no background canvas is present 2ms
+ ✓ tests/unit/appBootstrap.spec.ts > appBootstrap > bootstraps the application by calling all installers 2ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > drawing and placement interactions > should place, drag, resize, and hide a signature preview on page changes 185ms
+ ✓ tests/unit/HistoryManager.spec.ts > HistoryManager > Basic functionality > should start with empty stacks 3ms
+ ✓ tests/unit/HistoryManager.spec.ts > HistoryManager > Basic functionality > should allow pushing actions 1ms
+ ✓ tests/unit/HistoryManager.spec.ts > HistoryManager > Property 9: Undo/Redo Round-Trip > undo followed by redo restores state 5ms
+ ✓ tests/unit/HistoryManager.spec.ts > HistoryManager > Property 10: History Stack Size Invariant > undo stack never exceeds maxSize 2ms
+ ✓ tests/unit/HistoryManager.spec.ts > HistoryManager > Property 10: History Stack Size Invariant > oldest entries are discarded when limit exceeded 1ms
+ ✓ tests/unit/HistoryManager.spec.ts > HistoryManager > Property 11: History Recording Completeness > each push increases undo count by exactly 1 (when not at capacity) 9ms
+ ✓ tests/unit/HistoryManager.spec.ts > HistoryManager > Property 11: History Recording Completeness > push clears redo stack 6ms
+ ✓ tests/unit/HistoryManager.spec.ts > HistoryManager > Edge cases > undo on empty stack returns null 1ms
+ ✓ tests/unit/HistoryManager.spec.ts > HistoryManager > Edge cases > redo on empty stack returns null 1ms
+ ✓ tests/unit/HistoryManager.spec.ts > HistoryManager > Edge cases > clear empties both stacks 0ms
+stdout | tests/integration/PdfSign.spec.ts > PdfSign > session and error handling > should show and restore a saved signing session
+[KytePDF][2026-04-26T01:38:39.056Z][INFO] Restoring sign session { name: 'saved.pdf' }
+
+stderr | tests/integration/PdfSign.spec.ts > PdfSign > session and error handling > should tolerate session lookup, restore, and save failures
+[KytePDF][2026-04-26T01:38:39.077Z][ERROR] Failed to check for existing session Error: lookup failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfSign.spec.ts:605:54
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+
+stderr | tests/integration/PdfSign.spec.ts > PdfSign > session and error handling > should tolerate session lookup, restore, and save failures
+[KytePDF][2026-04-26T01:38:39.077Z][ERROR] Failed to restore sign session Error: restore failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfSign.spec.ts:608:54
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+
+stderr | tests/integration/PdfSign.spec.ts > PdfSign > session and error handling > should tolerate session lookup, restore, and save failures
+[KytePDF][2026-04-26T01:38:39.078Z][ERROR] Failed to save sign session Error: save failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfSign.spec.ts:612:54
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > drawing and placement interactions > should pan the PDF container and ignore panning from interactive targets 42ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > session and error handling > should show and restore a saved signing session 29ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > session and error handling > should tolerate session lookup, restore, and save failures 21ms
+stderr | tests/integration/PdfSign.spec.ts > PdfSign > session and error handling > should reject invalid files and show preview load errors
+[KytePDF][2026-04-26T01:38:39.116Z][ERROR] Invalid file type: text/plain. Expected: application/pdf 
+[KytePDF][2026-04-26T01:38:39.116Z][ERROR] Showing error dialog: An unexpected error occurred. {
+  original: 'Invalid file type: text/plain. Expected: application/pdf'
+}
+
+stdout | tests/integration/PdfSign.spec.ts > PdfSign > session and error handling > should reject invalid files and show preview load errors
+[KytePDF][2026-04-26T01:38:39.117Z][INFO] File loaded for signing { name: 'broken.pdf' }
+
+stderr | tests/integration/PdfSign.spec.ts > PdfSign > session and error handling > should reject invalid files and show preview load errors
+[KytePDF][2026-04-26T01:38:39.117Z][ERROR] Sign load error Error: preview failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/integration/PdfSign.spec.ts:630:33
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+[KytePDF][2026-04-26T01:38:39.117Z][ERROR] Showing error dialog: This PDF is password-protected. Please remove the password and try again. {
+  original: "Could not load PDF. Please ensure it's a valid PDF file and not password protected."
+}
+
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > session and error handling > should ignore saveSession when no PDF is selected 21ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > session and error handling > should reject invalid files and show preview load errors 18ms
+ ✓ tests/integration/PdfSign.spec.ts > PdfSign > session and error handling > should return null when preview controller targets are missing 23ms
+ ✓ tests/unit/pdfConversions.spec.ts > pdfConversions > convertPdfToImages > should convert all pages of a PDF to an array of blobs 21ms
+ ✓ tests/unit/pdfConversions.spec.ts > pdfConversions > convertImagesToPdf > should convert an array of images to a single PDF Uint8Array 2ms
+stderr | tests/unit/LocalConverter.spec.ts > LocalConverter > returns a failure result when Word conversion throws
+[KytePDF][2026-04-26T01:38:39.315Z][ERROR] Local PDF to Word conversion failed Error: pack failed
+    at /Users/idmcalculus/Downloads/kytepdf/tests/unit/LocalConverter.spec.ts:147:44
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:145:11
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:26
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1243:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1209:10)
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1653:37
+    at Traces.$ (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/vitest/dist/chunks/traces.U4xDYhzZ.js:115:27)
+    at trace (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/vitest/dist/chunks/test.B8ej_ZHS.js:239:21)
+    at runTest (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1653:12)
+
+stderr | tests/unit/LocalConverter.spec.ts > LocalConverter > returns a failure result when Excel conversion throws
+[KytePDF][2026-04-26T01:38:39.320Z][ERROR] Local PDF to Excel conversion failed Error: write failed
+    at Proxy.<anonymous> (/Users/idmcalculus/Downloads/kytepdf/tests/unit/LocalConverter.spec.ts:196:13)
+    at Proxy.Mock (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/spy/dist/index.js:285:34)
+    at LocalConverter.pdfToExcel (/Users/idmcalculus/Downloads/kytepdf/utils/LocalConverter.ts:96:32)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at /Users/idmcalculus/Downloads/kytepdf/tests/unit/LocalConverter.spec.ts:199:20
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:20
+
+ ✓ tests/unit/LocalConverter.spec.ts > LocalConverter > assesses quality from extracted text density and caches extraction by byte object 4ms
+ ✓ tests/unit/LocalConverter.spec.ts > LocalConverter > returns fair and poor quality for lower text density 1ms
+ ✓ tests/unit/LocalConverter.spec.ts > LocalConverter > builds a Word document from grouped lines and paragraphs 1ms
+ ✓ tests/unit/LocalConverter.spec.ts > LocalConverter > adds an empty-output warning for Word documents without extractable text 1ms
+ ✓ tests/unit/LocalConverter.spec.ts > LocalConverter > returns a failure result when Word conversion throws 3ms
+ ✓ tests/unit/LocalConverter.spec.ts > LocalConverter > builds Excel rows by line and x-position gaps 1ms
+ ✓ tests/unit/LocalConverter.spec.ts > LocalConverter > creates a blank Excel sheet and warnings when no text is found 1ms
+ ✓ tests/unit/LocalConverter.spec.ts > LocalConverter > returns a failure result when Excel conversion throws 1ms
+ ✓ tests/unit/LocalConverter.spec.ts > LocalConverter > adds a fair-quality warning when local conversion has moderate text density 1ms
+ ✓ tests/unit/pdfSecurity.spec.ts > pdfSecurity > detects when a PDF is encrypted 3ms
+ ✓ tests/unit/pdfSecurity.spec.ts > pdfSecurity > detects when a PDF needs a password 1ms
+ ✓ tests/unit/pdfSecurity.spec.ts > pdfSecurity > protects a PDF with viewer permissions 2ms
+ ✓ tests/unit/pdfSecurity.spec.ts > pdfSecurity > detects restriction-only PDFs 1ms
+ ✓ tests/unit/pdfSecurity.spec.ts > pdfSecurity > detects password-required PDFs when the loader reports NEEDS PASSWORD 1ms
+ ✓ tests/unit/pdfSecurity.spec.ts > pdfSecurity > rejects protecting an already protected PDF 1ms
+ ✓ tests/unit/pdfSecurity.spec.ts > pdfSecurity > unprotects an encrypted PDF with the current password 1ms
+ ✓ tests/unit/pdfSecurity.spec.ts > pdfSecurity > removes owner restrictions without a password when the PDF already opens 1ms
+ ✓ tests/unit/pdfSecurity.spec.ts > pdfSecurity > rejects unprotect when the PDF has no password 2ms
+ ✓ tests/unit/pdfSecurity.spec.ts > pdfSecurity > surfaces incorrect password errors while unprotecting 1ms
+ ✓ tests/unit/pdfSecurity.spec.ts > pdfSecurity > treats NEEDS PASSWORD after a supplied unlock password as incorrect 0ms
+ ✓ tests/unit/pdfSecurity.spec.ts > pdfSecurity > requires a known password when the PDF does not open without one 0ms
+ ✓ tests/unit/pdfSecurity.spec.ts > pdfSecurity > throws when generating owner password and crypto is unavailable 0ms
+ ✓ tests/unit/pdfSecurity.spec.ts > pdfSecurity > throws immediately on non-encrypted load errors during isPdfEncrypted 0ms
+ ✓ tests/unit/pdfSecurity.spec.ts > pdfSecurity > throws immediately on non-encrypted load errors during getPdfSecurityState 0ms
+ ✓ tests/unit/pdfSecurity.spec.ts > pdfSecurity > rejects protecting when user password is empty 0ms
+ ✓ tests/unit/pdfSecurity.spec.ts > pdfSecurity > rejects protecting when owner password equals user password 0ms
+ ✓ tests/unit/pdfSecurity.spec.ts > pdfSecurity > throws immediately on non-encrypted load errors during protectPdf 0ms
+ ✓ tests/unit/pdfSecurity.spec.ts > pdfSecurity > throws immediately on non-password errors during unprotectPdf 0ms
+stderr | tests/unit/pdfRenderer.spec.ts > pdfRenderer > propagates PDF load failures
+[KytePDF][2026-04-26T01:38:39.568Z][ERROR] Failed to load PDF document Error: locked
+    at /Users/idmcalculus/Downloads/kytepdf/tests/unit/pdfRenderer.spec.ts:50:70
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:145:11
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:915:26
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1243:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1209:10)
+    at file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1653:37
+    at Traces.$ (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/vitest/dist/chunks/traces.U4xDYhzZ.js:115:27)
+    at trace (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/vitest/dist/chunks/test.B8ej_ZHS.js:239:21)
+    at runTest (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/runner/dist/index.js:1653:12)
+
+stderr | tests/unit/pdfRenderer.spec.ts > pdfRenderer > propagates missing canvas context and render failures
+[KytePDF][2026-04-26T01:38:39.571Z][ERROR] Failed to render page 1 Error: Canvas 2D context not available
+    at Module.renderPage (/Users/idmcalculus/Downloads/kytepdf/utils/pdfRenderer.ts:28:25)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+
+stderr | tests/unit/pdfRenderer.spec.ts > pdfRenderer > propagates missing canvas context and render failures
+[KytePDF][2026-04-26T01:38:39.572Z][ERROR] Failed to render page 2 Error: render failed
+    at Object.<anonymous> (/Users/idmcalculus/Downloads/kytepdf/tests/unit/pdfRenderer.spec.ts:61:54)
+    at Object.Mock [as render] (file:///Users/idmcalculus/Downloads/kytepdf/node_modules/@vitest/spy/dist/index.js:285:34)
+    at Module.renderPage (/Users/idmcalculus/Downloads/kytepdf/utils/pdfRenderer.ts:30:16)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+
+ ✓ tests/unit/pdfRenderer.spec.ts > pdfRenderer > should load a PDF document 3ms
+ ✓ tests/unit/pdfRenderer.spec.ts > pdfRenderer > should render a page to canvas 3ms
+ ✓ tests/unit/pdfRenderer.spec.ts > pdfRenderer > propagates PDF load failures 3ms
+ ✓ tests/unit/pdfRenderer.spec.ts > pdfRenderer > propagates missing canvas context and render failures 2ms
+ ✓ tests/unit/serviceWorkerRuntime.spec.ts > serviceWorkerRuntime > classifies static caches and cacheable assets 3ms
+ ✓ tests/unit/serviceWorkerRuntime.spec.ts > serviceWorkerRuntime > only handles same-origin GET fetches 1ms
+ ✓ tests/unit/serviceWorkerRuntime.spec.ts > serviceWorkerRuntime > detects navigation requests 1ms
+ ✓ tests/unit/serviceWorkerRuntime.spec.ts > serviceWorkerRuntime > pre-caches static assets and asks the worker to skip waiting 2ms
+ ✓ tests/unit/serviceWorkerRuntime.spec.ts > serviceWorkerRuntime > deletes old caches and navigates clients when replacing an older Kyte cache 1ms
+ ✓ tests/unit/serviceWorkerRuntime.spec.ts > serviceWorkerRuntime > claims clients without navigation when no old Kyte cache exists 1ms
+ ✓ tests/unit/serviceWorkerRuntime.spec.ts > serviceWorkerRuntime > returns cached responses before fetching 2ms
+ ✓ tests/unit/serviceWorkerRuntime.spec.ts > serviceWorkerRuntime > fetches and stores cacheable responses 1ms
+ ✓ tests/unit/serviceWorkerRuntime.spec.ts > serviceWorkerRuntime > does not store failed or non-cacheable responses 3ms
+ ✓ tests/unit/serviceWorkerRuntime.spec.ts > serviceWorkerRuntime > wires service worker events 1ms
+stdout | tests/unit/EmailSuppression.spec.ts > Email Suppression State Machine > should show prompt on first try
+[KytePDF][2026-04-26T01:38:39.607Z][INFO] User skipped email collection. Next prompt in 3 operations. 
+
+stdout | tests/unit/EmailSuppression.spec.ts > Email Suppression State Machine > should set N=3 and Counter=1 after first dismissal
+[KytePDF][2026-04-26T01:38:39.609Z][INFO] User skipped email collection. Next prompt in 3 operations. 
+
+stdout | tests/unit/EmailSuppression.spec.ts > Email Suppression State Machine > should suppress for 3 operations after first dismissal
+[KytePDF][2026-04-26T01:38:39.611Z][INFO] User skipped email collection. Next prompt in 3 operations. 
+
+stdout | tests/unit/EmailSuppression.spec.ts > Email Suppression State Machine > should suppress for 3 operations after first dismissal
+[KytePDF][2026-04-26T01:38:39.611Z][DEBUG] Email prompt suppressed. Counter: 2/3 
+
+stdout | tests/unit/EmailSuppression.spec.ts > Email Suppression State Machine > should suppress for 3 operations after first dismissal
+[KytePDF][2026-04-26T01:38:39.611Z][DEBUG] Email prompt suppressed. Counter: 3/3 
+
+stdout | tests/unit/EmailSuppression.spec.ts > Email Suppression State Machine > should suppress for 3 operations after first dismissal
+[KytePDF][2026-04-26T01:38:39.611Z][INFO] User skipped email collection. Next prompt in 4 operations. 
+
+stdout | tests/unit/EmailSuppression.spec.ts > Email Suppression State Machine > should increment N to 4 after second dismissal
+[KytePDF][2026-04-26T01:38:39.612Z][INFO] User skipped email collection. Next prompt in 4 operations. 
+
+stdout | tests/unit/EmailSuppression.spec.ts > Email Suppression State Machine > should reset N to 3 after reaching 10
+[KytePDF][2026-04-26T01:38:39.613Z][INFO] User skipped email collection. Next prompt in 3 operations. 
+
+ ✓ tests/unit/EmailSuppression.spec.ts > Email Suppression State Machine > should show prompt on first try 6ms
+ ✓ tests/unit/EmailSuppression.spec.ts > Email Suppression State Machine > should set N=3 and Counter=1 after first dismissal 1ms
+ ✓ tests/unit/EmailSuppression.spec.ts > Email Suppression State Machine > should suppress for 3 operations after first dismissal 2ms
+ ✓ tests/unit/EmailSuppression.spec.ts > Email Suppression State Machine > should increment N to 4 after second dismissal 1ms
+ ✓ tests/unit/EmailSuppression.spec.ts > Email Suppression State Machine > should reset N to 3 after reaching 10 1ms
+ ✓ tests/unit/EmailSuppression.spec.ts > Email Suppression State Machine > should stop asking if email is collected 0ms
+ ✓ tests/unit/logger.spec.ts > Logger > should log info messages by default 5ms
+ ✓ tests/unit/logger.spec.ts > Logger > should not log debug messages by default 2ms
+ ✓ tests/unit/logger.spec.ts > Logger > should log debug messages when level is set to DEBUG 2ms
+ ✓ tests/unit/logger.spec.ts > Logger > should log warn messages 1ms
+ ✓ tests/unit/logger.spec.ts > Logger > should log error messages and call telemetry 1ms
+ ✓ tests/unit/logger.spec.ts > Logger > should respect the enabled flag 0ms
+ ✓ tests/unit/errorMapper.spec.ts > errorMapper > should map PDFs without passwords 3ms
+ ✓ tests/unit/errorMapper.spec.ts > errorMapper > should map already protected PDFs 2ms
+ ✓ tests/unit/errorMapper.spec.ts > errorMapper > should map incorrect password errors 3ms
+ ✓ tests/unit/errorMapper.spec.ts > errorMapper > should map password-required errors 1ms
+ ✓ tests/unit/errorMapper.spec.ts > errorMapper > should map password-protected errors 1ms
+ ✓ tests/unit/errorMapper.spec.ts > errorMapper > should map invalid PDF errors 1ms
+ ✓ tests/unit/errorMapper.spec.ts > errorMapper > should map out of memory errors 2ms
+ ✓ tests/unit/errorMapper.spec.ts > errorMapper > should map network errors 1ms
+ ✓ tests/unit/errorMapper.spec.ts > errorMapper > should return fallback for unknown errors 1ms
+ ✓ tests/unit/errorMapper.spec.ts > errorMapper > should return original message if no fallback and no mapping 0ms
+ ✓ tests/unit/telemetry.spec.ts > Telemetry > should capture exceptions when in production 4ms
+ ✓ tests/unit/telemetry.spec.ts > Telemetry > should not capture exceptions when not in production 1ms
+ ✓ tests/unit/telemetry.spec.ts > Telemetry > should log events when in production 2ms
+ ✓ tests/unit/telemetry.spec.ts > Telemetry > should handle Error objects 2ms
+ ✓ tests/unit/telemetry.spec.ts > Telemetry > should not log events when not in production 0ms
+ ✓ tests/unit/taskScheduler.spec.ts > yieldToMain > uses requestIdleCallback with a clamped timeout when available 4ms
+ ✓ tests/unit/taskScheduler.spec.ts > yieldToMain > falls back to requestAnimationFrame 1ms
+ ✓ tests/unit/taskScheduler.spec.ts > yieldToMain > falls back to setTimeout 2ms
+ ✓ tests/unit/AnnotationManager.spec.ts > AnnotationManager > should add a text annotation 3ms
+ ✓ tests/unit/AnnotationManager.spec.ts > AnnotationManager > should update an existing annotation 1ms
+ ✓ tests/unit/AnnotationManager.spec.ts > AnnotationManager > should remove an annotation 1ms
+ ✓ tests/unit/AnnotationManager.spec.ts > AnnotationManager > should return annotations grouped by page 1ms
+ ✓ tests/unit/AnnotationManager.spec.ts > AnnotationManager > should clear all annotations 0ms
+ ✓ tests/integration/CloudConversions.spec.ts > Cloud Conversions Integration > should call cloudConversionService with correct parameters for PDF to Word 4ms
+ ✓ tests/integration/CloudConversions.spec.ts > Cloud Conversions Integration > should handle OCR specifically 1ms
+ ✓ tests/unit/coordinates.spec.ts > coordinates utility > should convert top-left DOM coordinates to bottom-left PDF points 3ms
+ ✓ tests/unit/coordinates.spec.ts > coordinates utility > should adjust Y for text baseline 1ms
+
+ Test Files  43 passed (43)
+      Tests  695 passed (695)
+   Start at  02:38:33
+   Duration  6.34s (transform 4.05s, setup 2.77s, import 7.39s, tests 19.76s, environment 31.46s)
+
