@@ -46,11 +46,17 @@ export default defineConfig({
             return "vendor-pdflib";
           }
 
+          // docx — only used for DOCX generation
+          if (id.includes("/docx/")) return "vendor-docx";
+
           // SheetJS / xlsx — only used by Office conversion tools
           if (id.includes("/xlsx/")) return "vendor-xlsx";
 
           // JSZip — only used for batch ZIP downloads
           if (id.includes("/jszip/")) return "vendor-zip";
+
+          // Lucide icons
+          if (id.includes("/lucide/")) return "vendor-ui";
 
           // Everything else from node_modules → single shared vendor chunk
           return "vendor-misc";
