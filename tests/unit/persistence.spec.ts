@@ -277,11 +277,11 @@ describe("PersistenceManager", () => {
     const cursorReq = vi.mocked(mockStore.openCursor).mock.results[0].value;
     cursorReq.result = {
       value: [
-        { size: 25 }, 
-        { size: 25 }, 
+        { size: 25 },
+        { size: 25 },
         { notSize: 10 }, // Missing size
-        null,            // Not an object
-        "string",        // Not an object
+        null, // Not an object
+        "string", // Not an object
       ],
       continue: vi.fn(() => {
         cursorReq.result = null;

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BackgroundParticle,
+  bootstrapKytePdf,
   createBackgroundAnimator,
   DASHBOARD_MARKUP,
   installBackground,
@@ -12,7 +13,6 @@ import {
   setMainMarkup,
   showDashboard,
   TOOL_ROUTES,
-  bootstrapKytePdf,
 } from "../../utils/appBootstrap";
 
 const createLogger = () => ({
@@ -141,7 +141,7 @@ describe("appBootstrap", () => {
       show: vi.fn().mockResolvedValue(true),
     };
     const doc = {
-      getElementById: vi.fn((id: string) => id === "globalDialog" ? dialogMock : null),
+      getElementById: vi.fn((id: string) => (id === "globalDialog" ? dialogMock : null)),
     };
     const win = {
       addEventListener: vi.fn((_event: string, cb: () => void) => loadCallbacks.push(cb)),
@@ -160,7 +160,9 @@ describe("appBootstrap", () => {
 
     controllerCallbacks[0]();
     await Promise.resolve(); // Wait for the dialog promise
-    expect(dialogMock.show).toHaveBeenCalledWith(expect.objectContaining({ title: "Update Available" }));
+    expect(dialogMock.show).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Update Available" }),
+    );
     expect(win.location.reload).toHaveBeenCalledTimes(1);
 
     // Try again with rejected dialog
@@ -199,7 +201,7 @@ describe("appBootstrap", () => {
     } as unknown as Window;
 
     installServiceWorkerRegistration({ logger, navigator: appNavigator, prod: true, window: win });
-    
+
     // Trigger update
     controllerCallbacks[0]();
     expect(win.location.reload).toHaveBeenCalledTimes(1);
@@ -329,7 +331,7 @@ describe("appBootstrap", () => {
       navigator: appNavigator,
       window: win,
     });
-    
+
     expect(logger.info).toHaveBeenCalledWith("KytePDF Application Starting");
     expect(result).toBeNull(); // Because getElementById("bg-canvas") returns null
   });

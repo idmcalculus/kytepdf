@@ -190,8 +190,13 @@ describe("pdfSecurity", () => {
     await expect(
       protectPdf(new Uint8Array([1]), {
         userPassword: "pass",
-        permissions: { allowPrinting: true, allowCopying: true, allowModifying: true, allowAnnotating: true },
-      })
+        permissions: {
+          allowPrinting: true,
+          allowCopying: true,
+          allowModifying: true,
+          allowAnnotating: true,
+        },
+      }),
     ).rejects.toThrow("crypto.getRandomValues is not available");
 
     Object.defineProperty(globalThis, "crypto", { value: cryptoOriginal, configurable: true });
@@ -205,7 +210,7 @@ describe("pdfSecurity", () => {
   it("throws immediately on non-encrypted load errors during getPdfSecurityState", async () => {
     pdfConfigMock.load.mockRejectedValueOnce(new Error("File corrupted"));
     await expect(getPdfSecurityState(new Uint8Array([1]))).rejects.toThrow("File corrupted");
-    
+
     // Also test throwing from the second blank-password attempt
     pdfConfigMock.load
       .mockRejectedValueOnce(new Error("NEEDS PASSWORD"))
@@ -217,8 +222,13 @@ describe("pdfSecurity", () => {
     await expect(
       protectPdf(new Uint8Array([1]), {
         userPassword: "",
-        permissions: { allowPrinting: true, allowCopying: true, allowModifying: true, allowAnnotating: true },
-      })
+        permissions: {
+          allowPrinting: true,
+          allowCopying: true,
+          allowModifying: true,
+          allowAnnotating: true,
+        },
+      }),
     ).rejects.toThrow("Enter a password to protect this PDF.");
   });
 
@@ -227,8 +237,13 @@ describe("pdfSecurity", () => {
       protectPdf(new Uint8Array([1]), {
         userPassword: "same",
         ownerPassword: "same",
-        permissions: { allowPrinting: true, allowCopying: true, allowModifying: true, allowAnnotating: true },
-      })
+        permissions: {
+          allowPrinting: true,
+          allowCopying: true,
+          allowModifying: true,
+          allowAnnotating: true,
+        },
+      }),
     ).rejects.toThrow("Owner password must be different");
   });
 
@@ -237,8 +252,13 @@ describe("pdfSecurity", () => {
     await expect(
       protectPdf(new Uint8Array([1]), {
         userPassword: "pass",
-        permissions: { allowPrinting: true, allowCopying: true, allowModifying: true, allowAnnotating: true },
-      })
+        permissions: {
+          allowPrinting: true,
+          allowCopying: true,
+          allowModifying: true,
+          allowAnnotating: true,
+        },
+      }),
     ).rejects.toThrow("Corrupt stream");
   });
 
@@ -247,7 +267,7 @@ describe("pdfSecurity", () => {
     pdfConfigMock.load
       .mockRejectedValueOnce(new Error("Input document is encrypted"))
       .mockResolvedValueOnce({ save: vi.fn() });
-    
+
     // The inner attempt throws unknown error
     pdfConfigMock.load.mockRejectedValueOnce(new Error("System error"));
     await expect(unprotectPdf(new Uint8Array([1]), "pass")).rejects.toThrow("System error");
