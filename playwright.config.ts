@@ -20,6 +20,10 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
     {
+      name: "ci-chrome",
+      use: { ...devices["Desktop Chrome"], channel: "chrome" },
+    },
+    {
       name: "firefox",
       use: { ...devices["Desktop Firefox"] },
     },
