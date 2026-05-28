@@ -24,7 +24,7 @@ const createStorageMock = () => {
     },
     get length(): number {
       return Object.keys(store).length;
-    }
+    },
   };
 };
 

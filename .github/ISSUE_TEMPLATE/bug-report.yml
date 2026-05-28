@@ -1,0 +1,81 @@
+name: "🐛 Bug Report"
+description: "Report a bug or unexpected behavior in KytePDF"
+title: "Bug: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report! To help us reproduce and fix the issue quickly, please fill out the form below.
+  - type: textarea
+    id: description
+    attributes:
+      label: "Description of the Bug"
+      description: "A clear and concise description of what the bug is."
+      placeholder: "When I try to merge two PDFs, the download fails and..."
+    validations:
+      required: true
+  - type: checkboxes
+    id: components
+    attributes:
+      label: "Affected Components"
+      description: "Select all components affected by this bug."
+      options:
+        - label: "PDF Creator / Editor"
+        - label: "Conversion Tools (Image, Docx, Excel, etc.)"
+        - label: "PDF Signing & Placement (PdfSign)"
+        - label: "Cloud Conversion Gateway (LibreOffice / OCR)"
+        - label: "Offline Mode / PWA / Service Worker"
+        - label: "UI / Styling / Accessibility"
+        - label: "Performance / Large File Handling"
+  - type: dropdown
+    id: environment
+    attributes:
+      label: "Environment Context"
+      description: "Where did you run into this bug?"
+      options:
+        - "Production (https://kytepdf.com or Netlify deployment)"
+        - "Local Development (bun run dev / vite)"
+        - "Docker Container (cloud-gateway)"
+        - "Other"
+      default: 0
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Steps to Reproduce"
+      description: "Provide a detailed list of steps to reproduce the issue."
+      placeholder: |
+        1. Open KytePDF
+        2. Select 'Image to PDF' tool
+        3. Upload a large PNG file
+        4. Click 'Convert' and observe the crash
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Expected Behavior"
+      description: "A clear and concise description of what you expected to happen."
+      placeholder: "The PDF should convert smoothly and prompt for download."
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: "Browser & OS Info"
+      description: "For example: Chrome 124 on macOS 14.4"
+      placeholder: "Chrome 124 / macOS 14.4"
+    validations:
+      required: true
+  - type: textarea
+    id: console-logs
+    attributes:
+      label: "Console Logs"
+      description: "Please copy-paste any relevant browser console logs or CLI server error messages."
+      render: shell
+      placeholder: "Uncaught TypeError: localStorage.clear is not a function..."
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: "Additional Context"
+      description: "Any other details, file samples, or context that might be helpful."
