@@ -1,6 +1,60 @@
 import { beforeEach, vi } from "vitest";
 import "fake-indexeddb/auto";
 
+// Polyfill/Mock localStorage and sessionStorage for environments (like Bun or Node v24+)
+// where native Web Storage might conflict with jsdom/happy-dom or be incomplete.
+const createStorageMock = () => {
+  let store: Record<string, string> = {};
+  return {
+    getItem: (key: string): string | null => {
+      return key in store ? store[key] : null;
+    },
+    setItem: (key: string, value: string): void => {
+      store[key] = String(value);
+    },
+    removeItem: (key: string): void => {
+      delete store[key];
+    },
+    clear: (): void => {
+      store = {};
+    },
+    key: (index: number): string | null => {
+      const keys = Object.keys(store);
+      return keys[index] || null;
+    },
+    get length(): number {
+      return Object.keys(store).length;
+    }
+  };
+};
+
+const localStorageMock = createStorageMock();
+const sessionStorageMock = createStorageMock();
+
+if (typeof window !== "undefined") {
+  Object.defineProperty(window, "localStorage", {
+    value: localStorageMock,
+    writable: true,
+    configurable: true,
+  });
+  Object.defineProperty(window, "sessionStorage", {
+    value: sessionStorageMock,
+    writable: true,
+    configurable: true,
+  });
+}
+
+Object.defineProperty(globalThis, "localStorage", {
+  value: localStorageMock,
+  writable: true,
+  configurable: true,
+});
+Object.defineProperty(globalThis, "sessionStorage", {
+  value: sessionStorageMock,
+  writable: true,
+  configurable: true,
+});
+
 // Polyfill File/Blob.arrayBuffer for jsdom
 if (typeof File !== "undefined" && !File.prototype.arrayBuffer) {
   File.prototype.arrayBuffer = () => Promise.resolve(new ArrayBuffer(0));
