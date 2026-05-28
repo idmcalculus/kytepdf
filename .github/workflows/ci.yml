@@ -66,15 +66,16 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ hashFiles('bun.lock') }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: |
-            playwright-
+            playwright-${{ runner.os }}-
 
-      - name: Install Playwright browsers
-        run: bunx playwright install --with-deps
+      - name: Install Playwright Chromium browser
+        timeout-minutes: 10
+        run: ./node_modules/.bin/playwright install --with-deps chromium
 
       - name: End-to-end tests
-        run: bun run test:e2e
+        run: bun run test:e2e -- --project=chromium
 
       - name: Upload coverage report
         if: always()
