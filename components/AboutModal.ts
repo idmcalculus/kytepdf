@@ -21,7 +21,7 @@ export class AboutModal extends HTMLElement {
             </p>
             
             <div class="about-contribute">
-              <p>Want to contribute? Check out the project on <a href="https://github.com/nicholasadamou/kytepdf" target="_blank" rel="noopener">GitHub</a>!</p>
+              <p>Want to contribute? Check out the project on <a href="https://github.com/idmcalculus/kytepdf" target="_blank" rel="noopener">GitHub</a>!</p>
             </div>
 
             <div class="about-credits">
