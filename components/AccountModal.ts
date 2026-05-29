@@ -421,8 +421,8 @@ export class AccountModal extends BaseComponent {
 
   private renderUnavailable() {
     return `
-      <div class="account-alert error" role="alert">
-        Account features are not available in this build. Please contact support.
+      <div class="account-alert info" role="status">
+        Account sign-in is not enabled in this build. You can keep using Kyte's local PDF tools without signing in.
       </div>
     `;
   }

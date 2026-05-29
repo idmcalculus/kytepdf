@@ -400,6 +400,12 @@ account-modal.is-open {
     background: rgba(16, 185, 129, 0.1);
     border: 1px solid rgba(16, 185, 129, 0.24);
   }
+
+  &.info {
+    color: #cbd5e1;
+    background: rgba(148, 163, 184, 0.08);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+  }
 }
 
 .account-summary,
