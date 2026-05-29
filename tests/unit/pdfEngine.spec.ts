@@ -133,6 +133,29 @@ describe("pdfEngine", () => {
     expect(result).toBeInstanceOf(Uint8Array);
   });
 
+  it("uses lower render scale for aggressive compression profiles", async () => {
+    const { pdfjsLib } = await import("../../utils/pdfConfig");
+    const getViewport = vi.fn().mockReturnValue({ height: 100, width: 100 });
+    vi.mocked(pdfjsLib.getDocument).mockReturnValueOnce({
+      promise: Promise.resolve({
+        getPage: vi.fn().mockResolvedValue({
+          getViewport,
+          render: vi.fn().mockReturnValue({ promise: Promise.resolve() }),
+        }),
+        numPages: 1,
+      }),
+    } as any);
+
+    await compressPdf(
+      new File([new Uint8Array(1024 * 100)], "test.pdf", { type: "application/pdf" }),
+      10,
+      vi.fn(),
+      { targetRatio: 0.1 },
+    );
+
+    expect(getViewport).toHaveBeenCalledWith({ scale: 0.85 });
+  });
+
   it("should embed text annotations into a PDF", async () => {
     const pdfData = new Uint8Array([1, 2, 3]);
     const annotations = [

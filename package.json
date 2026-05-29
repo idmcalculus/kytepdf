@@ -15,7 +15,10 @@
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "prepare": "husky"
+    "prepare": "husky",
+    "auth-server:install": "npm install --prefix auth-server",
+    "auth-server:dev": "npm run dev --prefix auth-server",
+    "auth-server:start": "npm run start --prefix auth-server"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.10",

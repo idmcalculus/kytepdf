@@ -210,16 +210,16 @@ describe("BaseComponent", () => {
 
     it("should handle account, about, and clear-storage controls", async () => {
       const showAbout = vi.fn();
+      const showAccountModal = vi.fn();
       (window as any).showAbout = showAbout;
+      (window as any).showAccountModal = showAccountModal;
       const { persistence } = await import("../../utils/persistence");
 
       (component.querySelector("#aboutBtn") as HTMLButtonElement).click();
       expect(showAbout).toHaveBeenCalled();
 
       (component.querySelector("#userAccountBtn") as HTMLButtonElement).click();
-      expect((document.getElementById("globalDialog") as any).show).toHaveBeenCalledWith(
-        expect.objectContaining({ title: "User Account" }),
-      );
+      expect(showAccountModal).toHaveBeenCalled();
 
       const clearLink = component.querySelector("#clearStorageLink") as HTMLAnchorElement;
       clearLink.click();
@@ -227,6 +227,7 @@ describe("BaseComponent", () => {
       expect(persistence.delete).toHaveBeenCalledWith("test-tool");
 
       delete (window as any).showAbout;
+      delete (window as any).showAccountModal;
     });
   });
 

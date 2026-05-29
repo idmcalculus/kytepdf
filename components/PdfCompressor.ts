@@ -117,7 +117,7 @@ export class PdfCompressor extends BaseComponent {
     });
 
     targetSizeInput.addEventListener("input", () => {
-      compressBtn.disabled = !this.selectedFile || !targetSizeInput.value;
+      this.updateCompressionButtonState();
       this.checkWarning();
     });
 
@@ -197,6 +197,7 @@ export class PdfCompressor extends BaseComponent {
         estSizeInfo.classList.remove("hidden");
       }
     }
+    this.updateCompressionButtonState();
     this.checkWarning();
   }
 
@@ -215,6 +216,7 @@ export class PdfCompressor extends BaseComponent {
     (this.querySelector("#fileSize") as HTMLElement).textContent = this.formatBytes(
       this.selectedFile.size,
     );
+    this.updateTargetSizeLimit();
     (this.querySelector("#fileInfo") as HTMLElement).classList.remove("hidden");
     (this.querySelector("#dropZone") as HTMLElement).classList.add("hidden");
     (this.querySelector("#mainLayout") as HTMLElement).classList.remove("hidden");
@@ -235,9 +237,7 @@ export class PdfCompressor extends BaseComponent {
       (this.querySelector("#estSizeInfo") as HTMLElement).classList.remove("hidden");
     }
 
-    (this.querySelector("#compressBtn") as HTMLButtonElement).disabled = !(
-      this.querySelector("#targetSize") as HTMLInputElement
-    ).value;
+    this.updateCompressionButtonState();
     this.checkWarning();
   }
 
@@ -268,7 +268,12 @@ export class PdfCompressor extends BaseComponent {
       const currentSizeKb = this.selectedFile.size / 1024;
       const targetSizeKb = parseFloat(targetSizeInput.value);
       let message = "";
-      if (targetSizeKb < currentSizeKb * 0.1)
+
+      if (!Number.isFinite(targetSizeKb) || targetSizeKb <= 0)
+        message = "Enter a valid target size.";
+      else if (targetSizeKb >= currentSizeKb)
+        message = "Enter a target smaller than the original file size.";
+      else if (targetSizeKb < currentSizeKb * 0.1)
         message = "Target size is extremely low. Text might become illegible.";
       else if (targetSizeKb < currentSizeKb * 0.3)
         message = "Target size is low. Quality will be noticeably reduced.";
@@ -279,7 +284,39 @@ export class PdfCompressor extends BaseComponent {
       } else {
         qualityWarning.classList.add("hidden");
       }
+    } else {
+      qualityWarning.classList.add("hidden");
     }
+  }
+
+  private updateTargetSizeLimit() {
+    const targetSizeInput = this.querySelector("#targetSize") as HTMLInputElement | null;
+    if (!targetSizeInput || !this.selectedFile) return;
+
+    targetSizeInput.max = String(Math.max(1, Math.floor(this.selectedFile.size / 1024)));
+  }
+
+  private getTargetSizeKb() {
+    const targetSizeInput = this.querySelector("#targetSize") as HTMLInputElement;
+    return parseFloat(targetSizeInput.value);
+  }
+
+  private isTargetSizeValid(targetSizeKb = this.getTargetSizeKb()) {
+    if (!this.selectedFile) return false;
+    if (!Number.isFinite(targetSizeKb) || targetSizeKb <= 0) return false;
+    return targetSizeKb < this.selectedFile.size / 1024;
+  }
+
+  private updateCompressionButtonState() {
+    const compressBtn = this.querySelector("#compressBtn") as HTMLButtonElement | null;
+    if (!compressBtn) return;
+    compressBtn.disabled = !this.isTargetSizeValid();
+  }
+
+  private getTargetRatio(targetSizeKb: number) {
+    if (this.selectedRatio !== null) return this.selectedRatio;
+    if (!this.selectedFile) return undefined;
+    return Math.min(0.95, Math.max(0.01, targetSizeKb / (this.selectedFile.size / 1024)));
   }
 
   async startCompression() {
@@ -290,6 +327,12 @@ export class PdfCompressor extends BaseComponent {
 
     if (!this.selectedFile) {
       logger.warn("Start compression called without a selected file");
+      return;
+    }
+
+    if (!this.isTargetSizeValid(targetSizeKb)) {
+      this.updateCompressionButtonState();
+      await this.checkWarning();
       return;
     }
 
@@ -305,6 +348,7 @@ export class PdfCompressor extends BaseComponent {
         (percent, status) => {
           this.updateProgress(percent, status);
         },
+        { targetRatio: this.getTargetRatio(targetSizeKb) },
       );
 
       if (!compressedBytes) throw new Error("Compression failed to produce output");

@@ -261,6 +261,7 @@ export async function compressPdf(
   file: File,
   targetSizeKb: number,
   onProgress: (progress: number, status: string) => void,
+  options: { targetRatio?: number } = {},
 ): Promise<Uint8Array | null> {
   const arrayBuffer = await file.arrayBuffer();
   const { pdfDoc: pdf } = await loadProcessablePdfJsDocument(arrayBuffer);
@@ -273,10 +274,17 @@ export async function compressPdf(
 
   let minQuality = 0.01;
   let maxQuality = 0.95;
-  let currentScale = 1.0; // Start at 1.0 for better initial guess
-  let bestBuffer: Uint8Array | null = null;
+  const originalSizeKb = Math.max(file.size / 1024, targetSizeKb);
+  const targetRatio = Math.min(
+    0.95,
+    Math.max(0.01, options.targetRatio ?? targetSizeKb / originalSizeKb),
+  );
+  let currentScale = getCompressionStartScale(targetRatio);
+  const maxScale = getCompressionMaxScale(targetRatio);
+  let bestUnderTarget: { buffer: Uint8Array; sizeKb: number } | null = null;
+  let smallestBuffer: { buffer: Uint8Array; sizeKb: number } | null = null;
   let iterations = 0;
-  const maxIterations = 10;
+  const maxIterations = 12;
 
   onProgress(5, "Analyzing PDF structure...");
 
@@ -328,7 +336,13 @@ export async function compressPdf(
       const pdfBytes = await currentPdf.save();
       const sizeKb = pdfBytes.length / 1024;
 
-      bestBuffer = pdfBytes;
+      if (!smallestBuffer || sizeKb < smallestBuffer.sizeKb) {
+        smallestBuffer = { buffer: pdfBytes, sizeKb };
+      }
+
+      if (sizeKb <= targetSizeKb && (!bestUnderTarget || sizeKb > bestUnderTarget.sizeKb)) {
+        bestUnderTarget = { buffer: pdfBytes, sizeKb };
+      }
 
       logger.debug(`Compression iteration ${iterations + 1}`, {
         quality,
@@ -355,6 +369,12 @@ export async function compressPdf(
         // We can try to slightly increase quality to get closer to the limit.
         minQuality = quality;
 
+        if (sizeKb < targetSizeKb * 0.65 && quality > 0.9 && currentScale < maxScale) {
+          currentScale = Math.min(maxScale, currentScale * 1.25);
+          minQuality = 0.01;
+          maxQuality = 0.95;
+        }
+
         // If we are within 5% of target, we are done.
         if (sizeKb > targetSizeKb * 0.9) {
           break;
@@ -362,7 +382,7 @@ export async function compressPdf(
       }
     } catch (err) {
       logger.error("Compression iteration error", err);
-      if (bestBuffer) break;
+      if (bestUnderTarget || smallestBuffer) break;
       throw err;
     }
 
@@ -371,7 +391,19 @@ export async function compressPdf(
   }
 
   onProgress(100, "Finalizing...");
-  return bestBuffer;
+  return bestUnderTarget?.buffer ?? smallestBuffer?.buffer ?? null;
+}
+
+function getCompressionStartScale(targetRatio: number) {
+  if (targetRatio <= 0.15) return 0.85;
+  if (targetRatio <= 0.45) return 1.15;
+  return 1.5;
+}
+
+function getCompressionMaxScale(targetRatio: number) {
+  if (targetRatio <= 0.15) return 1.0;
+  if (targetRatio <= 0.45) return 1.6;
+  return 2.4;
 }
 
 export async function convertPdfToImages(

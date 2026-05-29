@@ -2,6 +2,24 @@
   command = "bun run build"
   publish = "dist"
 
+# SPA deep-link rewrites — email verification and password reset links
+# must resolve to index.html so the app can handle the token client-side.
+[[redirects]]
+  from = "/verify-email"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/reset-password"
+  to = "/index.html"
+  status = 200
+
+# Catch-all SPA fallback (must be last)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
 [[headers]]
   for = "/*"
   [headers.values]

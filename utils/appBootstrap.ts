@@ -76,6 +76,23 @@ export function installGlobalActions({
     }
     return confirmed;
   };
+
+  (win as any).showAccountModal = (options?: { view?: string; token?: string }) => {
+    const accountModal = doc.getElementById("accountModal") as any;
+    if (accountModal) accountModal.show(options);
+  };
+
+  const url = new URL(win.location.href);
+  const token = url.searchParams.get("token");
+  if ((url.pathname === "/verify-email" || url.pathname === "/reset-password") && token) {
+    (win as any).showAccountModal({
+      view: url.pathname === "/verify-email" ? "verify-email" : "reset-password",
+      token,
+    });
+    // Don't remove the token from the URL yet — the user may need it if they
+    // accidentally close or reload mid-flow. The AccountModal clears routeToken
+    // on successful completion, at which point it's safe to clean the URL.
+  }
 }
 
 export function installErrorHandlers({
@@ -149,6 +166,8 @@ export function installServiceWorkerRegistration({
 }: Pick<BootstrapOptions, "logger" | "navigator" | "prod" | "window">) {
   if (!prod || !("serviceWorker" in appNavigator)) return;
 
+  const hadControllerOnLoad = Boolean(appNavigator.serviceWorker.controller);
+
   win.addEventListener("load", () => {
     appNavigator.serviceWorker
       .register("/sw.js")
@@ -156,7 +175,7 @@ export function installServiceWorkerRegistration({
         appLogger.info("Service worker registered");
         registration.update();
 
-        if (registration.waiting) {
+        if (hadControllerOnLoad && registration.waiting) {
           registration.waiting.postMessage({ type: "SKIP_WAITING" });
         }
 
@@ -175,14 +194,19 @@ export function installServiceWorkerRegistration({
   let hasRefreshedForServiceWorker = false;
   appNavigator.serviceWorker.addEventListener("controllerchange", () => {
     if (hasRefreshedForServiceWorker) return;
+    if (!hadControllerOnLoad) {
+      hasRefreshedForServiceWorker = true;
+      return;
+    }
     hasRefreshedForServiceWorker = true;
     // LOW-02: Show a user-facing prompt instead of silently reloading
     const dialog = win.document?.getElementById("globalDialog") as any;
     if (dialog) {
       dialog
         .show({
-          title: "Update Available",
-          message: "A new version of KytePDF is ready. Reload to apply the update?",
+          title: "Refreshing Offline Tools",
+          message:
+            "KytePDF has downloaded updated local PDF tools. Reload to finish setting up your offline workspace?",
           type: "info",
           showCancel: true,
         })

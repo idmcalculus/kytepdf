@@ -161,7 +161,10 @@ describe("appBootstrap", () => {
     controllerCallbacks[0]();
     await Promise.resolve(); // Wait for the dialog promise
     expect(dialogMock.show).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Update Available" }),
+      expect.objectContaining({
+        message: expect.stringContaining("offline workspace"),
+        title: "Refreshing Offline Tools",
+      }),
     );
     expect(win.location.reload).toHaveBeenCalledTimes(1);
 
@@ -169,6 +172,47 @@ describe("appBootstrap", () => {
     dialogMock.show.mockResolvedValueOnce(false);
     controllerCallbacks[0](); // Note: hasRefreshedForServiceWorker is true now so it returns early
     expect(win.location.reload).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not show update prompts during first-time service worker installation", async () => {
+    const logger = createLogger();
+    const loadCallbacks: Array<() => void> = [];
+    const controllerCallbacks: Array<() => void> = [];
+    const waiting = { postMessage: vi.fn() };
+    const registration = {
+      addEventListener: vi.fn(),
+      update: vi.fn(),
+      waiting,
+    };
+    const appNavigator = {
+      serviceWorker: {
+        addEventListener: vi.fn((_event: string, cb: () => void) => controllerCallbacks.push(cb)),
+        controller: null,
+        register: vi.fn().mockResolvedValue(registration),
+      },
+    } as unknown as Navigator;
+    const dialogMock = {
+      show: vi.fn().mockResolvedValue(true),
+    };
+    const win = {
+      addEventListener: vi.fn((_event: string, cb: () => void) => loadCallbacks.push(cb)),
+      location: { reload: vi.fn() },
+      document: {
+        getElementById: vi.fn((id: string) => (id === "globalDialog" ? dialogMock : null)),
+      },
+    } as unknown as Window;
+
+    installServiceWorkerRegistration({ logger, navigator: appNavigator, prod: true, window: win });
+    loadCallbacks[0]();
+    await Promise.resolve();
+
+    expect(waiting.postMessage).not.toHaveBeenCalled();
+
+    controllerCallbacks[0]();
+    await Promise.resolve();
+
+    expect(dialogMock.show).not.toHaveBeenCalled();
+    expect(win.location.reload).not.toHaveBeenCalled();
   });
 
   it("skips service worker registration outside production or unsupported browsers", () => {
@@ -320,7 +364,8 @@ describe("appBootstrap", () => {
     };
     const win = {
       addEventListener: vi.fn(),
-      location: { reload: vi.fn() },
+      location: { href: "http://localhost/", reload: vi.fn() },
+      history: { replaceState: vi.fn() },
       document: doc,
     } as unknown as Window;
 

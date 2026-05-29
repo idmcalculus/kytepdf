@@ -1,0 +1,12 @@
+{
+  "name": "auth-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file=.env --watch ./node_modules/@fortressauth/server/dist/index.js",
+    "start": "node ./node_modules/@fortressauth/server/dist/index.js"
+  },
+  "dependencies": {
+    "@fortressauth/server": "0.1.14"
+  }
+}

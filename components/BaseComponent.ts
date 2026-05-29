@@ -179,13 +179,7 @@ export class BaseComponent extends HTMLElement {
       const accountBtn = this.querySelector("#userAccountBtn") as HTMLElement | null;
       if (accountBtn) {
         accountBtn.onclick = () => {
-          this.showDialog({
-            title: "User Account",
-            message:
-              "User accounts, cloud sync, and cross-device history are coming soon! For now, all your data stays safely on this browser.",
-            type: "info",
-            confirmText: "Get Notified",
-          });
+          if ((window as any).showAccountModal) (window as any).showAccountModal();
         };
       }
 

@@ -106,7 +106,9 @@ describe("PdfCompressor", () => {
   });
 
   it("should start compression and show success", async () => {
-    const file = new File(["test content"], "test.pdf", { type: "application/pdf" });
+    const file = new File([new Uint8Array(100 * 1024)], "test.pdf", {
+      type: "application/pdf",
+    });
     await component.handleFiles(asFileList([file]));
 
     const _compressBtn = component.querySelector("#compressBtn") as HTMLButtonElement;
@@ -116,7 +118,12 @@ describe("PdfCompressor", () => {
     });
     await component.startCompression();
 
-    expect(compressPdf).toHaveBeenCalled();
+    expect(compressPdf).toHaveBeenCalledWith(
+      expect.any(File),
+      expect.any(Number),
+      expect.any(Function),
+      expect.objectContaining({ targetRatio: 0.4 }),
+    );
     expect(component.querySelector("#percentText")?.textContent).toBe("42%");
     expect(component.querySelector("#statusText")?.textContent).toBe("Optimizing pages...");
     expect(persistence.addJob).toHaveBeenCalled();
@@ -298,6 +305,28 @@ describe("PdfCompressor", () => {
       targetSizeInput.dispatchEvent(new Event("input"));
       await flush();
       expect(warning.classList.contains("hidden")).toBe(true);
+    });
+
+    it("caps custom targets below the original file size", async () => {
+      await component.handleFiles(asFileList([pdfFile("large.pdf", 100 * 1024)]));
+
+      (component.querySelector("#customPresetBtn") as HTMLButtonElement).click();
+
+      const targetSizeInput = component.querySelector("#targetSize") as HTMLInputElement;
+      const compressBtn = component.querySelector("#compressBtn") as HTMLButtonElement;
+      const warning = component.querySelector("#qualityWarning") as HTMLElement;
+
+      expect(targetSizeInput.max).toBe("100");
+
+      targetSizeInput.value = "101";
+      targetSizeInput.dispatchEvent(new Event("input"));
+      await flush();
+
+      expect(compressBtn.disabled).toBe(true);
+      expect(warning.textContent).toContain("smaller than the original");
+
+      await component.startCompression();
+      expect(compressPdf).not.toHaveBeenCalled();
     });
 
     it("returns early when compression starts without a selected file", async () => {

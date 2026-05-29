@@ -53,6 +53,7 @@ describe("PdfCreator", () => {
     document.body.innerHTML = '<div id="globalDialog"></div>';
     (document.getElementById("globalDialog") as any).show = vi.fn().mockResolvedValue(true);
     (window as any).showAbout = vi.fn();
+    (window as any).showAccountModal = vi.fn();
     Object.defineProperty(window, "innerWidth", { configurable: true, value: originalInnerWidth });
     HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
 
@@ -396,9 +397,7 @@ describe("PdfCreator", () => {
     (component.querySelector("#backToDash") as HTMLButtonElement).click();
 
     expect((window as any).showAbout).toHaveBeenCalled();
-    expect((document.getElementById("globalDialog") as any).show).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "User Account" }),
-    );
+    expect((window as any).showAccountModal).toHaveBeenCalled();
     expect(backSpy).toHaveBeenCalled();
 
     setInputValue(component, "#fileNameInput", "  client-brief.pdf");

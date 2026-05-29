@@ -28,6 +28,10 @@ export default defineConfig({
         "vitest.config.ts",
       ],
     },
-    include: ["tests/unit/**/*.{test,spec}.{js,ts}", "tests/integration/**/*.{test,spec}.{js,ts}"],
+    include: [
+      "tests/**/*.{test,spec}.{js,ts}",
+      // Exclude Playwright e2e specs — those run via `playwright test`, not Vitest.
+      "!tests/e2e/**",
+    ],
   },
 });

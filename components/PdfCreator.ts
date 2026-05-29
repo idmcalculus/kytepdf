@@ -1490,13 +1490,7 @@ export class PdfCreator extends BaseComponent {
 
     const accountBtn = this.querySelector("#userAccountBtn") as HTMLElement | null;
     accountBtn?.addEventListener("click", () => {
-      void this.showDialog({
-        title: "User Account",
-        message:
-          "Optional cloud sync and cross-device history are coming soon. Your draft and generated documents stay local by default.",
-        type: "info",
-        confirmText: "Get Notified",
-      });
+      if ((window as any).showAccountModal) (window as any).showAccountModal();
     });
   }
 

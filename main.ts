@@ -15,6 +15,7 @@ import "./components/KyteDialog.ts";
 import "./components/AboutModal.ts";
 import "./components/EmailCollectionModal.ts";
 import "./components/CloudConsentModal.ts";
+import "./components/AccountModal.ts";
 import "./components/KyteFooter.ts";
 import { createIcons, icons } from "lucide";
 import { bootstrapKytePdf } from "./utils/appBootstrap.ts";
