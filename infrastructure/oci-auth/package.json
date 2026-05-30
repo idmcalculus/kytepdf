@@ -1,0 +1,30 @@
+{
+  "name": "oci-auth-hosting",
+  "version": "0.1.0",
+  "description": "Pulumi TypeScript project for OCI Always Free auth server hosting",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "test": "npm run build && vitest run"
+  },
+  "lint-staged": {
+    "**/*.{js,ts,json}": "npx biome check --write"
+  },
+  "dependencies": {
+    "@pulumi/oci": "^4.13.0",
+    "@pulumi/pulumi": "^3.244.0",
+    "@pulumi/random": "^4.21.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.16",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^25.9.1",
+    "fast-check": "^4.8.0",
+    "js-yaml": "^4.1.1",
+    "lint-staged": "^17.0.6",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
+  }
+}

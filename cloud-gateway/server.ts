@@ -753,10 +753,11 @@ if (process.env.NODE_ENV !== "test") {
   runBootstrap();
 }
 
+export type { MultipartPayload, UploadedFile };
 export {
   Bootstrap,
-  ConversionService,
   type ConversionHandler,
+  ConversionService,
   type ExecRunner,
   FilePolicy,
   GatewayConfig,
@@ -767,8 +768,7 @@ export {
   MultipartParser,
   OcrClient,
   RateLimiter,
+  runBootstrap,
   SecurityPolicy,
   TempStorage,
-  runBootstrap,
 };
-export type { MultipartPayload, UploadedFile };

@@ -5,5 +5,4 @@ import { config } from "./config.ts";
 // Centralized configuration for PDF.js
 pdfjsLib.GlobalWorkerOptions.workerSrc = config.pdf.workerSrc;
 
-export { pdfjsLib };
-export { PDFDocument, rgb, StandardFonts, degrees };
+export { degrees, PDFDocument, pdfjsLib, rgb, StandardFonts };

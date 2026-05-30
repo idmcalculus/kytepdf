@@ -1,0 +1,3 @@
+name: oci-auth-hosting
+runtime: nodejs
+description: OCI Always Free auth server hosting for KytePDF (Caddy + auth + Postgres on ARM64 VM).

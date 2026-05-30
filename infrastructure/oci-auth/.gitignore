@@ -1,0 +1,14 @@
+# Node.js
+node_modules/
+
+# TypeScript build output
+*.js
+*.js.map
+*.d.ts
+*.d.ts.map
+
+# Pulumi stack config files (may contain encrypted secrets)
+Pulumi.*.yaml
+
+# Local state / cache
+.pulumi/

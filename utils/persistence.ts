@@ -236,7 +236,7 @@ class PersistenceManager {
    * Get quota and usage from navigator.storage
    */
   async getStorageUsage(): Promise<StorageEstimate> {
-    if (!navigator.storage || !navigator.storage.estimate) {
+    if (!navigator.storage?.estimate) {
       return { usage: 0, quota: 0 };
     }
     return await navigator.storage.estimate();

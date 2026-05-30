@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.3.10/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.4.16/schema.json",
   "assist": {
     "actions": {
       "source": {
@@ -40,5 +40,17 @@
       "!!**/bun.lock",
       "!!**/public"
     ]
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["infrastructure/oci-auth/**/*.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noTemplateCurlyInString": "off"
+          }
+        }
+      }
+    }
+  ]
 }
