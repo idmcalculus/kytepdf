@@ -5,6 +5,7 @@ import { compressPdf } from "../../utils/pdfCompression";
 import { persistence } from "../../utils/persistence";
 
 const previewMocks = vi.hoisted(() => ({
+  destroy: vi.fn().mockResolvedValue(undefined),
   getPdfPreviewErrorMessage: vi.fn(() => "Preview failed"),
   load: vi.fn().mockResolvedValue(undefined),
   next: vi.fn(),
@@ -15,6 +16,7 @@ const previewMocks = vi.hoisted(() => ({
 // Mock dependencies
 vi.mock("../../utils/persistence", () => ({
   persistence: {
+    delete: vi.fn().mockResolvedValue(undefined),
     get: vi.fn().mockResolvedValue(null),
     set: vi.fn(),
     getJobs: vi.fn().mockResolvedValue([]),
@@ -45,6 +47,7 @@ vi.mock("../../utils/pdfCompression", () => ({
 vi.mock("../../utils/pdfPreview.ts", () => ({
   getPdfPreviewErrorMessage: previewMocks.getPdfPreviewErrorMessage,
   PdfPreviewController: class {
+    destroy = previewMocks.destroy;
     load = previewMocks.load;
     next = previewMocks.next;
     prev = previewMocks.prev;
@@ -293,6 +296,23 @@ describe("PdfCompressor", () => {
       await expect(component.checkExistingSession()).resolves.toBeUndefined();
     });
 
+    it("does not execute HTML/JS embedded in a resumed filename (stored XSS regression)", async () => {
+      const maliciousName = "<img src=x onerror=window.__resumeXss=1>.pdf";
+      const savedFile = pdfFile(maliciousName);
+      vi.mocked(persistence.get).mockResolvedValueOnce(savedFile);
+      (window as any).__resumeXss = undefined;
+
+      await component.checkExistingSession();
+
+      const resumeBtn = component.querySelector("#resumeBtn") as HTMLElement;
+      expect(resumeBtn.querySelector("img")).toBeNull();
+      expect((window as any).__resumeXss).toBeUndefined();
+      // Shown as typed: not run as markup and not escaped twice.
+      expect(resumeBtn.textContent?.trim()).toBe(
+        `Resume ${maliciousName} (${component.formatBytes(savedFile.size)})`,
+      );
+    });
+
     it("restores a saved session and ignores missing or failed saved sessions", async () => {
       const savedFile = pdfFile("restored.pdf");
       const handleFiles = vi.spyOn(component, "handleFiles").mockResolvedValue(undefined);
@@ -414,6 +434,99 @@ describe("PdfCompressor", () => {
 
       await component.startCompression();
       expect(compressPdf).not.toHaveBeenCalled();
+    });
+
+    it("keeps the compress button off when a preset is chosen before any file", () => {
+      (component.querySelector('.preset-btn[data-ratio="0.1"]') as HTMLButtonElement).click();
+
+      expect((component.querySelector("#targetSize") as HTMLInputElement).value).toBe("");
+      expect(component.querySelector("#estSizeInfo")?.classList.contains("hidden")).toBe(true);
+      expect((component.querySelector("#compressBtn") as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it("compresses from the button and restores from the resume button", async () => {
+      await component.handleFiles(asFileList([pdfFile("clicked.pdf", 64 * 1024)]));
+      (component.querySelector("#compressBtn") as HTMLButtonElement).click();
+      await flush();
+      expect(compressPdf).toHaveBeenCalledTimes(1);
+
+      const restore = vi.spyOn(component, "restoreSession").mockResolvedValue(undefined);
+      (component.querySelector("#resumeBtn") as HTMLButtonElement).click();
+      expect(restore).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps the running job's file when another file is picked mid-compression", async () => {
+      await component.handleFiles(asFileList([pdfFile("first.pdf", 64 * 1024)]));
+      let finish!: (bytes: Uint8Array) => void;
+      vi.mocked(compressPdf).mockImplementationOnce(
+        () => new Promise((resolve) => (finish = resolve)),
+      );
+      const dialog = document.getElementById("globalDialog") as any;
+
+      const running = component.startCompression();
+      await flush();
+      previewMocks.load.mockClear();
+      await component.handleFiles(asFileList([pdfFile("other.pdf", 8 * 1024)]));
+
+      expect(dialog.show).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Compression in progress",
+          message: "Wait for the current compression to finish before you open another file.",
+        }),
+      );
+      expect(previewMocks.load).not.toHaveBeenCalled();
+      expect(component.querySelector("#fileName")?.textContent).toBe("first.pdf");
+
+      // A second start while running does nothing.
+      await component.startCompression();
+      expect(compressPdf).toHaveBeenCalledTimes(1);
+
+      finish(new Uint8Array(1024));
+      await running;
+
+      expect(persistence.addJob).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fileName: "first_compressed.pdf",
+          metadata: expect.objectContaining({ originalSize: 64 * 1024 }),
+        }),
+      );
+    });
+
+    it("refuses to clear saved progress mid-compression", async () => {
+      await component.handleFiles(asFileList([pdfFile("first.pdf", 64 * 1024)]));
+      let finish!: (bytes: Uint8Array) => void;
+      vi.mocked(compressPdf).mockImplementationOnce(
+        () => new Promise((resolve) => (finish = resolve)),
+      );
+      const dialog = document.getElementById("globalDialog") as any;
+      const running = component.startCompression();
+      await flush();
+
+      await component.clearFullStorage("pdf-compressor");
+
+      expect(dialog.show).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: "Wait for the current compression to finish before you clear saved progress.",
+        }),
+      );
+      expect((component as any).selectedFile?.name).toBe("first.pdf");
+
+      finish(new Uint8Array(1024));
+      await running;
+      expect(component.querySelector("#successMessage")?.classList.contains("hidden")).toBe(false);
+
+      // Once it has finished, clearing works again.
+      await component.clearFullStorage("pdf-compressor");
+      expect((component as any).selectedFile).toBeNull();
+    });
+
+    it("closes the preview document when the tool closes or re-renders", () => {
+      component.setupEventListeners();
+      expect(previewMocks.destroy).toHaveBeenCalledTimes(1);
+
+      component.remove();
+      expect(previewMocks.destroy).toHaveBeenCalledTimes(2);
+      expect((component as any).previewController).toBeNull();
     });
 
     it("returns early when compression starts without a selected file", async () => {

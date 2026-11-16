@@ -184,6 +184,32 @@ describe("PdfSplit", () => {
       await expect(component.checkExistingSession()).resolves.toBeUndefined();
     });
 
+    it("does not execute HTML/JS embedded in a resumed filename (stored XSS regression)", async () => {
+      const maliciousName = "<img src=x onerror=window.__resumeXss=1>.pdf";
+      const savedFile = pdfFile(maliciousName);
+      mocks.persistence.get.mockResolvedValueOnce(savedFile);
+      (window as any).__resumeXss = undefined;
+
+      await component.checkExistingSession();
+
+      const resumeBtn = component.querySelector("#resumeBtn") as HTMLElement;
+      expect(resumeBtn.querySelector("img")).toBeNull();
+      expect((window as any).__resumeXss).toBeUndefined();
+      // Shown as typed: not run as markup and not escaped twice.
+      expect(resumeBtn.textContent?.trim()).toBe(
+        `Resume ${maliciousName} (${component.formatBytes(savedFile.size)})`,
+      );
+    });
+
+    it("restores from the resume button and skips saving when no file is chosen", async () => {
+      const restore = vi.spyOn(component, "restoreSession").mockResolvedValue(undefined);
+      (component.querySelector("#resumeBtn") as HTMLButtonElement).click();
+      expect(restore).toHaveBeenCalledTimes(1);
+
+      await component.saveSession();
+      expect(persistence.set).not.toHaveBeenCalled();
+    });
+
     it("handles save-session failures without blocking the component", async () => {
       (component as any).selectedFile = pdfFile("autosave.pdf");
       mocks.persistence.set.mockRejectedValueOnce(new Error("quota"));
@@ -263,6 +289,34 @@ describe("PdfSplit", () => {
       expect(component.querySelector("#percentText")?.textContent).toBe("100%");
       expect(component.querySelector("#successMessage")?.classList.contains("hidden")).toBe(false);
       expect(file.name).toBe("source.pdf");
+    });
+
+    it("names the history entry after the source even when it ends in .PDF", async () => {
+      await loadFile(pdfFile("Scan.PDF"));
+      component.selectAll();
+
+      await component.startSplit();
+
+      expect(persistence.addJob).toHaveBeenCalledWith(
+        expect.objectContaining({ fileName: "Scan_extracted.pdf" }),
+      );
+    });
+
+    it("closes the previous document when another PDF is loaded and when the tool closes", async () => {
+      // A document that fails to close must not stop the next one loading.
+      const first = { numPages: 2, destroy: vi.fn().mockRejectedValue(new Error("worker gone")) };
+      const second = { numPages: 3, destroy: vi.fn().mockResolvedValue(undefined) };
+      mocks.loadPdfDocument.mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+
+      await loadFile(pdfFile("a.pdf"));
+      await loadFile(pdfFile("b.pdf"));
+      expect(first.destroy).toHaveBeenCalledTimes(1);
+      expect(second.destroy).not.toHaveBeenCalled();
+
+      mocks.thumbnailDestroy.mockClear();
+      component.remove();
+      expect(second.destroy).toHaveBeenCalledTimes(1);
+      expect(mocks.thumbnailDestroy).toHaveBeenCalledTimes(1);
     });
 
     it("extracts only explicitly selected pages in sorted order", async () => {

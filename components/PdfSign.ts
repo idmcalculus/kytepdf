@@ -1,8 +1,8 @@
-import { describeFailure } from "../utils/errorMapper.ts";
+import { describeFailure, UserFacingError } from "../utils/errorMapper.ts";
 import { logger } from "../utils/logger.ts";
 import { getPdfPreviewErrorMessage, PdfPreviewController } from "../utils/pdfPreview.ts";
 import { loadProcessablePdf } from "../utils/pdfSecurity.ts";
-import { calculateSignaturePlacement } from "../utils/pdfUtils.ts";
+import { calculateSignaturePlacement, generateOutputFilename } from "../utils/pdfUtils.ts";
 import { persistence } from "../utils/persistence.ts";
 import { BaseComponent } from "./BaseComponent.ts";
 
@@ -456,7 +456,9 @@ export class PdfSign extends BaseComponent {
     });
 
     saveTypedSigBtn.addEventListener("click", () => {
-      const text = this.sanitize(nameInput.value.trim());
+      // Drawn on a canvas, never parsed as HTML, so it is used as typed:
+      // escaping it would draw "O&#39;Brien" for "O'Brien".
+      const text = nameInput.value.trim();
       if (!text) {
         logger.warn("Empty typed signature");
         return;
@@ -599,6 +601,9 @@ export class PdfSign extends BaseComponent {
       pdfContainer.style.cursor = "crosshair";
     });
 
+    // A re-render (for example after clearing storage) replaces the old
+    // preview, so close its document first.
+    void this.previewController?.destroy();
     this.previewController = this.createPreviewController();
     (this.querySelector("#prevPage") as HTMLElement).addEventListener("click", () =>
       this.changePage(-1),
@@ -626,10 +631,28 @@ export class PdfSign extends BaseComponent {
         const resumeBtn = this.querySelector("#resumeBtn");
         if (resumeContainer && resumeBtn) {
           resumeContainer.classList.remove("hidden");
-          resumeBtn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
-            Resume ${savedFile.name} (${this.formatBytes(savedFile.size)})
-          `;
+          resumeBtn.innerHTML = "";
+
+          // Static trusted icon
+          const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          icon.setAttribute("width", "14");
+          icon.setAttribute("height", "14");
+          icon.setAttribute("viewBox", "0 0 24 24");
+          icon.setAttribute("fill", "none");
+          icon.setAttribute("stroke", "currentColor");
+          icon.setAttribute("stroke-width", "2");
+          icon.setAttribute("stroke-linecap", "round");
+          icon.setAttribute("stroke-linejoin", "round");
+          icon.style.marginRight = "4px";
+          icon.innerHTML = `<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/>`;
+          resumeBtn.appendChild(icon);
+
+          // User-controlled text via textContent (safe)
+          resumeBtn.appendChild(
+            document.createTextNode(
+              `Resume ${savedFile.name} (${this.formatBytes(savedFile.size)})`,
+            ),
+          );
         }
       }
     } catch (err) {
@@ -692,11 +715,22 @@ export class PdfSign extends BaseComponent {
     this.isDrawing = false;
   }
 
+  disconnectedCallback() {
+    void this.previewController?.destroy();
+    this.previewController = null;
+  }
+
   async handleFiles(files: FileList) {
     const file = files[0];
     if (!(await this.validateFile(file))) return;
 
     try {
+      // A placement belongs to the document it was made on.
+      this.sigPlacement = null;
+      (this.querySelector("#signaturePreview") as HTMLElement | null)?.classList.add("hidden");
+      const finalizeBtn = this.querySelector("#finalizeBtn") as HTMLButtonElement | null;
+      if (finalizeBtn) finalizeBtn.disabled = true;
+
       this.selectedFile = file;
       logger.info("File loaded for signing", { name: file.name });
       (this.querySelector("#dropZone") as HTMLElement).classList.add("hidden");
@@ -800,6 +834,12 @@ export class PdfSign extends BaseComponent {
       const sigImage = await pdfDoc.embedPng(this.signatureImage);
       const pages = pdfDoc.getPages();
       const targetPage = pages[this.sigPlacement.page - 1];
+      if (!targetPage) {
+        // The placement no longer fits this document; ask for a new one.
+        this.sigPlacement = null;
+        (this.querySelector("#signaturePreview") as HTMLElement | null)?.classList.add("hidden");
+        throw new UserFacingError("Place your signature on the document again, then sign.");
+      }
       const { width, height } = targetPage.getSize();
 
       targetPage.drawImage(sigImage, {
@@ -813,7 +853,7 @@ export class PdfSign extends BaseComponent {
       const pdfBytes = await pdfDoc.save();
       this.updateProgress(100, "Complete!");
 
-      const fileName = this.selectedFile.name.replace(".pdf", "_signed.pdf");
+      const fileName = generateOutputFilename(this.selectedFile.name, "_signed");
       await this.recordJob("Sign", fileName, pdfBytes, {
         pageNumber: this.sigPlacement.page,
       });
@@ -824,7 +864,7 @@ export class PdfSign extends BaseComponent {
       logger.error("Sign error", error);
       this.showErrorDialog(describeFailure("Failed to sign PDF.", error));
     } finally {
-      finalizeBtn.disabled = false;
+      finalizeBtn.disabled = !this.sigPlacement;
     }
   }
 }

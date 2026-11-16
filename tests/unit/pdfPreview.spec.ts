@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearPreviewLoadingState,
   getPdfPreviewErrorMessage,
   loadPdfDocument,
+  PDF_PREVIEW_LOADING_MESSAGE,
   PdfPreviewController,
   PdfThumbnailGridController,
   renderPdfPageToCanvas,
@@ -253,6 +254,27 @@ describe("PdfPreviewController", () => {
     expect(staleDoc.destroy).toHaveBeenCalled();
     expect(freshDoc.destroy).not.toHaveBeenCalled();
   });
+
+  it("frees a document that finishes opening after destroy instead of keeping it", async () => {
+    const lateDoc = { ...pdfMocks.doc, destroy: vi.fn() };
+    let finishOpening: (doc: typeof lateDoc) => void = () => {};
+    pdfMocks.getDocument.mockReturnValueOnce({
+      promise: new Promise((resolve) => {
+        finishOpening = resolve;
+      }),
+    });
+    const controller = new PdfPreviewController({ canvas: createCanvas() });
+
+    const loading = controller.load(new Uint8Array([1]));
+    // The owner goes away (e.g. the tool is closed) while the file is opening.
+    await controller.destroy();
+    finishOpening(lateDoc);
+    await loading;
+
+    expect(lateDoc.destroy).toHaveBeenCalled();
+    expect(controller.document).toBeNull();
+    expect(pdfMocks.render).not.toHaveBeenCalled();
+  });
 });
 
 describe("pdfPreview helpers", () => {
@@ -442,5 +464,187 @@ describe("PdfThumbnailGridController", () => {
 
     (globalThis as any).IntersectionObserver = originalObserver;
     (globalThis as any).requestIdleCallback = originalIdle;
+  });
+});
+
+describe("preview edge cases", () => {
+  let originalObserver: unknown;
+  let originalIdle: unknown;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    pdfMocks.getDocument.mockReturnValue({ promise: Promise.resolve(pdfMocks.doc) });
+    originalObserver = (globalThis as any).IntersectionObserver;
+    originalIdle = (globalThis as any).requestIdleCallback;
+    (globalThis as any).IntersectionObserver = undefined;
+  });
+
+  afterEach(() => {
+    (globalThis as any).IntersectionObserver = originalObserver;
+    (globalThis as any).requestIdleCallback = originalIdle;
+  });
+
+  const thumbnails = () =>
+    new PdfThumbnailGridController({
+      container: document.createElement("div"),
+      pdfDoc: pdfMocks.doc,
+    });
+
+  it("shows the default loading message", () => {
+    const container = document.createElement("div");
+    setPreviewLoadingState(container);
+    expect(container.textContent).toBe(PDF_PREVIEW_LOADING_MESSAGE);
+  });
+
+  it("does not draw a thumbnail page twice", async () => {
+    (globalThis as any).requestIdleCallback = (cb: () => void) => cb();
+    const controller = thumbnails();
+    const canvas = createCanvas();
+
+    controller.observe(document.createElement("div"), 1, canvas);
+    await flush();
+    controller.observe(document.createElement("div"), 1, canvas);
+    await flush();
+
+    expect(pdfMocks.getPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops thumbnail work that was waiting when the grid was destroyed", async () => {
+    const idle: Array<() => void> = [];
+    (globalThis as any).requestIdleCallback = (cb: () => void) => idle.push(cb);
+    const controller = thumbnails();
+
+    controller.observe(document.createElement("div"), 1, createCanvas());
+    await flush();
+    controller.destroy();
+    for (const cb of idle) cb();
+    await flush();
+
+    expect(pdfMocks.getPage).not.toHaveBeenCalled();
+  });
+
+  it("draws a page again after a destroy that interrupted its first render", async () => {
+    (globalThis as any).requestIdleCallback = (cb: () => void) => cb();
+    let finishPage!: (page: unknown) => void;
+    pdfMocks.getPage.mockImplementationOnce(() => new Promise((resolve) => (finishPage = resolve)));
+    const controller = thumbnails();
+    const canvas = createCanvas();
+
+    controller.observe(document.createElement("div"), 1, canvas);
+    await flush();
+    controller.destroy();
+    finishPage({ getViewport: pdfMocks.getViewport, render: pdfMocks.render });
+    await flush();
+
+    controller.observe(document.createElement("div"), 1, canvas);
+    await flush();
+    await flush();
+    expect(pdfMocks.getPage).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores intersection callbacks that arrive after destroy", async () => {
+    let callback: IntersectionObserverCallback = () => {};
+    (globalThis as any).IntersectionObserver = vi.fn().mockImplementation(function (
+      this: any,
+      cb: IntersectionObserverCallback,
+    ) {
+      callback = cb;
+      this.observe = vi.fn();
+      this.unobserve = vi.fn();
+      this.disconnect = vi.fn();
+    });
+    (globalThis as any).requestIdleCallback = (cb: () => void) => cb();
+    const controller = thumbnails();
+    const target = document.createElement("div");
+    controller.observe(target, 1, createCanvas());
+
+    controller.destroy();
+    callback([{ isIntersecting: true, target } as IntersectionObserverEntry], {} as any);
+    await flush();
+
+    expect(pdfMocks.getPage).not.toHaveBeenCalled();
+  });
+
+  it("keeps rendering later pages after one page fails", async () => {
+    const pageIndicator = document.createElement("span");
+    const controller = new PdfPreviewController({ canvas: createCanvas(), pageIndicator });
+    await controller.load(new Uint8Array([1]));
+
+    pdfMocks.getPage.mockRejectedValueOnce(new Error("page 2 is damaged"));
+    await expect(controller.render(2)).rejects.toThrow("page 2 is damaged");
+    await controller.render(3);
+
+    expect(pageIndicator.textContent).toBe("Page 3 of 3");
+  });
+
+  it("keeps the current page when a page cannot be drawn", async () => {
+    const canvas = createCanvas();
+    const pageIndicator = document.createElement("span");
+    const controller = new PdfPreviewController({ canvas, pageIndicator, cacheSize: 0 });
+    await controller.load(new Uint8Array([1]));
+
+    (canvas.getContext as any).mockReturnValue(null);
+    await controller.render(2);
+
+    expect(pageIndicator.textContent).toBe("Page 1 of 3");
+  });
+
+  it("skips caching blank canvases and canvases it cannot copy", async () => {
+    const originalCreateElement = document.createElement.bind(document);
+    const copies: HTMLCanvasElement[] = [];
+    vi.spyOn(document, "createElement").mockImplementation((tagName: string) => {
+      const element = originalCreateElement(tagName);
+      if (tagName === "canvas") {
+        copies.push(element as HTMLCanvasElement);
+        Object.defineProperty(element, "getContext", { configurable: true, value: () => null });
+      }
+      return element;
+    });
+    pdfMocks.getViewport.mockReturnValueOnce({ width: 0, height: 0 });
+
+    try {
+      const canvas = createCanvas();
+      copies.length = 0;
+      const controller = new PdfPreviewController({ canvas, cacheSize: 2 });
+      await controller.load(new Uint8Array([1])); // zero-size page: no copy attempted
+      expect(copies).toHaveLength(0);
+      await controller.render(2); // copy made, but it has no 2D context
+      await controller.render(1);
+
+      expect(copies).toHaveLength(2);
+      // Nothing was cached, so page 1 is drawn from the document again.
+      expect(pdfMocks.getPage.mock.calls.map(([page]) => page)).toEqual([1, 2, 1]);
+    } finally {
+      vi.mocked(document.createElement).mockRestore();
+    }
+  });
+
+  it("does not redraw from cache when the canvas has no 2D context", async () => {
+    const originalCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, "createElement").mockImplementation((tagName: string) => {
+      const element = originalCreateElement(tagName);
+      if (tagName === "canvas") {
+        Object.defineProperty(element, "getContext", {
+          configurable: true,
+          value: () => ({ clearRect: vi.fn(), drawImage: vi.fn() }),
+        });
+      }
+      return element;
+    });
+
+    try {
+      const canvas = createCanvas();
+      const pageIndicator = document.createElement("span");
+      const controller = new PdfPreviewController({ canvas, pageIndicator, cacheSize: 2 });
+      await controller.load(new Uint8Array([1]));
+      await controller.render(2);
+
+      (canvas.getContext as any).mockReturnValue(null);
+      await controller.render(1);
+
+      expect(pageIndicator.textContent).toBe("Page 2 of 3");
+    } finally {
+      vi.mocked(document.createElement).mockRestore();
+    }
   });
 });

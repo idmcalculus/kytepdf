@@ -9,7 +9,7 @@ import {
   setPreviewLoadingState,
 } from "../utils/pdfPreview.ts";
 import { loadProcessablePdf } from "../utils/pdfSecurity.ts";
-import { formatSelectionInfo } from "../utils/pdfUtils.ts";
+import { formatSelectionInfo, generateOutputFilename } from "../utils/pdfUtils.ts";
 import { persistence } from "../utils/persistence.ts";
 import { BaseComponent } from "./BaseComponent.ts";
 
@@ -93,10 +93,28 @@ export class PdfSplit extends BaseComponent {
         const resumeBtn = this.querySelector("#resumeBtn");
         if (resumeContainer && resumeBtn) {
           resumeContainer.classList.remove("hidden");
-          resumeBtn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
-            Resume ${savedFile.name} (${this.formatBytes(savedFile.size)})
-          `;
+          resumeBtn.innerHTML = "";
+
+          // Static trusted icon
+          const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          icon.setAttribute("width", "14");
+          icon.setAttribute("height", "14");
+          icon.setAttribute("viewBox", "0 0 24 24");
+          icon.setAttribute("fill", "none");
+          icon.setAttribute("stroke", "currentColor");
+          icon.setAttribute("stroke-width", "2");
+          icon.setAttribute("stroke-linecap", "round");
+          icon.setAttribute("stroke-linejoin", "round");
+          icon.style.marginRight = "4px";
+          icon.innerHTML = `<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/>`;
+          resumeBtn.appendChild(icon);
+
+          // User-controlled text via textContent (safe)
+          resumeBtn.appendChild(
+            document.createTextNode(
+              `Resume ${savedFile.name} (${this.formatBytes(savedFile.size)})`,
+            ),
+          );
         }
       }
     } catch (err) {
@@ -127,6 +145,23 @@ export class PdfSplit extends BaseComponent {
     }
   }
 
+  disconnectedCallback() {
+    this.releaseDocument();
+  }
+
+  /** Frees the thumbnail grid and the open pdf.js document (and its worker). */
+  private releaseDocument() {
+    this.thumbnailController?.destroy();
+    this.thumbnailController = null;
+    const doc = this.currentPdfDoc;
+    this.currentPdfDoc = null;
+    try {
+      void Promise.resolve(doc?.destroy?.()).catch(() => undefined);
+    } catch {
+      // A document that fails to close is dropped anyway.
+    }
+  }
+
   async handleFiles(files: FileList) {
     const file = files[0];
     if (!(await this.validateFile(file))) return;
@@ -142,6 +177,7 @@ export class PdfSplit extends BaseComponent {
 
       this.saveSession();
 
+      this.releaseDocument();
       this.currentPdfDoc = await loadPdfDocument(file);
       this.selectedPages.clear();
       this.renderPageGrid();
@@ -255,7 +291,7 @@ export class PdfSplit extends BaseComponent {
       this.updateProgress(100, "Finalizing...");
       const newPdfBytes = await newPdf.save();
 
-      const fileName = this.selectedFile.name.replace(".pdf", "_extracted.pdf");
+      const fileName = generateOutputFilename(this.selectedFile.name, "_extracted");
       await this.recordJob("Split", fileName, newPdfBytes, {
         pagesExtracted: pagesToExtract.length,
       });

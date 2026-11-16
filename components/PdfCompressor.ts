@@ -12,7 +12,31 @@ export class PdfCompressor extends BaseComponent {
 
   private selectedRatio: number | null = 0.4;
   private previewController: PdfPreviewController | null = null;
+  /** True while a compression runs; it reads the preview's document, so that must stay put. */
+  private isCompressing = false;
   protected toolKey = "pdf-compressor";
+
+  disconnectedCallback() {
+    // The preview holds the whole file (up to 1 GB) in a pdf.js worker.
+    void this.previewController?.destroy();
+    this.previewController = null;
+  }
+
+  private async showBusyMessage(action: string) {
+    await this.showDialog({
+      title: "Compression in progress",
+      message: `Wait for the current compression to finish before you ${action}.`,
+      type: "info",
+    });
+  }
+
+  async clearFullStorage(toolKey?: string) {
+    if (this.isCompressing) {
+      await this.showBusyMessage("clear saved progress");
+      return;
+    }
+    await super.clearFullStorage(toolKey);
+  }
 
   render() {
     this.innerHTML = `
@@ -127,6 +151,9 @@ export class PdfCompressor extends BaseComponent {
 
     compressBtn.addEventListener("click", () => this.startCompression());
 
+    // A re-render (for example after clearing storage) replaces the old
+    // preview, so close its document first.
+    void this.previewController?.destroy();
     this.previewController = this.createPreviewController();
 
     // Resume session bind
@@ -147,10 +174,28 @@ export class PdfCompressor extends BaseComponent {
         const resumeBtn = this.querySelector("#resumeBtn");
         if (resumeContainer && resumeBtn) {
           resumeContainer.classList.remove("hidden");
-          resumeBtn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
-            Resume ${savedFile.name} (${this.formatBytes(savedFile.size)})
-          `;
+          resumeBtn.innerHTML = "";
+
+          // Static trusted icon
+          const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          icon.setAttribute("width", "14");
+          icon.setAttribute("height", "14");
+          icon.setAttribute("viewBox", "0 0 24 24");
+          icon.setAttribute("fill", "none");
+          icon.setAttribute("stroke", "currentColor");
+          icon.setAttribute("stroke-width", "2");
+          icon.setAttribute("stroke-linecap", "round");
+          icon.setAttribute("stroke-linejoin", "round");
+          icon.style.marginRight = "4px";
+          icon.innerHTML = `<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/>`;
+          resumeBtn.appendChild(icon);
+
+          // User-controlled text via textContent (safe)
+          resumeBtn.appendChild(
+            document.createTextNode(
+              `Resume ${savedFile.name} (${this.formatBytes(savedFile.size)})`,
+            ),
+          );
         }
       }
     } catch (err) {
@@ -211,6 +256,10 @@ export class PdfCompressor extends BaseComponent {
   }
 
   async handleFiles(files: FileList) {
+    if (this.isCompressing) {
+      await this.showBusyMessage("open another file");
+      return;
+    }
     const file = files[0];
     const isValid = await this.validateFile(file, {
       maxSizeMB: PdfCompressor.MAX_FILE_SIZE_MB,
@@ -333,10 +382,12 @@ export class PdfCompressor extends BaseComponent {
     const compressBtn = this.querySelector("#compressBtn") as HTMLButtonElement;
     const targetSizeKb = parseFloat(targetSizeInput.value);
 
-    if (!this.selectedFile) {
+    const file = this.selectedFile;
+    if (!file) {
       logger.warn("Start compression called without a selected file");
       return;
     }
+    if (this.isCompressing) return;
 
     if (!this.isTargetSizeValid(targetSizeKb)) {
       this.updateCompressionButtonState();
@@ -346,12 +397,13 @@ export class PdfCompressor extends BaseComponent {
 
     compressBtn.disabled = true;
     progressSection.classList.remove("hidden");
+    this.isCompressing = true;
 
     logger.info("Starting PDF compression", { targetSizeKb });
 
     try {
       const compressedBytes = await compressPdf(
-        this.selectedFile,
+        file,
         targetSizeKb,
         (percent, status) => {
           this.updateProgress(percent, status);
@@ -363,26 +415,27 @@ export class PdfCompressor extends BaseComponent {
         },
       );
 
-      const savedPercent = calculateSavingsPercent(this.selectedFile.size, compressedBytes.length);
+      const savedPercent = calculateSavingsPercent(file.size, compressedBytes.length);
 
       (this.querySelector("#finalSizeValue") as HTMLElement).textContent = this.formatBytes(
         compressedBytes.length,
       );
       (this.querySelector("#savedPercentValue") as HTMLElement).textContent = `${savedPercent}%`;
 
-      const fileName = generateOutputFilename(this.selectedFile.name, "_compressed");
+      const fileName = generateOutputFilename(file.name, "_compressed");
       await this.recordJob("Compress", fileName, compressedBytes, {
-        originalSize: this.selectedFile.size,
+        originalSize: file.size,
         finalSize: compressedBytes.length,
         savedPercent: savedPercent,
       });
 
-      this.showSuccess(compressedBytes, this.selectedFile.name, "_compressed");
+      this.showSuccess(compressedBytes, file.name, "_compressed");
       this.showSuccessDialog(`Compression complete! Your file was reduced by ${savedPercent}%.`);
     } catch (error) {
       logger.error("Compression error", error);
       this.showErrorDialog(describeFailure("Compression failed.", error));
     } finally {
+      this.isCompressing = false;
       compressBtn.disabled = false;
     }
   }

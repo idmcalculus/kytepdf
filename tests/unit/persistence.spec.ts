@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { persistence } from "../../utils/persistence";
 
 describe("PersistenceManager", () => {
@@ -199,6 +199,18 @@ describe("PersistenceManager", () => {
     expect(result[2].id).toBe(1); // 100 - oldest
   });
 
+  it("should return an empty history when the jobs store yields no result", async () => {
+    const getJobsPromise = persistence.getJobs();
+    mockRequest.onsuccess({ target: { result: mockDb } });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const getAllReq = vi.mocked(mockJobsStore.getAll).mock.results[0].value;
+    getAllReq.result = undefined;
+    getAllReq.onsuccess({ target: getAllReq });
+
+    await expect(getJobsPromise).resolves.toEqual([]);
+  });
+
   it("should reject get jobs failures", async () => {
     const getJobsPromise = persistence.getJobs();
     mockRequest.onsuccess({ target: { result: mockDb } });
@@ -385,5 +397,32 @@ describe("PersistenceManager", () => {
     transaction.onerror({ target: { error: new Error("clear all failed") } });
 
     await expect(clearPromise).rejects.toThrow("clear all failed");
+  });
+
+  describe("when init resolves without an open database", () => {
+    beforeEach(() => {
+      vi.spyOn(persistence, "init").mockResolvedValue(undefined as unknown as IDBDatabase);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it.each([
+      ["set", () => persistence.set("key", 1)],
+      ["get", () => persistence.get("key")],
+      ["delete", () => persistence.delete("key")],
+      ["addJob", () => persistence.addJob({ tool: "t", fileName: "f.pdf", fileSize: 1 })],
+      ["getJobs", () => persistence.getJobs()],
+      ["deleteJob", () => persistence.deleteJob(1)],
+      ["clearAll", () => persistence.clearAll()],
+      ["clearSessions", () => persistence.clearSessions()],
+    ])("%s rejects instead of touching a missing database", async (_name, call) => {
+      await expect(call()).rejects.toThrow("Database not initialized");
+    });
+
+    it("estimateUsage reports zero bytes", async () => {
+      await expect(persistence.estimateUsage()).resolves.toBe(0);
+    });
   });
 });

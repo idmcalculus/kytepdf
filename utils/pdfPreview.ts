@@ -207,7 +207,7 @@ export class PdfPreviewController {
 
   async load(source: PdfPreviewSource) {
     const loadId = ++this.loadToken;
-    await this.destroy();
+    await this.release();
 
     const pdfDoc = await loadPdfDocument(source);
     if (loadId !== this.loadToken) {
@@ -280,7 +280,17 @@ export class PdfPreviewController {
     void this.render(this.requestedPageNum - 1);
   }
 
+  /**
+   * Frees the document and cancels any load still in flight, so a file that
+   * finishes opening after the owner has gone is freed instead of kept.
+   */
   async destroy() {
+    this.loadToken++;
+    await this.release();
+  }
+
+  /** Frees the current document; a load in progress keeps going. */
+  private async release() {
     this.renderToken++;
     const pdfDoc = this.pdfDoc;
     this.pdfDoc = null;

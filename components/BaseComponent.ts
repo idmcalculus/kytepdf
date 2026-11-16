@@ -1,6 +1,7 @@
 import { describeFailure, mapError } from "../utils/errorMapper.ts";
 import { logger } from "../utils/logger.ts";
-import { persistence } from "../utils/persistence.ts";
+import { mimeFromExtension, mimeFromFilename } from "../utils/mime.ts";
+import { type Job, persistence } from "../utils/persistence.ts";
 import { telemetry } from "../utils/telemetry.ts";
 
 export interface DialogOptions {
@@ -17,6 +18,26 @@ export class BaseComponent extends HTMLElement {
   protected currentPdfDoc: any = null;
   protected currentPageNum: number = 1;
   protected files: File[] = [];
+
+  /**
+   * MIME types this tool takes as input. "Reuse a recent file" only offers
+   * history entries of these types, so a PDF tool never offers a .md or .docx
+   * result it would then reject. A tool that takes other inputs sets its own
+   * list, or overrides `acceptsRecentJob` for rules a MIME list can't express.
+   */
+  protected recentFileTypes: readonly string[] = ["application/pdf"];
+
+  /** Whether a history entry can be reopened as input to this tool. */
+  protected acceptsRecentJob(job: Job): boolean {
+    return this.recentFileTypes.includes(BaseComponent.getJobMimeType(job));
+  }
+
+  /** The stored MIME type of a history entry, or one derived from its name. */
+  protected static getJobMimeType(job: Job): string {
+    return (
+      (typeof job.mimeType === "string" && job.mimeType) || mimeFromFilename(job.fileName || "")
+    );
+  }
 
   connectedCallback() {
     if ((this as any).render) (this as any).render();
@@ -224,14 +245,15 @@ export class BaseComponent extends HTMLElement {
     if (!list || !container) return;
 
     try {
-      const jobs = await persistence.getJobs();
-      if (jobs.length === 0) {
+      // Jobs come newest first; keep the three most recent this tool can open.
+      const recentJobs = (await persistence.getJobs())
+        .filter((job) => this.acceptsRecentJob(job))
+        .slice(0, 3);
+      if (recentJobs.length === 0) {
         container.classList.add("hidden");
         return;
       }
 
-      // Get last 3 unique files
-      const recentJobs = jobs.slice(0, 3);
       container.classList.remove("hidden");
       list.innerHTML = recentJobs
         .map(
@@ -247,11 +269,13 @@ export class BaseComponent extends HTMLElement {
       list.querySelectorAll(".recent-file-chip").forEach((btn) => {
         btn.addEventListener("click", async () => {
           const jobId = (btn as HTMLElement).dataset.id;
-          const job = jobs.find((j) => String(j.id) === jobId);
+          const job = recentJobs.find((j) => String(j.id) === jobId);
           if (job) {
             logger.info("Reusing recent file from history", { name: job.fileName });
-            // Convert job data back to a File
-            const file = new File([job.data], job.fileName, { type: "application/pdf" });
+            // Convert job data back to a File with its stored or name-derived MIME type
+            const file = new File([job.data], job.fileName, {
+              type: BaseComponent.getJobMimeType(job),
+            });
             if ((this as any).handleFiles) {
               (this as any).handleFiles([file] as unknown as FileList);
             }
@@ -319,25 +343,28 @@ export class BaseComponent extends HTMLElement {
    */
   async validateFile(
     file: File,
-    options: { maxSizeMB?: number; allowedTypes?: string[] } = {
-      maxSizeMB: 100,
-      allowedTypes: ["application/pdf"],
-    },
+    // Merged per-key against the defaults below rather than defaulted as a
+    // whole object: a caller passing only `{ allowedTypes: [...] }` used to
+    // drop the size limit entirely (and vice versa), because a supplied
+    // argument suppresses the default for every key at once.
+    options: { maxSizeMB?: number; allowedTypes?: string[] } = {},
   ) {
     if (!file) {
       logger.warn("File validation failed: No file provided");
       return false;
     }
 
-    if (options.allowedTypes && !options.allowedTypes.includes(file.type)) {
-      const msg = `Invalid file type: ${file.type}. Expected: ${options.allowedTypes.join(", ")}`;
+    const { maxSizeMB = 100, allowedTypes = ["application/pdf"] } = options;
+
+    if (allowedTypes && !allowedTypes.includes(file.type)) {
+      const msg = `Invalid file type: ${file.type}. Expected: ${allowedTypes.join(", ")}`;
       logger.error(msg);
       this.showErrorDialog(msg);
       return false;
     }
 
-    const maxSizeBytes = (options.maxSizeMB ?? 0) * 1024 * 1024;
-    if (options.maxSizeMB && file.size > maxSizeBytes) {
+    const maxSizeBytes = maxSizeMB * 1024 * 1024;
+    if (maxSizeMB && file.size > maxSizeBytes) {
       const msg = `This file is too large (${this.formatBytes(file.size)}). The maximum size is ${this.formatBytes(maxSizeBytes)}.`;
       logger.error(msg);
       this.showErrorDialog(msg);
@@ -345,7 +372,7 @@ export class BaseComponent extends HTMLElement {
     }
 
     // Magic-byte validation for PDF files
-    if (options.allowedTypes?.includes("application/pdf") && file.type === "application/pdf") {
+    if (allowedTypes?.includes("application/pdf") && file.type === "application/pdf") {
       try {
         const header = await file.slice(0, 5).text();
         if (!header.startsWith("%PDF-")) {
@@ -396,6 +423,24 @@ export class BaseComponent extends HTMLElement {
 
   // Standard Saving Logic
 
+  private static readonly TYPE_DESCRIPTIONS: Record<string, string> = {
+    ".pdf": "PDF Document",
+    ".zip": "ZIP Archive",
+    ".txt": "Text File",
+    ".md": "Markdown File",
+    ".docx": "Word Document",
+    ".xlsx": "Excel Spreadsheet",
+    ".pptx": "PowerPoint Presentation",
+  };
+
+  private getMimeType(extension: string): string {
+    return mimeFromExtension(extension);
+  }
+
+  private getFileTypeDescription(extension: string): string {
+    return BaseComponent.TYPE_DESCRIPTIONS[extension] ?? "File";
+  }
+
   async savePdf(
     bytes: Uint8Array | null,
     originalName: string,
@@ -405,9 +450,11 @@ export class BaseComponent extends HTMLElement {
     try {
       let suggestedName = originalName || `document${extension}`;
 
-      if (suggestedName.endsWith(".pdf")) {
-        suggestedName = suggestedName.replace(".pdf", `${suffix}${extension}`);
-      } else if (!suggestedName.endsWith(extension)) {
+      // Only a trailing ".pdf", in any case: "Scan.PDF" and "a.pdf.final.pdf"
+      // both get the suffix at the end.
+      if (/\.pdf$/i.test(suggestedName)) {
+        suggestedName = suggestedName.replace(/\.pdf$/i, `${suffix}${extension}`);
+      } else if (!suggestedName.toLowerCase().endsWith(extension.toLowerCase())) {
         suggestedName = suggestedName + extension;
       }
 
@@ -419,14 +466,15 @@ export class BaseComponent extends HTMLElement {
 
       if ("showSaveFilePicker" in window) {
         try {
-          const mimeType = extension === ".zip" ? "application/zip" : "application/pdf";
+          const mimeType = this.getMimeType(extension);
+          const typeDescription = this.getFileTypeDescription(extension);
 
           const handle = await (window as any).showSaveFilePicker({
             suggestedName,
 
             types: [
               {
-                description: extension === ".zip" ? "ZIP Archive" : "PDF Document",
+                description: typeDescription,
 
                 accept: { [mimeType]: [extension] },
               },
@@ -462,7 +510,7 @@ export class BaseComponent extends HTMLElement {
           throw err;
         }
       } else {
-        const mimeType = extension === ".zip" ? "application/zip" : "application/pdf";
+        const mimeType = this.getMimeType(extension);
 
         const blob = new Blob([bytes as any], { type: mimeType });
 
@@ -624,6 +672,7 @@ export class BaseComponent extends HTMLElement {
         fileName: fileName,
         data: pdfBytes,
         fileSize: pdfBytes.length,
+        mimeType: mimeFromFilename(fileName),
         metadata: metadata,
       };
       await persistence.addJob(job);

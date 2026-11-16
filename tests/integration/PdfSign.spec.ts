@@ -402,6 +402,78 @@ describe("PdfSign", () => {
     });
   });
 
+  describe("switching documents", () => {
+    it("forgets the old placement and turns Finalize off when another PDF is loaded", async () => {
+      await loadPdfForSigning();
+      (component as any).signatureImage = "data:image/png;base64,abc";
+      (component as any).sigPlacement = { page: 3, x: 0.1, y: 0.2, w: 0.3, h: 0.1 };
+      const preview = component.querySelector("#signaturePreview") as HTMLElement;
+      preview.classList.remove("hidden");
+      const finalizeBtn = component.querySelector("#finalizeBtn") as HTMLButtonElement;
+      finalizeBtn.disabled = false;
+
+      await component.handleFiles(
+        asFileList(new File(["other"], "other.pdf", { type: "application/pdf" })),
+      );
+
+      expect((component as any).sigPlacement).toBeNull();
+      expect(preview.classList.contains("hidden")).toBe(true);
+      expect(finalizeBtn.disabled).toBe(true);
+      // The drawn signature itself is kept for the new document.
+      expect((component as any).signatureImage).toBe("data:image/png;base64,abc");
+    });
+
+    it("asks for a new placement when the placed page does not exist", async () => {
+      const { PDFDocument } = await import("../../utils/pdfConfig");
+      await loadPdfForSigning();
+      (component as any).signatureImage = "data:image/png;base64,abc";
+      (component as any).sigPlacement = { page: 5, x: 0.1, y: 0.2, w: 0.3, h: 0.1 };
+      const finalizeBtn = component.querySelector("#finalizeBtn") as HTMLButtonElement;
+
+      await component.startFinalize();
+
+      expect((document.getElementById("globalDialog") as any).show).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "error",
+          message: "Failed to sign PDF. Place your signature on the document again, then sign.",
+        }),
+      );
+      expect((component as any).sigPlacement).toBeNull();
+      expect(finalizeBtn.disabled).toBe(true);
+      expect(vi.mocked(PDFDocument.load)).toHaveBeenCalled();
+    });
+
+    it("names the signed copy after the source even when it ends in .PDF", async () => {
+      const { persistence } = await import("../../utils/persistence");
+      await component.handleFiles(
+        asFileList(new File(["pdf"], "Scan.PDF", { type: "application/pdf" })),
+      );
+      (component as any).signatureImage = "data:image/png;base64,abc";
+      (component as any).sigPlacement = { page: 1, x: 0.1, y: 0.2, w: 0.3, h: 0.1 };
+
+      await component.startFinalize();
+
+      expect(persistence.addJob).toHaveBeenCalledWith(
+        expect.objectContaining({ fileName: "Scan_signed.pdf" }),
+      );
+    });
+
+    it("closes the preview document when the tool closes or re-renders", async () => {
+      await loadPdfForSigning();
+      const first = (component as any).previewController;
+      const firstDestroy = vi.spyOn(first, "destroy");
+
+      component.setupEventListeners();
+      expect(firstDestroy).toHaveBeenCalledTimes(1);
+
+      const second = (component as any).previewController;
+      const secondDestroy = vi.spyOn(second, "destroy");
+      component.remove();
+      expect(secondDestroy).toHaveBeenCalledTimes(1);
+      expect((component as any).previewController).toBeNull();
+    });
+  });
+
   describe("signature clearing", () => {
     it("should hide signature preview on clear", async () => {
       const clearBtn = component.querySelector("#clearSigBtn") as HTMLButtonElement;
@@ -453,7 +525,8 @@ describe("PdfSign", () => {
 
     it("should delegate renderPage to the preview controller", async () => {
       const render = vi.fn().mockResolvedValue(undefined);
-      (component as any).previewController = { render };
+      // The component frees its preview on teardown, so the fake needs destroy too.
+      (component as any).previewController = { render, destroy: vi.fn() };
 
       await component.renderPage(2);
 
@@ -499,6 +572,85 @@ describe("PdfSign", () => {
       sigCanvas.dispatchEvent(touchMove);
       sigCanvas.dispatchEvent(new Event("touchend"));
       expect((component as any).isDrawing).toBe(false);
+    });
+
+    it("draws from real pointer events only while the button is held", () => {
+      const sigCanvas = component.querySelector("#sigCanvas") as HTMLCanvasElement;
+      Object.defineProperty(sigCanvas, "getBoundingClientRect", {
+        configurable: true,
+        value: () => ({ left: 0, top: 0, width: sigCanvas.width, height: sigCanvas.height }),
+      });
+      const sigContext = { beginPath: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(), stroke: vi.fn() };
+      (component as any).sigContext = sigContext;
+
+      sigCanvas.dispatchEvent(new MouseEvent("mousemove", { clientX: 5, clientY: 5 }));
+      expect(sigContext.lineTo).not.toHaveBeenCalled();
+
+      sigCanvas.dispatchEvent(new MouseEvent("mousedown", { clientX: 10, clientY: 10 }));
+      sigCanvas.dispatchEvent(new MouseEvent("mousemove", { clientX: 20, clientY: 15 }));
+      window.dispatchEvent(new MouseEvent("mouseup"));
+      sigCanvas.dispatchEvent(new MouseEvent("mousemove", { clientX: 30, clientY: 30 }));
+
+      expect(sigContext.moveTo).toHaveBeenCalledWith(10, 10);
+      expect(sigContext.lineTo).toHaveBeenCalledTimes(1);
+      expect(sigContext.lineTo).toHaveBeenCalledWith(20, 15);
+    });
+
+    it("does not place anything before a signature exists and sizes a placed one at 2:1 by default", async () => {
+      await loadPdfForSigning();
+      const canvas = component.querySelector("#pdfCanvas") as HTMLCanvasElement;
+      const preview = component.querySelector("#signaturePreview") as HTMLElement;
+
+      canvas.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 10, clientY: 10 }));
+      expect(preview.classList.contains("hidden")).toBe(true);
+
+      (component as any).signatureImage = "data:image/png;base64,abc";
+      (component as any).sigAspectRatio = 0;
+      canvas.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 10, clientY: 10 }));
+      expect(preview.classList.contains("hidden")).toBe(false);
+      expect(preview.style.width).toBe("120px");
+      expect(preview.style.height).toBe("60px");
+    });
+
+    it("draws a typed name exactly as typed, in the last chosen font", () => {
+      const ctx = {
+        fillText: vi.fn(),
+        measureText: vi.fn().mockReturnValue({ width: 300 }),
+        font: "",
+      };
+      const getContext = vi
+        .spyOn(HTMLCanvasElement.prototype, "getContext")
+        .mockReturnValue(ctx as any);
+
+      try {
+        const fontButtons = component.querySelectorAll<HTMLElement>(".font-btn");
+        fontButtons[1].click();
+        delete fontButtons[0].dataset.font;
+        fontButtons[0].click(); // a button without a font keeps the last one
+
+        const nameInput = component.querySelector("#nameInput") as HTMLInputElement;
+        nameInput.value = "  O'Brien & <Co>  ";
+        (component.querySelector("#saveTypedSigBtn") as HTMLButtonElement).click();
+
+        expect(ctx.fillText).toHaveBeenCalledWith("O'Brien & <Co>", 180, 90);
+        expect(ctx.font).toBe("italic 120px 'Great Vibes', cursive");
+        expect(fontButtons[0].classList.contains("active")).toBe(true);
+      } finally {
+        getContext.mockRestore();
+      }
+    });
+
+    it("finalizes from the button and restores from the resume button", async () => {
+      const finalize = vi.spyOn(component, "startFinalize").mockResolvedValue(undefined);
+      const restore = vi.spyOn(component, "restoreSession").mockResolvedValue(undefined);
+
+      const finalizeBtn = component.querySelector("#finalizeBtn") as HTMLButtonElement;
+      finalizeBtn.disabled = false;
+      finalizeBtn.click();
+      (component.querySelector("#resumeBtn") as HTMLButtonElement).click();
+
+      expect(finalize).toHaveBeenCalledTimes(1);
+      expect(restore).toHaveBeenCalledTimes(1);
     });
 
     it("should place, drag, resize, and hide a signature preview on page changes", async () => {
@@ -599,6 +751,24 @@ describe("PdfSign", () => {
       expect(handleSpy).toHaveBeenCalledWith([saved]);
     });
 
+    it("does not execute HTML/JS embedded in a resumed filename (stored XSS regression)", async () => {
+      const { persistence } = await import("../../utils/persistence");
+      const maliciousName = "<img src=x onerror=window.__resumeXss=1>.pdf";
+      const saved = new File(["saved"], maliciousName, { type: "application/pdf" });
+      (persistence.get as any).mockResolvedValueOnce(saved);
+      (window as any).__resumeXss = undefined;
+
+      await component.checkExistingSession();
+
+      const resumeBtn = component.querySelector("#resumeBtn") as HTMLElement;
+      expect(resumeBtn.querySelector("img")).toBeNull();
+      expect((window as any).__resumeXss).toBeUndefined();
+      // Shown as typed: not run as markup and not escaped twice.
+      expect(resumeBtn.textContent?.trim()).toBe(
+        `Resume ${maliciousName} (${component.formatBytes(saved.size)})`,
+      );
+    });
+
     it("should tolerate session lookup, restore, and save failures", async () => {
       const { persistence } = await import("../../utils/persistence");
 
@@ -611,6 +781,12 @@ describe("PdfSign", () => {
       (component as any).selectedFile = new File(["pdf"], "state.pdf", { type: "application/pdf" });
       (persistence.set as any).mockRejectedValueOnce(new Error("save failed"));
       await expect(component.saveSession()).resolves.toBeUndefined();
+    });
+
+    it("does nothing on restore when no session is saved", async () => {
+      const handleSpy = vi.spyOn(component, "handleFiles").mockResolvedValue(undefined);
+      await component.restoreSession();
+      expect(handleSpy).not.toHaveBeenCalled();
     });
 
     it("should ignore saveSession when no PDF is selected", async () => {
