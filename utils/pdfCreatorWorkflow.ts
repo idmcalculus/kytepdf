@@ -16,7 +16,6 @@ import {
   type CreatorCvExtraSection,
   type CreatorInvoiceItem,
   type CreatorSection,
-  calculateInvoiceTotal,
   createDefaultCreatorDraft,
   createDefaultCvEducation,
   createDefaultCvExperience,
@@ -25,6 +24,16 @@ import {
   createDefaultLetterParagraph,
   createDefaultReportSection,
   getTemplateLabel,
+  normalizeInvoiceDetailsAlignment,
+  normalizeInvoiceFooterLogoPosition,
+  normalizeInvoiceStatus,
+  normalizeWatermarkSource,
+  normalizeWatermarkStyle,
+  PDF_CREATOR_CURRENCIES,
+  PDF_CREATOR_ORIENTATIONS,
+  PDF_CREATOR_PAGE_SIZES,
+  PDF_CREATOR_TEMPLATES,
+  type PdfCreatorCurrency,
   type PdfCreatorDraft,
   type PdfCreatorTemplate,
 } from "./pdfCreator.ts";
@@ -112,11 +121,19 @@ export function computePreviewMetaText(
  *
  * Pure: takes a value and returns a normalized draft.
  */
+const pickAllowed = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T =>
+  typeof value === "string" && (allowed as readonly string[]).includes(value)
+    ? (value as T)
+    : fallback;
+
 export function normalizeDraft(value: Partial<PdfCreatorDraft>): PdfCreatorDraft {
   const defaults = createDefaultCreatorDraft();
   return {
     ...defaults,
     ...value,
+    template: pickAllowed(value.template, PDF_CREATOR_TEMPLATES, defaults.template),
+    pageSize: pickAllowed(value.pageSize, PDF_CREATOR_PAGE_SIZES, defaults.pageSize),
+    orientation: pickAllowed(value.orientation, PDF_CREATOR_ORIENTATIONS, defaults.orientation),
     report: {
       ...defaults.report,
       ...value.report,
@@ -143,8 +160,24 @@ export function normalizeDraft(value: Partial<PdfCreatorDraft>): PdfCreatorDraft
     invoice: {
       ...defaults.invoice,
       ...value.invoice,
+      companyReference: value.invoice?.companyReference ?? defaults.invoice.companyReference,
+      detailsValueAlignment: normalizeInvoiceDetailsAlignment(value.invoice?.detailsValueAlignment),
+      footerLogoPosition: normalizeInvoiceFooterLogoPosition(value.invoice?.footerLogoPosition),
+      includeBusinessNameInHeader:
+        value.invoice?.includeBusinessNameInHeader ??
+        (value.invoice as { includeHeader?: boolean } | undefined)?.includeHeader ??
+        defaults.invoice.includeBusinessNameInHeader,
+      headerTextColor: value.invoice?.headerTextColor ?? defaults.invoice.headerTextColor,
+      status: normalizeInvoiceStatus(value.invoice?.status),
+      currency: pickAllowed(
+        value.invoice?.currency,
+        PDF_CREATOR_CURRENCIES,
+        defaults.invoice.currency,
+      ),
+      paidDate: value.invoice?.paidDate ?? defaults.invoice.paidDate,
       paymentDetails: value.invoice?.paymentDetails ?? defaults.invoice.paymentDetails,
       paymentLink: value.invoice?.paymentLink ?? defaults.invoice.paymentLink,
+      signature: value.invoice?.signature ?? defaults.invoice.signature,
       lineItems:
         value.invoice?.lineItems && value.invoice.lineItems.length > 0
           ? value.invoice.lineItems.map((item) => ({
@@ -154,6 +187,64 @@ export function normalizeDraft(value: Partial<PdfCreatorDraft>): PdfCreatorDraft
               unitPrice: Number.isFinite(item.unitPrice) ? item.unitPrice : 0,
             }))
           : defaults.invoice.lineItems,
+    },
+    payslip: {
+      ...defaults.payslip,
+      ...value.payslip,
+      companyReference: value.payslip?.companyReference ?? defaults.payslip.companyReference,
+      copyrightNote: value.payslip?.copyrightNote ?? defaults.payslip.copyrightNote,
+      detailsValueAlignment: normalizeInvoiceDetailsAlignment(value.payslip?.detailsValueAlignment),
+      footerLogoPosition: normalizeInvoiceFooterLogoPosition(value.payslip?.footerLogoPosition),
+      includeCompanyNameInHeader:
+        value.payslip?.includeCompanyNameInHeader ?? defaults.payslip.includeCompanyNameInHeader,
+      headerTextColor: value.payslip?.headerTextColor ?? defaults.payslip.headerTextColor,
+      currency: pickAllowed(
+        value.payslip?.currency,
+        PDF_CREATOR_CURRENCIES,
+        defaults.payslip.currency,
+      ),
+      lineItems:
+        value.payslip?.lineItems && value.payslip.lineItems.length > 0
+          ? value.payslip.lineItems.map((item) => ({
+              id: item.id || createDefaultInvoiceItem().id,
+              description: item.description ?? "",
+              quantity: Number.isFinite(item.quantity) ? item.quantity : 0,
+              unitPrice: Number.isFinite(item.unitPrice) ? item.unitPrice : 0,
+            }))
+          : defaults.payslip.lineItems,
+      deductions:
+        value.payslip?.deductions && value.payslip.deductions.length > 0
+          ? value.payslip.deductions.map((item) => ({
+              id: item.id || createDefaultInvoiceItem().id,
+              description: item.description ?? "",
+              quantity: Number.isFinite(item.quantity) ? item.quantity : 0,
+              unitPrice: Number.isFinite(item.unitPrice) ? item.unitPrice : 0,
+            }))
+          : defaults.payslip.deductions,
+      watermark: {
+        ...defaults.payslip.watermark,
+        ...value.payslip?.watermark,
+        enabled: value.payslip?.watermark?.enabled ?? defaults.payslip.watermark.enabled,
+        source: normalizeWatermarkSource(value.payslip?.watermark?.source),
+        style: normalizeWatermarkStyle(value.payslip?.watermark?.style),
+        text: value.payslip?.watermark?.text ?? defaults.payslip.watermark.text,
+        customImageDataUrl:
+          value.payslip?.watermark?.customImageDataUrl ??
+          defaults.payslip.watermark.customImageDataUrl,
+        customImageFileName:
+          value.payslip?.watermark?.customImageFileName ??
+          defaults.payslip.watermark.customImageFileName,
+        opacity: Number.isFinite(value.payslip?.watermark?.opacity)
+          ? Math.min(60, Math.max(1, value.payslip!.watermark.opacity))
+          : defaults.payslip.watermark.opacity,
+        size: Number.isFinite(value.payslip?.watermark?.size)
+          ? Math.min(90, Math.max(10, value.payslip!.watermark.size))
+          : defaults.payslip.watermark.size,
+        rotation: Number.isFinite(value.payslip?.watermark?.rotation)
+          ? Math.min(180, Math.max(-180, value.payslip!.watermark.rotation))
+          : defaults.payslip.watermark.rotation,
+        grayscale: value.payslip?.watermark?.grayscale ?? defaults.payslip.watermark.grayscale,
+      },
     },
     cv: {
       ...defaults.cv,
@@ -199,11 +290,10 @@ export function normalizeDraft(value: Partial<PdfCreatorDraft>): PdfCreatorDraft
 // ---------------------------------------------------------------------------
 
 /**
- * Formats the invoice total for display. Pure wrapper around calculateInvoiceTotal.
+ * Formats an amount in the editor's locale, as shown next to the line items.
  */
-export function formatInvoiceTotal(items: CreatorInvoiceItem[], currency: string): string {
-  const total = calculateInvoiceTotal(items);
-  return total.toLocaleString(undefined, {
+export function formatCurrencyAmount(value: number, currency: PdfCreatorCurrency): string {
+  return value.toLocaleString(undefined, {
     style: "currency",
     currency,
     maximumFractionDigits: 2,
@@ -341,6 +431,80 @@ export function moveInvoiceItem(
 }
 
 // ---------------------------------------------------------------------------
+// Payslip earning helpers
+// ---------------------------------------------------------------------------
+
+export function addPayslipItem(draft: PdfCreatorDraft): PdfCreatorDraft {
+  return {
+    ...draft,
+    payslip: {
+      ...draft.payslip,
+      lineItems: [
+        ...draft.payslip.lineItems,
+        createDefaultInvoiceItem({ description: "Earning", unitPrice: 0 }),
+      ],
+    },
+  };
+}
+
+export function removePayslipItem(draft: PdfCreatorDraft, id: string): PdfCreatorDraft | null {
+  const next = removeCollectionItem(draft.payslip.lineItems, id);
+  if (!next) return null;
+  return { ...draft, payslip: { ...draft.payslip, lineItems: next } };
+}
+
+export function movePayslipItem(
+  draft: PdfCreatorDraft,
+  id: string,
+  direction: -1 | 1,
+): PdfCreatorDraft {
+  return {
+    ...draft,
+    payslip: {
+      ...draft.payslip,
+      lineItems: moveCollectionItem(draft.payslip.lineItems, id, direction) as CreatorInvoiceItem[],
+    },
+  };
+}
+
+export function addPayslipDeduction(draft: PdfCreatorDraft): PdfCreatorDraft {
+  return {
+    ...draft,
+    payslip: {
+      ...draft.payslip,
+      deductions: [
+        ...draft.payslip.deductions,
+        createDefaultInvoiceItem({ description: "Deduction", unitPrice: 0 }),
+      ],
+    },
+  };
+}
+
+export function removePayslipDeduction(draft: PdfCreatorDraft, id: string): PdfCreatorDraft | null {
+  const next = removeCollectionItem(draft.payslip.deductions, id);
+  if (!next) return null;
+  return { ...draft, payslip: { ...draft.payslip, deductions: next } };
+}
+
+export function movePayslipDeduction(
+  draft: PdfCreatorDraft,
+  id: string,
+  direction: -1 | 1,
+): PdfCreatorDraft {
+  return {
+    ...draft,
+    payslip: {
+      ...draft.payslip,
+      deductions: moveCollectionItem(
+        draft.payslip.deductions,
+        id,
+        direction,
+      ) as CreatorInvoiceItem[],
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // CV collection helpers
 // ---------------------------------------------------------------------------
 
@@ -452,9 +616,9 @@ export function applyTemplateChange(
 
 const FLOATING_PREVIEW_BREAKPOINT = 1280;
 const FLOATING_PREVIEW_GUTTER = 24;
-const FLOATING_PREVIEW_TOP = 112;
-const FLOATING_PREVIEW_WIDTH = 420;
-const FLOATING_PREVIEW_HEIGHT = 560;
+export const FLOATING_PREVIEW_TOP = 112;
+export const FLOATING_PREVIEW_WIDTH = 420;
+export const FLOATING_PREVIEW_HEIGHT = 560;
 
 export interface PreviewPosition {
   x: number;

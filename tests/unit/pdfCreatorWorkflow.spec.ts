@@ -1,6 +1,7 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
+  calculateInvoiceTotal,
   createDefaultCreatorDraft,
   createDefaultCvEducation,
   createDefaultCvExperience,
@@ -15,12 +16,15 @@ import {
   addCvExtraSection,
   addInvoiceItem,
   addLetterParagraph,
+  addPayslipDeduction,
+  addPayslipItem,
   addReportSection,
   applyTemplateChange,
   canFloatPreview,
   clampFloatingPreviewPosition,
   computePreviewMetaText,
   computeSummaryText,
+  formatCurrencyAmount,
   getDefaultFloatingPreviewPosition,
   getDraftStatusText,
   moveCollectionItem,
@@ -29,6 +33,8 @@ import {
   moveCvExtraSection,
   moveInvoiceItem,
   moveLetterParagraph,
+  movePayslipDeduction,
+  movePayslipItem,
   moveReportSection,
   normalizeDraft,
   removeCollectionItem,
@@ -37,6 +43,8 @@ import {
   removeCvExtraSection,
   removeInvoiceItem,
   removeLetterParagraph,
+  removePayslipDeduction,
+  removePayslipItem,
   removeReportSection,
 } from "../../utils/pdfCreatorWorkflow.ts";
 
@@ -113,6 +121,37 @@ describe("computePreviewMetaText", () => {
     const text = computePreviewMetaText(null, null);
     expect(text).toContain("Preview updates automatically");
   });
+
+  it("uses the singular with a file name and the plural without one", () => {
+    expect(computePreviewMetaText(1, "invoice.pdf")).toBe("1 page · invoice.pdf");
+    expect(computePreviewMetaText(3, null)).toBe("3 pages ready");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatCurrencyAmount
+// ---------------------------------------------------------------------------
+
+describe("formatCurrencyAmount", () => {
+  const format = (value: number, currency: string) =>
+    value.toLocaleString(undefined, { style: "currency", currency, maximumFractionDigits: 2 });
+
+  it("formats an amount in the chosen currency, rounded to pence or cents", () => {
+    expect(formatCurrencyAmount(541.5, "GBP")).toBe(format(541.5, "GBP"));
+    expect(formatCurrencyAmount(1234.567, "EUR")).toBe(format(1234.57, "EUR"));
+    expect(formatCurrencyAmount(0, "USD")).toBe(format(0, "USD"));
+  });
+
+  it("shows invoice totals that ignore negative and non-finite amounts", () => {
+    const items = [
+      createDefaultInvoiceItem({ quantity: 1, unitPrice: 100 }),
+      createDefaultInvoiceItem({ quantity: -4, unitPrice: 50 }),
+      createDefaultInvoiceItem({ quantity: 2, unitPrice: Number.NaN }),
+      createDefaultInvoiceItem({ quantity: Number.POSITIVE_INFINITY, unitPrice: 9 }),
+    ];
+
+    expect(formatCurrencyAmount(calculateInvoiceTotal(items), "USD")).toBe(format(100, "USD"));
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -125,6 +164,7 @@ describe("normalizeDraft", () => {
     expect(result.template).toBe("report");
     expect(result.report.sections.length).toBeGreaterThan(0);
     expect(result.invoice.lineItems.length).toBeGreaterThan(0);
+    expect(result.payslip.lineItems.length).toBeGreaterThan(0);
     expect(result.cv.experiences.length).toBeGreaterThan(0);
   });
 
@@ -164,16 +204,151 @@ describe("normalizeDraft", () => {
     expect(result.invoice.lineItems[0].unitPrice).toBe(0);
   });
 
-  it("preserves paymentDetails and paymentLink", () => {
+  it("preserves payslip fields and normalizes invalid earning values", () => {
+    const result = normalizeDraft({
+      payslip: {
+        ...createDefaultCreatorDraft().payslip,
+        companyName: "Northstar Ltd",
+        employeeName: "Morgan Lee",
+        companyReference: "PAYROLL-REF-42",
+        copyrightNote: "© 2026 Northstar Ltd.",
+        detailsValueAlignment: "left",
+        footerLogoPosition: "right",
+        includeCompanyNameInHeader: false,
+        headerTextColor: "#00aa55",
+        payPeriod: "June 2026",
+        watermark: {
+          ...createDefaultCreatorDraft().payslip.watermark,
+          source: "invalid" as any,
+          style: "invalid" as any,
+          customImageDataUrl: "data:image/png;base64,AQID",
+          customImageFileName: "watermark.png",
+          opacity: 99,
+          size: 5,
+          rotation: 999,
+          grayscale: true,
+        },
+        lineItems: [
+          {
+            id: "earning-1",
+            description: undefined as any,
+            quantity: Number.NaN,
+            unitPrice: Number.POSITIVE_INFINITY,
+          },
+        ],
+        deductions: [
+          {
+            id: "deduction-1",
+            description: null as any,
+            quantity: Number.NaN,
+            unitPrice: undefined as any,
+          },
+        ],
+      },
+    });
+
+    expect(result.payslip.companyName).toBe("Northstar Ltd");
+    expect(result.payslip.employeeName).toBe("Morgan Lee");
+    expect(result.payslip.companyReference).toBe("PAYROLL-REF-42");
+    expect(result.payslip.copyrightNote).toBe("© 2026 Northstar Ltd.");
+    expect(result.payslip.detailsValueAlignment).toBe("left");
+    expect(result.payslip.footerLogoPosition).toBe("right");
+    expect(result.payslip.includeCompanyNameInHeader).toBe(false);
+    expect(result.payslip.headerTextColor).toBe("#00aa55");
+    expect(result.payslip.payPeriod).toBe("June 2026");
+    expect(result.payslip.watermark).toEqual(
+      expect.objectContaining({
+        source: "company-logo",
+        style: "centered",
+        customImageDataUrl: "data:image/png;base64,AQID",
+        customImageFileName: "watermark.png",
+        opacity: 60,
+        size: 10,
+        rotation: 180,
+        grayscale: true,
+      }),
+    );
+    expect(result.payslip.lineItems[0]).toEqual({
+      id: "earning-1",
+      description: "",
+      quantity: 0,
+      unitPrice: 0,
+    });
+    expect(result.payslip.deductions[0]).toEqual({
+      id: "deduction-1",
+      description: "",
+      quantity: 0,
+      unitPrice: 0,
+    });
+  });
+
+  it("preserves optional invoice metadata fields", () => {
     const result = normalizeDraft({
       invoice: {
         ...createDefaultCreatorDraft().invoice,
+        companyReference: "DEEL REF: 5099601",
+        detailsValueAlignment: "left",
+        footerLogoPosition: "center",
+        includeBusinessNameInHeader: false,
+        headerTextColor: "#111827",
+        status: "paid",
+        paidDate: "2022-11-09",
         paymentDetails: "IBAN: XX00",
         paymentLink: "https://pay.example.com",
+        signature: "Habeeb Tijani",
       },
     });
+    expect(result.invoice.companyReference).toBe("DEEL REF: 5099601");
+    expect(result.invoice.detailsValueAlignment).toBe("left");
+    expect(result.invoice.footerLogoPosition).toBe("center");
+    expect(result.invoice.includeBusinessNameInHeader).toBe(false);
+    expect(result.invoice.headerTextColor).toBe("#111827");
+    expect(result.invoice.status).toBe("paid");
+    expect(result.invoice.paidDate).toBe("2022-11-09");
     expect(result.invoice.paymentDetails).toBe("IBAN: XX00");
     expect(result.invoice.paymentLink).toBe("https://pay.example.com");
+    expect(result.invoice.signature).toBe("Habeeb Tijani");
+  });
+
+  it("falls back to pending for invalid saved invoice status", () => {
+    const result = normalizeDraft({
+      invoice: {
+        ...createDefaultCreatorDraft().invoice,
+        status: "unknown" as any,
+      },
+    });
+    expect(result.invoice.status).toBe("pending");
+  });
+
+  it("falls back to right-aligned invoice details for invalid saved alignment", () => {
+    const result = normalizeDraft({
+      invoice: {
+        ...createDefaultCreatorDraft().invoice,
+        detailsValueAlignment: "centre" as any,
+      },
+    });
+    expect(result.invoice.detailsValueAlignment).toBe("right");
+  });
+
+  it("falls back to no footer logo for an invalid saved position", () => {
+    const result = normalizeDraft({
+      invoice: {
+        ...createDefaultCreatorDraft().invoice,
+        footerLogoPosition: "bottom" as any,
+      },
+    });
+    expect(result.invoice.footerLogoPosition).toBe("none");
+  });
+
+  it("migrates the old invoice header toggle to business-name visibility", () => {
+    const legacyInvoice = {
+      ...createDefaultCreatorDraft().invoice,
+      includeBusinessNameInHeader: undefined,
+      includeHeader: false,
+    };
+    const result = normalizeDraft({ invoice: legacyInvoice as any });
+
+    expect(result.invoice.includeBusinessNameInHeader).toBe(false);
   });
 
   it("normalizes null cv experience fields", () => {
@@ -192,10 +367,150 @@ describe("normalizeDraft", () => {
     expect(result.cv.experiences[0].role).toBe("");
   });
 
+  it("gives saved items without ids fresh unique ids and blanks their missing text", () => {
+    const missing = undefined as any;
+    const result = normalizeDraft({
+      report: {
+        ...createDefaultCreatorDraft().report,
+        sections: [{ id: "", heading: missing, body: missing }],
+      },
+      letter: {
+        ...createDefaultCreatorDraft().letter,
+        paragraphs: [{ id: "", text: missing }],
+      },
+      invoice: {
+        ...createDefaultCreatorDraft().invoice,
+        lineItems: [
+          { id: "", description: "Audit", quantity: 2, unitPrice: 300 },
+          { id: "", description: "Support", quantity: 1, unitPrice: 90 },
+        ],
+      },
+      payslip: {
+        ...createDefaultCreatorDraft().payslip,
+        lineItems: [{ id: "", description: "Salary", quantity: 1, unitPrice: 4000 }],
+        deductions: [{ id: "", description: "Tax", quantity: 1, unitPrice: 800 }],
+      },
+      cv: {
+        ...createDefaultCreatorDraft().cv,
+        experiences: [{ id: "", role: "Designer" } as any],
+        education: [{ id: "" } as any],
+        additionalSections: [{ id: "", title: missing, body: missing }],
+      },
+    });
+
+    const ids = [
+      result.report.sections[0].id,
+      result.letter.paragraphs[0].id,
+      ...result.invoice.lineItems.map((item) => item.id),
+      result.payslip.lineItems[0].id,
+      result.payslip.deductions[0].id,
+      result.cv.experiences[0].id,
+      result.cv.education[0].id,
+      result.cv.additionalSections[0].id,
+    ];
+    expect(ids.every(Boolean)).toBe(true);
+    expect(new Set(ids).size).toBe(ids.length);
+
+    expect(result.report.sections[0]).toEqual(expect.objectContaining({ heading: "", body: "" }));
+    expect(result.letter.paragraphs[0].text).toBe("");
+    expect(result.invoice.lineItems.map(({ quantity, unitPrice }) => quantity * unitPrice)).toEqual(
+      [600, 90],
+    );
+    expect(result.payslip.lineItems[0].unitPrice).toBe(4000);
+    expect(result.payslip.deductions[0].description).toBe("Tax");
+    expect(result.cv.experiences[0]).toEqual(
+      expect.objectContaining({
+        role: "Designer",
+        organization: "",
+        location: "",
+        startDate: "",
+        endDate: "",
+        achievements: "",
+      }),
+    );
+    expect(result.cv.education[0]).toEqual(
+      expect.objectContaining({
+        qualification: "",
+        institution: "",
+        location: "",
+        startDate: "",
+        endDate: "",
+        details: "",
+      }),
+    );
+    expect(result.cv.additionalSections[0]).toEqual(
+      expect.objectContaining({ title: "", body: "" }),
+    );
+  });
+
+  it("replaces unknown template, page size, orientation and currencies with the defaults", () => {
+    const defaults = createDefaultCreatorDraft();
+    const result = normalizeDraft({
+      template: "brochure" as any,
+      pageSize: "a3" as any,
+      orientation: 90 as any,
+      invoice: { ...defaults.invoice, currency: "JPY" as any },
+      payslip: { ...defaults.payslip, currency: undefined as any },
+    });
+
+    expect(result.template).toBe(defaults.template);
+    expect(result.pageSize).toBe(defaults.pageSize);
+    expect(result.orientation).toBe(defaults.orientation);
+    expect(result.invoice.currency).toBe("USD");
+    expect(result.payslip.currency).toBe("GBP");
+  });
+
+  it("keeps every allowed template, page size, orientation and currency", () => {
+    for (const template of ["letter", "invoice", "payslip", "cv-harvard", "cv-modern"] as const) {
+      expect(normalizeDraft({ template }).template).toBe(template);
+    }
+    const defaults = createDefaultCreatorDraft();
+    const result = normalizeDraft({
+      pageSize: "a4",
+      orientation: "landscape",
+      invoice: { ...defaults.invoice, currency: "EUR" },
+      payslip: { ...defaults.payslip, currency: "USD" },
+    });
+
+    expect(result).toEqual(expect.objectContaining({ pageSize: "a4", orientation: "landscape" }));
+    expect(result.invoice.currency).toBe("EUR");
+    expect(result.payslip.currency).toBe("USD");
+  });
+
+  it("keeps in-range saved watermark settings unchanged", () => {
+    const result = normalizeDraft({
+      payslip: {
+        ...createDefaultCreatorDraft().payslip,
+        watermark: {
+          ...createDefaultCreatorDraft().payslip.watermark,
+          enabled: false,
+          source: "text",
+          style: "tiled",
+          text: "PRIVATE",
+          opacity: 20,
+          size: 50,
+          rotation: -45,
+        },
+      },
+    });
+
+    expect(result.payslip.watermark).toEqual(
+      expect.objectContaining({
+        enabled: false,
+        source: "text",
+        style: "tiled",
+        text: "PRIVATE",
+        opacity: 20,
+        size: 50,
+        rotation: -45,
+      }),
+    );
+  });
+
   it("property: normalizeDraft is idempotent on a valid full draft", () => {
     fc.assert(
       fc.property(
-        fc.constantFrom("report", "letter", "invoice", "cv-harvard", "cv-modern"),
+        fc.constantFrom("report", "letter", "invoice", "payslip", "cv-harvard", "cv-modern"),
         (template) => {
           const base = createDefaultCreatorDraft();
           base.template = template as any;
@@ -337,6 +652,32 @@ describe("removeLetterParagraph", () => {
   });
 });
 
+describe("removing one of several items", () => {
+  it("removes only the chosen item and leaves the source draft untouched", () => {
+    const draft = createDefaultCreatorDraft();
+    draft.cv.experiences = [createDefaultCvExperience(), createDefaultCvExperience()];
+    draft.cv.education = [createDefaultCvEducation(), createDefaultCvEducation()];
+    draft.cv.additionalSections = [createDefaultCvExtraSection(), createDefaultCvExtraSection()];
+
+    const cases = [
+      { remove: removeLetterParagraph, list: (d: typeof draft) => d.letter.paragraphs },
+      { remove: removeInvoiceItem, list: (d: typeof draft) => d.invoice.lineItems },
+      { remove: removeCvExperience, list: (d: typeof draft) => d.cv.experiences },
+      { remove: removeCvEducation, list: (d: typeof draft) => d.cv.education },
+      { remove: removeCvExtraSection, list: (d: typeof draft) => d.cv.additionalSections },
+    ];
+
+    for (const { remove, list } of cases) {
+      const [first, second] = list(draft);
+      const result = remove(draft, first.id);
+
+      expect(result).not.toBeNull();
+      expect(list(result!).map((item) => item.id)).toEqual([second.id]);
+      expect(list(draft)).toHaveLength(2);
+    }
+  });
+});
+
 describe("moveLetterParagraph", () => {
   it("moves a paragraph down", () => {
     const draft = createDefaultCreatorDraft();
@@ -374,6 +715,48 @@ describe("moveInvoiceItem", () => {
     const ids = draft.invoice.lineItems.map((i) => i.id);
     const moved = moveInvoiceItem(draft, ids[1], -1);
     expect(moved.invoice.lineItems[0].id).toBe(ids[1]);
+  });
+});
+
+describe("payslip earning mutations", () => {
+  it("adds, moves, and removes earnings with the minimum-one guard", () => {
+    const draft = createDefaultCreatorDraft();
+    const added = addPayslipItem(draft);
+    const addedId = added.payslip.lineItems.at(-1)?.id as string;
+    const moved = movePayslipItem(added, addedId, -1);
+    const removed = removePayslipItem(moved, addedId);
+
+    expect(added.payslip.lineItems).toHaveLength(draft.payslip.lineItems.length + 1);
+    expect(moved.payslip.lineItems.at(-2)?.id).toBe(addedId);
+    expect(removed?.payslip.lineItems).toHaveLength(draft.payslip.lineItems.length);
+
+    const singleItemDraft = {
+      ...draft,
+      payslip: { ...draft.payslip, lineItems: [draft.payslip.lineItems[0]] },
+    };
+    expect(removePayslipItem(singleItemDraft, singleItemDraft.payslip.lineItems[0].id)).toBeNull();
+  });
+});
+
+describe("payslip deduction mutations", () => {
+  it("adds, moves, and removes deductions with the minimum-one guard", () => {
+    const draft = createDefaultCreatorDraft();
+    const added = addPayslipDeduction(draft);
+    const addedId = added.payslip.deductions.at(-1)?.id as string;
+    const moved = movePayslipDeduction(added, addedId, -1);
+    const removed = removePayslipDeduction(moved, addedId);
+
+    expect(added.payslip.deductions).toHaveLength(draft.payslip.deductions.length + 1);
+    expect(moved.payslip.deductions.at(-2)?.id).toBe(addedId);
+    expect(removed?.payslip.deductions).toHaveLength(draft.payslip.deductions.length);
+
+    const singleItemDraft = {
+      ...draft,
+      payslip: { ...draft.payslip, deductions: [draft.payslip.deductions[0]] },
+    };
+    expect(
+      removePayslipDeduction(singleItemDraft, singleItemDraft.payslip.deductions[0].id),
+    ).toBeNull();
   });
 });
 
@@ -563,5 +946,16 @@ describe("getDefaultFloatingPreviewPosition", () => {
   it("top position is FLOATING_PREVIEW_TOP (112) when in bounds", () => {
     const result = getDefaultFloatingPreviewPosition(viewport, null, size);
     expect(result.y).toBe(112);
+  });
+
+  it("assumes the standard 420 × 560 preview when no size is given", () => {
+    expect(getDefaultFloatingPreviewPosition(viewport, 1300)).toEqual({ x: 856, y: 112 });
+    expect(getDefaultFloatingPreviewPosition({ innerWidth: 1280, innerHeight: 600 }, null)).toEqual(
+      { x: 836, y: 24 },
+    );
+    expect(clampFloatingPreviewPosition({ x: 5000, y: 5000 }, viewport)).toEqual({
+      x: 1440 - 420 - 24,
+      y: 900 - 560 - 24,
+    });
   });
 });

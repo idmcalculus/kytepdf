@@ -1,9 +1,80 @@
-import { PDFDocument, rgb, StandardFonts } from "./pdfConfig.ts";
+import { logger } from "./logger.ts";
+import { degrees, PDFDocument, rgb, StandardFonts } from "./pdfConfig.ts";
 
-export type PdfCreatorTemplate = "report" | "letter" | "invoice" | "cv-harvard" | "cv-modern";
+export type PdfCreatorTemplate =
+  | "report"
+  | "letter"
+  | "invoice"
+  | "payslip"
+  | "cv-harvard"
+  | "cv-modern";
 export type PdfCreatorPageSize = "letter" | "a4";
 export type PdfCreatorOrientation = "portrait" | "landscape";
 export type PdfCreatorCurrency = "USD" | "EUR" | "GBP";
+export type PdfCreatorInvoiceStatus = "pending" | "paid" | "overdue" | "cancelled";
+export type PdfCreatorInvoiceDetailsAlignment = "left" | "right";
+export type PdfCreatorInvoiceFooterLogoPosition = "none" | "left" | "center" | "right";
+export type PdfCreatorWatermarkSource = "company-logo" | "custom-image" | "text";
+export type PdfCreatorWatermarkStyle = "centered" | "diagonal" | "tiled";
+
+export const PDF_CREATOR_TEMPLATES = [
+  "report",
+  "letter",
+  "invoice",
+  "payslip",
+  "cv-harvard",
+  "cv-modern",
+] as const satisfies readonly PdfCreatorTemplate[];
+export const PDF_CREATOR_PAGE_SIZES = [
+  "letter",
+  "a4",
+] as const satisfies readonly PdfCreatorPageSize[];
+export const PDF_CREATOR_ORIENTATIONS = [
+  "portrait",
+  "landscape",
+] as const satisfies readonly PdfCreatorOrientation[];
+export const PDF_CREATOR_CURRENCIES = [
+  "USD",
+  "EUR",
+  "GBP",
+] as const satisfies readonly PdfCreatorCurrency[];
+
+export const WATERMARK_SOURCE_OPTIONS = [
+  { value: "company-logo", label: "Company logo" },
+  { value: "custom-image", label: "Custom image" },
+  { value: "text", label: "Custom text" },
+] as const satisfies readonly { value: PdfCreatorWatermarkSource; label: string }[];
+
+export const WATERMARK_STYLE_OPTIONS = [
+  { value: "centered", label: "Centred" },
+  { value: "diagonal", label: "Diagonal" },
+  { value: "tiled", label: "Tiled" },
+] as const satisfies readonly { value: PdfCreatorWatermarkStyle; label: string }[];
+
+export const INVOICE_FOOTER_LOGO_OPTIONS = [
+  { value: "none", label: "Do not show" },
+  { value: "left", label: "Left" },
+  { value: "center", label: "Centre" },
+  { value: "right", label: "Right" },
+] as const satisfies readonly {
+  value: PdfCreatorInvoiceFooterLogoPosition;
+  label: string;
+}[];
+
+export const INVOICE_DETAILS_ALIGNMENT_OPTIONS = [
+  { value: "right", label: "Right aligned" },
+  { value: "left", label: "Left aligned" },
+] as const satisfies readonly {
+  value: PdfCreatorInvoiceDetailsAlignment;
+  label: string;
+}[];
+
+export const INVOICE_STATUS_OPTIONS = [
+  { value: "pending", label: "Pending" },
+  { value: "paid", label: "Paid" },
+  { value: "overdue", label: "Overdue" },
+  { value: "cancelled", label: "Cancelled" },
+] as const satisfies readonly { value: PdfCreatorInvoiceStatus; label: string }[];
 
 export interface CreatorSection {
   id: string;
@@ -76,13 +147,55 @@ export interface CreatorInvoiceDraft {
   clientName: string;
   clientDetails: string;
   invoiceNumber: string;
+  companyReference: string;
+  detailsValueAlignment: PdfCreatorInvoiceDetailsAlignment;
+  footerLogoPosition: PdfCreatorInvoiceFooterLogoPosition;
+  includeBusinessNameInHeader: boolean;
+  headerTextColor: string;
+  status: PdfCreatorInvoiceStatus;
   issueDate: string;
   dueDate: string;
+  paidDate: string;
   currency: PdfCreatorCurrency;
   paymentDetails: string;
   paymentLink: string;
   notes: string;
+  signature: string;
   lineItems: CreatorInvoiceItem[];
+}
+
+export interface CreatorPayslipDraft {
+  companyName: string;
+  companyAddress: string;
+  employeeName: string;
+  employeeDetails: string;
+  payslipNumber: string;
+  companyReference: string;
+  copyrightNote: string;
+  detailsValueAlignment: PdfCreatorInvoiceDetailsAlignment;
+  footerLogoPosition: PdfCreatorInvoiceFooterLogoPosition;
+  includeCompanyNameInHeader: boolean;
+  headerTextColor: string;
+  payPeriod: string;
+  payDate: string;
+  currency: PdfCreatorCurrency;
+  notes: string;
+  lineItems: CreatorInvoiceItem[];
+  deductions: CreatorInvoiceItem[];
+  watermark: CreatorWatermarkDraft;
+}
+
+export interface CreatorWatermarkDraft {
+  enabled: boolean;
+  source: PdfCreatorWatermarkSource;
+  style: PdfCreatorWatermarkStyle;
+  text: string;
+  customImageDataUrl: string | null;
+  customImageFileName: string | null;
+  opacity: number;
+  size: number;
+  rotation: number;
+  grayscale: boolean;
 }
 
 export interface CreatorCvDraft {
@@ -116,6 +229,7 @@ export interface PdfCreatorDraft {
   report: CreatorReportDraft;
   letter: CreatorLetterDraft;
   invoice: CreatorInvoiceDraft;
+  payslip: CreatorPayslipDraft;
   cv: CreatorCvDraft;
 }
 
@@ -175,6 +289,8 @@ export const getTemplateLabel = (template: PdfCreatorTemplate) => {
       return "Business Letter";
     case "invoice":
       return "Invoice";
+    case "payslip":
+      return "Payslip";
     case "cv-harvard":
       return "Harvard CV";
     case "cv-modern":
@@ -297,13 +413,21 @@ export const createDefaultCreatorDraft = (): PdfCreatorDraft => ({
     clientName: "Acme Ventures",
     clientDetails: "Finance Team\n23 Broadway\nNew York, NY 10006",
     invoiceNumber: "INV-2026-001",
+    companyReference: "",
+    detailsValueAlignment: "right",
+    footerLogoPosition: "none",
+    includeBusinessNameInHeader: true,
+    headerTextColor: "#ffffff",
+    status: "pending",
     issueDate: today(),
     dueDate: today(),
+    paidDate: "",
     currency: "USD",
     paymentDetails: "",
     paymentLink: "",
     notes:
       "Thank you for your business. Please remit payment by the due date and include the invoice number with your transfer.",
+    signature: "",
     lineItems: [
       createDefaultInvoiceItem({
         description: "Design system audit",
@@ -316,6 +440,59 @@ export const createDefaultCreatorDraft = (): PdfCreatorDraft => ({
         unitPrice: 165,
       }),
     ],
+  },
+  payslip: {
+    companyName: "Kyte Studio",
+    companyAddress: "12 Market Lane\nLondon\nEC2A 4NE\npayroll@kytepdf.com",
+    employeeName: "Jordan Taylor",
+    employeeDetails: "Employee ID: EMP-001\nProduct Designer\nLondon, UK",
+    payslipNumber: "PAY-2026-001",
+    companyReference: "",
+    copyrightNote: "© 2026 Kyte Studio. All rights reserved.",
+    detailsValueAlignment: "right",
+    footerLogoPosition: "none",
+    includeCompanyNameInHeader: true,
+    headerTextColor: "#ffffff",
+    payPeriod: "June 2026",
+    payDate: today(),
+    currency: "GBP",
+    notes: "This payslip is a record of earnings for the pay period shown above.",
+    lineItems: [
+      createDefaultInvoiceItem({
+        description: "Basic salary",
+        quantity: 1,
+        unitPrice: 3500,
+      }),
+      createDefaultInvoiceItem({
+        description: "Additional hours",
+        quantity: 4,
+        unitPrice: 35,
+      }),
+    ],
+    deductions: [
+      createDefaultInvoiceItem({
+        description: "Income tax",
+        quantity: 1,
+        unitPrice: 420,
+      }),
+      createDefaultInvoiceItem({
+        description: "Pension contribution",
+        quantity: 1,
+        unitPrice: 175,
+      }),
+    ],
+    watermark: {
+      enabled: true,
+      source: "company-logo",
+      style: "centered",
+      text: "CONFIDENTIAL",
+      customImageDataUrl: null,
+      customImageFileName: null,
+      opacity: 8,
+      size: 45,
+      rotation: 0,
+      grayscale: false,
+    },
   },
   cv: {
     fullName: "Jordan Taylor",
@@ -357,6 +534,78 @@ export const calculateInvoiceTotal = (items: CreatorInvoiceItem[]) =>
     0,
   );
 
+export const calculatePayslipTotals = (
+  payslip: Pick<CreatorPayslipDraft, "lineItems" | "deductions">,
+) => {
+  const earnings = calculateInvoiceTotal(payslip.lineItems);
+  const deductions = calculateInvoiceTotal(payslip.deductions);
+  return {
+    earnings,
+    deductions,
+    totalPay: earnings - deductions,
+  };
+};
+
+export const normalizeInvoiceStatus = (value: unknown): PdfCreatorInvoiceStatus => {
+  if (
+    typeof value === "string" &&
+    INVOICE_STATUS_OPTIONS.some((option) => option.value === value)
+  ) {
+    return value as PdfCreatorInvoiceStatus;
+  }
+  return "pending";
+};
+
+export const normalizeInvoiceDetailsAlignment = (
+  value: unknown,
+): PdfCreatorInvoiceDetailsAlignment => {
+  if (
+    typeof value === "string" &&
+    INVOICE_DETAILS_ALIGNMENT_OPTIONS.some((option) => option.value === value)
+  ) {
+    return value as PdfCreatorInvoiceDetailsAlignment;
+  }
+  return "right";
+};
+
+export const normalizeInvoiceFooterLogoPosition = (
+  value: unknown,
+): PdfCreatorInvoiceFooterLogoPosition => {
+  if (
+    typeof value === "string" &&
+    INVOICE_FOOTER_LOGO_OPTIONS.some((option) => option.value === value)
+  ) {
+    return value as PdfCreatorInvoiceFooterLogoPosition;
+  }
+  return "none";
+};
+
+export const normalizeWatermarkSource = (value: unknown): PdfCreatorWatermarkSource => {
+  if (
+    typeof value === "string" &&
+    WATERMARK_SOURCE_OPTIONS.some((option) => option.value === value)
+  ) {
+    return value as PdfCreatorWatermarkSource;
+  }
+  return "company-logo";
+};
+
+export const normalizeWatermarkStyle = (value: unknown): PdfCreatorWatermarkStyle => {
+  if (
+    typeof value === "string" &&
+    WATERMARK_STYLE_OPTIONS.some((option) => option.value === value)
+  ) {
+    return value as PdfCreatorWatermarkStyle;
+  }
+  return "centered";
+};
+
+export const getInvoiceStatusLabel = (status: PdfCreatorInvoiceStatus) =>
+  INVOICE_STATUS_OPTIONS.find((option) => option.value === status)?.label ?? "Pending";
+
+export const getInvoiceTotalLabel = (status: PdfCreatorInvoiceStatus) =>
+  `Total ${getInvoiceStatusLabel(status)}`;
+
 const sanitizeText = (value: string) => value.replace(/\r\n/g, "\n").trim();
 
 const sanitizeCurrencyNumber = (value: number) => {
@@ -375,12 +624,36 @@ const normalizeFileName = (value: string) => {
   return cleaned || "kyte-document";
 };
 
-const hexToRgb = (hex: string) => {
-  const normalized = /^#[\da-f]{6}$/i.test(hex) ? hex : DEFAULT_ACCENT;
+const hexToRgb = (hex: string, fallback = DEFAULT_ACCENT) => {
+  const normalized = /^#[\da-f]{6}$/i.test(hex) ? hex : fallback;
   const r = parseInt(normalized.slice(1, 3), 16) / 255;
   const g = parseInt(normalized.slice(3, 5), 16) / 255;
   const b = parseInt(normalized.slice(5, 7), 16) / 255;
   return rgb(r, g, b);
+};
+
+const getReadableAccentTextColor = (hex: string) => {
+  const normalized = /^#[\da-f]{6}$/i.test(hex) ? hex : DEFAULT_ACCENT;
+  const r = parseInt(normalized.slice(1, 3), 16) / 255;
+  const g = parseInt(normalized.slice(3, 5), 16) / 255;
+  const b = parseInt(normalized.slice(5, 7), 16) / 255;
+  const perceivedBrightness = r * 0.299 + g * 0.587 + b * 0.114;
+
+  return perceivedBrightness > 0.82 ? rgb(0.11, 0.17, 0.29) : rgb(r, g, b);
+};
+
+const getAccentTintColor = (hex: string, strength: number) => {
+  const normalized = /^#[\da-f]{6}$/i.test(hex) ? hex : DEFAULT_ACCENT;
+  const clampedStrength = Math.min(1, Math.max(0, strength));
+  const r = parseInt(normalized.slice(1, 3), 16) / 255;
+  const g = parseInt(normalized.slice(3, 5), 16) / 255;
+  const b = parseInt(normalized.slice(5, 7), 16) / 255;
+
+  return rgb(
+    1 - (1 - r) * clampedStrength,
+    1 - (1 - g) * clampedStrength,
+    1 - (1 - b) * clampedStrength,
+  );
 };
 
 const getPageDimensions = (
@@ -490,6 +763,263 @@ const parseMultiline = (text: string) =>
     .map((line) => line.trim())
     .filter(Boolean);
 
+type SignatureFont = { font: PdfFont; isFallback: boolean };
+
+const embedInvoiceSignatureFont = async (
+  pdfDoc: PDFDocument,
+  include: boolean,
+): Promise<SignatureFont | null> => {
+  if (!include) return null;
+
+  try {
+    const [fontkitModule, fontUrlModule] = await Promise.all([
+      import("@pdf-lib/fontkit"),
+      import("@fontsource/great-vibes/files/great-vibes-latin-400-normal.woff?url"),
+    ]);
+    const response = await fetch(fontUrlModule.default);
+    if (!response.ok) throw new Error("Signature font could not be loaded.");
+
+    pdfDoc.registerFontkit(fontkitModule.default);
+    const font = await pdfDoc.embedFont(new Uint8Array(await response.arrayBuffer()), {
+      subset: true,
+    });
+    return { font, isFallback: false };
+  } catch (error) {
+    logger.warn("Signature font could not be loaded; using Times Italic instead.", error);
+    return { font: await pdfDoc.embedFont(StandardFonts.TimesRomanItalic), isFallback: true };
+  }
+};
+
+/**
+ * Standard PDF fonts only cover WinAnsi, and drawing anything else throws.
+ * Strip accents the font cannot show and drop other characters it cannot encode.
+ */
+const keepEncodableCharacters = (text: string, font: PdfFont) => {
+  const supported = new Set(font.getCharacterSet());
+  const canEncode = (value: string) =>
+    Array.from(value).every((char) => supported.has(char.codePointAt(0) as number));
+  let replaced = 0;
+  let dropped = 0;
+
+  const result = Array.from(text.normalize("NFC"))
+    .map((char) => {
+      if (canEncode(char)) return char;
+      const base = char.normalize("NFD").replace(/\p{M}/gu, "");
+      if (base && canEncode(base)) {
+        replaced += 1;
+        return base;
+      }
+      dropped += 1;
+      return "";
+    })
+    .join("");
+
+  if (replaced > 0 || dropped > 0) {
+    logger.warn("The fallback signature font cannot show every character in the signature.", {
+      replaced,
+      dropped,
+    });
+  }
+  return sanitizeText(result);
+};
+
+type PdfWatermark = {
+  image: Awaited<ReturnType<typeof PDFDocument.prototype.embedPng>> | null;
+  text: string;
+  font: PdfFont;
+  style: PdfCreatorWatermarkStyle;
+  opacity: number;
+  size: number;
+  rotation: number;
+};
+
+const grayscaleImageCache = new Map<string, string>();
+
+const getGrayscaleImageDataUrl = async (dataUrl: string) => {
+  const cached = grayscaleImageCache.get(dataUrl);
+  if (cached) return cached;
+  if (typeof document === "undefined" || typeof globalThis.createImageBitmap !== "function") {
+    return dataUrl;
+  }
+
+  try {
+    const response = await fetch(dataUrl);
+    const bitmap = await globalThis.createImageBitmap(await response.blob());
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext("2d");
+    if (!context) return dataUrl;
+
+    context.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+    for (let index = 0; index < pixels.data.length; index += 4) {
+      const gray = Math.round(
+        pixels.data[index] * 0.299 +
+          pixels.data[index + 1] * 0.587 +
+          pixels.data[index + 2] * 0.114,
+      );
+      pixels.data[index] = gray;
+      pixels.data[index + 1] = gray;
+      pixels.data[index + 2] = gray;
+    }
+    context.putImageData(pixels, 0, 0);
+    const result = canvas.toDataURL("image/png");
+    grayscaleImageCache.set(dataUrl, result);
+    return result;
+  } catch {
+    return dataUrl;
+  }
+};
+
+/**
+ * pdf-lib rotates text and images about their bottom-left corner. Returns the
+ * corner position that puts the middle of the rotated box at (centerX, centerY).
+ */
+const getRotatedBoxOrigin = (
+  centerX: number,
+  centerY: number,
+  width: number,
+  height: number,
+  rotationDegrees: number,
+) => {
+  const radians = (rotationDegrees * Math.PI) / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  return {
+    x: centerX - (width / 2) * cos + (height / 2) * sin,
+    y: centerY - (width / 2) * sin - (height / 2) * cos,
+  };
+};
+
+const drawPdfWatermark = (
+  page: PdfPage,
+  pageWidth: number,
+  pageHeight: number,
+  watermark: PdfWatermark,
+) => {
+  const opacity = Math.min(0.6, Math.max(0.01, watermark.opacity / 100));
+  const sizeRatio = Math.min(0.9, Math.max(0.1, watermark.size / 100));
+  const configuredRotation = Math.min(180, Math.max(-180, watermark.rotation));
+  const rotation =
+    watermark.style === "diagonal" && configuredRotation === 0 ? -35 : configuredRotation;
+
+  if (watermark.image) {
+    const ratio = watermark.image.width / watermark.image.height || 1;
+    let width = pageWidth * sizeRatio;
+    let height = width / ratio;
+    if (height > pageHeight * 0.7) {
+      height = pageHeight * 0.7;
+      width = height * ratio;
+    }
+
+    const drawImageCenteredAt = (
+      centerX: number,
+      centerY: number,
+      imageWidth: number,
+      imageHeight: number,
+    ) => {
+      const origin = getRotatedBoxOrigin(centerX, centerY, imageWidth, imageHeight, rotation);
+      page.drawImage(watermark.image!, {
+        x: origin.x,
+        y: origin.y,
+        width: imageWidth,
+        height: imageHeight,
+        opacity,
+        rotate: degrees(rotation),
+      });
+    };
+
+    if (watermark.style === "tiled") {
+      const tileWidth = Math.min(width, pageWidth * 0.3);
+      const tileHeight = tileWidth / ratio;
+      const gapX = tileWidth * 0.45;
+      const gapY = tileHeight * 0.65;
+      for (let y = gapY; y < pageHeight - tileHeight / 2; y += tileHeight + gapY) {
+        for (let x = gapX; x < pageWidth - tileWidth / 2; x += tileWidth + gapX) {
+          drawImageCenteredAt(x + tileWidth / 2, y + tileHeight / 2, tileWidth, tileHeight);
+        }
+      }
+      return;
+    }
+
+    drawImageCenteredAt(pageWidth / 2, pageHeight / 2, width, height);
+    return;
+  }
+
+  if (!watermark.text) return;
+  const fontSize = Math.min(72, Math.max(22, pageWidth * sizeRatio * 0.18));
+  const textWidth = watermark.font.widthOfTextAtSize(watermark.text, fontSize);
+  const drawTextCenteredAt = (centerX: number, centerY: number) => {
+    const origin = getRotatedBoxOrigin(centerX, centerY, textWidth, fontSize, rotation);
+    page.drawText(watermark.text, {
+      x: origin.x,
+      y: origin.y,
+      size: fontSize,
+      font: watermark.font,
+      color: rgb(0.42, 0.47, 0.54),
+      opacity,
+      rotate: degrees(rotation),
+    });
+  };
+
+  if (watermark.style === "tiled") {
+    const gapX = Math.max(30, textWidth * 0.45);
+    const gapY = fontSize * 2.5;
+    for (let y = gapY; y < pageHeight; y += gapY) {
+      for (let x = 24; x < pageWidth; x += textWidth + gapX) {
+        drawTextCenteredAt(x + textWidth / 2, y + fontSize / 2);
+      }
+    }
+    return;
+  }
+
+  drawTextCenteredAt(pageWidth / 2, pageHeight / 2);
+};
+
+const resolvePdfWatermark = async (
+  pdfDoc: PDFDocument,
+  draft: PdfCreatorDraft,
+  companyLogo: Awaited<ReturnType<typeof PDFDocument.prototype.embedPng>> | null,
+  font: PdfFont,
+): Promise<PdfWatermark | null> => {
+  if (draft.template !== "payslip" || !draft.payslip.watermark.enabled) return null;
+  const settings = draft.payslip.watermark;
+  const base = {
+    text: "",
+    font,
+    style: normalizeWatermarkStyle(settings.style),
+    opacity: Number.isFinite(settings.opacity) ? settings.opacity : 8,
+    size: Number.isFinite(settings.size) ? settings.size : 45,
+    rotation: Number.isFinite(settings.rotation) ? settings.rotation : 0,
+  };
+
+  if (normalizeWatermarkSource(settings.source) === "text") {
+    return {
+      ...base,
+      image: null,
+      text: sanitizeText(settings.text) || "CONFIDENTIAL",
+    };
+  }
+
+  const sourceDataUrl =
+    normalizeWatermarkSource(settings.source) === "custom-image"
+      ? settings.customImageDataUrl
+      : draft.logoDataUrl;
+  if (!sourceDataUrl) return null;
+  const imageDataUrl = settings.grayscale
+    ? await getGrayscaleImageDataUrl(sourceDataUrl)
+    : sourceDataUrl;
+  const image =
+    imageDataUrl === draft.logoDataUrl && !settings.grayscale
+      ? companyLogo
+      : await embedLogo(pdfDoc, imageDataUrl);
+  if (!image) return null;
+
+  return { ...base, image };
+};
+
 class DocumentComposer {
   readonly pageWidth: number;
   readonly pageHeight: number;
@@ -505,15 +1035,16 @@ class DocumentComposer {
 
   constructor(
     private pdfDoc: PDFDocument,
-    private fonts: { regular: PdfFont; bold: PdfFont; mono: PdfFont },
     pageSize: readonly [number, number],
     accentHex: string,
+    private watermark: PdfWatermark | null = null,
   ) {
     [this.pageWidth, this.pageHeight] = pageSize;
     this.contentWidth = this.pageWidth - this.marginX * 2;
     this.accentColor = hexToRgb(accentHex);
     this.page = this.pdfDoc.addPage([this.pageWidth, this.pageHeight]);
     this.pages.push(this.page);
+    this.drawWatermark(this.page);
     this.cursorY = this.pageHeight - this.marginTop;
   }
 
@@ -544,8 +1075,15 @@ class DocumentComposer {
   addPage() {
     this.page = this.pdfDoc.addPage([this.pageWidth, this.pageHeight]);
     this.pages.push(this.page);
+    this.drawWatermark(this.page);
     this.cursorY = this.pageHeight - this.marginTop;
     return this.page;
+  }
+
+  private drawWatermark(page: PdfPage) {
+    if (this.watermark) {
+      drawPdfWatermark(page, this.pageWidth, this.pageHeight, this.watermark);
+    }
   }
 
   ensureSpace(height: number) {
@@ -556,49 +1094,17 @@ class DocumentComposer {
     return false;
   }
 
-  drawDivider(spacingBefore = 18, spacingAfter = 18) {
+  drawDivider(spacingBefore = 18, spacingAfter = 18, color = rgb(0.84, 0.87, 0.91)) {
     this.ensureSpace(spacingBefore + spacingAfter + 2);
     this.cursorY -= spacingBefore;
     this.page.drawLine({
       start: { x: this.marginX, y: this.cursorY },
       end: { x: this.pageWidth - this.marginX, y: this.cursorY },
       thickness: 1,
-      color: rgb(0.84, 0.87, 0.91),
+      color,
       opacity: 1,
     });
     this.cursorY -= spacingAfter;
-  }
-
-  drawLabelValue(label: string, value: string, valueSize = 11) {
-    const labelFont = this.fonts.bold;
-    const valueFont = this.fonts.regular;
-    const size = valueSize;
-    const labelWidth = labelFont.widthOfTextAtSize(label, size);
-    const maxWidth = this.contentWidth - labelWidth - 12;
-
-    this.ensureSpace(size + 10);
-    this.page.drawText(label, {
-      x: this.marginX,
-      y: this.cursorY,
-      size,
-      font: labelFont,
-      color: rgb(0.11, 0.17, 0.29),
-    });
-
-    const lines = wrapText(value, valueFont, size, maxWidth);
-    let lineY = this.cursorY;
-    for (const line of lines) {
-      this.page.drawText(line, {
-        x: this.marginX + labelWidth + 12,
-        y: lineY,
-        size,
-        font: valueFont,
-        color: rgb(0.24, 0.29, 0.36),
-      });
-      lineY -= size + 4;
-    }
-
-    this.cursorY = lineY - 4;
   }
 
   drawWrappedText(text: string, options: DrawTextOptions) {
@@ -651,6 +1157,114 @@ const drawPageNumbers = (
       font,
       color,
     });
+  });
+};
+
+const drawInvoiceFooter = (
+  composer: DocumentComposer,
+  font: PdfFont,
+  color: ReturnType<typeof rgb>,
+  options: {
+    reference: string;
+    copyrightNote: string;
+    includePageNumbers: boolean;
+    logo: Awaited<ReturnType<typeof PDFDocument.prototype.embedPng>> | null;
+    logoPosition: PdfCreatorInvoiceFooterLogoPosition;
+  },
+) => {
+  type FooterSlot = "left" | "center" | "right";
+
+  const effectiveLogoPosition =
+    options.logo && options.logoPosition !== "none" ? options.logoPosition : "none";
+  const referencePosition: FooterSlot =
+    effectiveLogoPosition === "left" || effectiveLogoPosition === "right" ? "center" : "left";
+  const pageNumberPosition: FooterSlot = effectiveLogoPosition === "right" ? "left" : "right";
+  const getSlotX = (width: number, slot: FooterSlot) => {
+    if (slot === "center") return (composer.pageWidth - width) / 2;
+    if (slot === "right") return composer.pageWidth - composer.marginX - width;
+    return composer.marginX;
+  };
+
+  let logoWidth = 0;
+  let logoHeight = 0;
+  if (effectiveLogoPosition !== "none" && options.logo) {
+    const ratio = options.logo.width / options.logo.height || 1;
+    logoWidth = 64;
+    logoHeight = logoWidth / ratio;
+    if (logoHeight > 22) {
+      logoHeight = 22;
+      logoWidth = logoHeight * ratio;
+    }
+  }
+
+  const referenceLabel = options.reference ? `Ref: ${options.reference}` : "";
+  const referenceMaxWidth = composer.contentWidth * (referencePosition === "center" ? 0.4 : 0.46);
+  let referenceSize = 9;
+  const copyrightNote = sanitizeText(options.copyrightNote);
+  let copyrightSize = 7;
+
+  while (
+    referenceLabel &&
+    referenceSize > 6.5 &&
+    font.widthOfTextAtSize(referenceLabel, referenceSize) > referenceMaxWidth
+  ) {
+    referenceSize -= 0.5;
+  }
+
+  while (
+    copyrightNote &&
+    copyrightSize > 5.5 &&
+    font.widthOfTextAtSize(copyrightNote, copyrightSize) > referenceMaxWidth * 2
+  ) {
+    copyrightSize -= 0.5;
+  }
+  const copyrightLines = copyrightNote
+    ? wrapText(copyrightNote, font, copyrightSize, referenceMaxWidth).filter(Boolean).slice(0, 2)
+    : [];
+
+  composer.allPages.forEach((page, index) => {
+    if (referenceLabel) {
+      const referenceWidth = font.widthOfTextAtSize(referenceLabel, referenceSize);
+      page.drawText(referenceLabel, {
+        x: getSlotX(referenceWidth, referencePosition),
+        y: copyrightLines.length > 0 ? 29 : 24,
+        size: referenceSize,
+        font,
+        color,
+      });
+    }
+
+    copyrightLines.forEach((line, lineIndex) => {
+      const lineWidth = font.widthOfTextAtSize(line, copyrightSize);
+      page.drawText(line, {
+        x: getSlotX(lineWidth, referencePosition),
+        y: 16 - lineIndex * 7.5,
+        size: copyrightSize,
+        font,
+        color,
+      });
+    });
+
+    if (options.includePageNumbers) {
+      const pageLabel = `Page ${index + 1} of ${composer.pageCount}`;
+      const pageWidth = font.widthOfTextAtSize(pageLabel, 9);
+      page.drawText(pageLabel, {
+        x: getSlotX(pageWidth, pageNumberPosition),
+        y: 24,
+        size: 9,
+        font,
+        color,
+      });
+    }
+
+    if (effectiveLogoPosition !== "none" && options.logo) {
+      page.drawImage(options.logo, {
+        x: getSlotX(logoWidth, effectiveLogoPosition),
+        y: 28.5 - logoHeight / 2,
+        width: logoWidth,
+        height: logoHeight,
+      });
+    }
   });
 };
 
@@ -820,13 +1434,14 @@ const drawInvoiceTableColumnDividers = (
   layout: InvoiceTableLayout,
   bottomY: number,
   height: number,
+  borderColor: ReturnType<typeof rgb>,
 ) => {
   [layout.qty.x, layout.rate.x, layout.amount.x].forEach((x) => {
     page.drawLine({
       start: { x, y: bottomY },
       end: { x, y: bottomY + height },
       thickness: 1,
-      color: rgb(0.88, 0.94, 0.97),
+      color: borderColor,
       opacity: 1,
     });
   });
@@ -1031,6 +1646,12 @@ const renderLetter = async (
 
   composer.moveCursor(8);
   const closing = sanitizeText(letter.closing);
+  const signature = sanitizeText(letter.signature);
+  // Keep the sign-off together and above the bottom margin.
+  const signOffHeight = (closing ? 42 : 0) + (signature ? 12 : 0);
+  if (signOffHeight > 0) {
+    composer.ensureSpace(signOffHeight);
+  }
   if (closing) {
     composer.currentPage.drawText(closing, {
       x: composer.marginX,
@@ -1042,7 +1663,6 @@ const renderLetter = async (
     composer.moveCursor(42);
   }
 
-  const signature = sanitizeText(letter.signature);
   if (signature) {
     composer.currentPage.drawText(signature, {
       x: composer.marginX,
@@ -1058,6 +1678,11 @@ const drawInvoiceTableHeader = (
   composer: DocumentComposer,
   fonts: { regular: PdfFont; bold: PdfFont; mono: PdfFont },
   layout: InvoiceTableLayout,
+  colors: {
+    tint: ReturnType<typeof rgb>;
+    border: ReturnType<typeof rgb>;
+    text: ReturnType<typeof rgb>;
+  },
 ) => {
   composer.ensureSpace(layout.headerHeight + layout.rowGap + 6);
   const headerBottom = composer.currentY - layout.headerHeight;
@@ -1066,11 +1691,17 @@ const drawInvoiceTableHeader = (
     y: headerBottom,
     width: layout.width,
     height: layout.headerHeight,
-    color: rgb(0.94, 0.98, 0.99),
+    color: colors.tint,
     borderWidth: 1,
-    borderColor: rgb(0.88, 0.94, 0.97),
+    borderColor: colors.border,
   });
-  drawInvoiceTableColumnDividers(composer.currentPage, layout, headerBottom, layout.headerHeight);
+  drawInvoiceTableColumnDividers(
+    composer.currentPage,
+    layout,
+    headerBottom,
+    layout.headerHeight,
+    colors.border,
+  );
 
   const headerTextY = getCellTextY(headerBottom, layout.headerHeight, 10);
 
@@ -1106,139 +1737,398 @@ const drawInvoiceTableHeader = (
       y: headerTextY,
       size: 10,
       font: fonts.bold,
-      color: rgb(0.18, 0.24, 0.31),
+      color: colors.text,
     });
   });
 
   composer.setCursor(headerBottom - layout.rowGap);
 };
 
+const drawFinancialItemsTable = (
+  composer: DocumentComposer,
+  fonts: { regular: PdfFont; bold: PdfFont; mono: PdfFont },
+  layout: InvoiceTableLayout,
+  colors: {
+    tint: ReturnType<typeof rgb>;
+    border: ReturnType<typeof rgb>;
+    text: ReturnType<typeof rgb>;
+  },
+  items: CreatorInvoiceItem[],
+  currency: PdfCreatorCurrency,
+) => {
+  drawInvoiceTableHeader(composer, fonts, layout, colors);
+
+  items.forEach((item) => {
+    const quantity = sanitizeCurrencyNumber(item.quantity);
+    const unitPrice = sanitizeCurrencyNumber(item.unitPrice);
+    const amount = quantity * unitPrice;
+    const descriptionLines = wrapText(
+      item.description || "Line item",
+      fonts.regular,
+      10.5,
+      layout.description.width - layout.cellPaddingX * 2,
+    );
+    const rowLineHeight = 14;
+    const rowHeight = Math.max(layout.baseRowHeight, descriptionLines.length * rowLineHeight + 14);
+
+    if (composer.ensureSpace(rowHeight + layout.rowGap)) {
+      drawInvoiceTableHeader(composer, fonts, layout, colors);
+    }
+
+    const rowBottom = composer.currentY - rowHeight;
+    composer.currentPage.drawRectangle({
+      x: layout.x,
+      y: rowBottom,
+      width: layout.width,
+      height: rowHeight,
+      color: rgb(1, 1, 1),
+      borderWidth: 1,
+      borderColor: colors.border,
+    });
+    drawInvoiceTableColumnDividers(
+      composer.currentPage,
+      layout,
+      rowBottom,
+      rowHeight,
+      colors.border,
+    );
+
+    const descBlockHeight = 10.5 + Math.max(0, descriptionLines.length - 1) * rowLineHeight;
+    let descY = rowBottom + (rowHeight - descBlockHeight) / 2 + descBlockHeight - 10.5;
+    descriptionLines.forEach((line) => {
+      composer.currentPage.drawText(line, {
+        x: layout.description.x + layout.cellPaddingX,
+        y: descY,
+        size: 10.5,
+        font: fonts.regular,
+        color: rgb(0.2, 0.25, 0.33),
+      });
+      descY -= rowLineHeight;
+    });
+
+    const qtyText = String(quantity || 0);
+    const rateText = formatCurrency(unitPrice, currency);
+    const amountText = formatCurrency(amount, currency);
+    const numericY = getCellTextY(rowBottom, rowHeight, 10.5);
+
+    composer.currentPage.drawText(qtyText, {
+      x: getCenteredTextX(qtyText, fonts.regular, 10.5, layout.qty.x, layout.qty.width),
+      y: numericY,
+      size: 10.5,
+      font: fonts.regular,
+      color: rgb(0.2, 0.25, 0.33),
+    });
+    composer.currentPage.drawText(rateText, {
+      x: getRightAlignedTextX(
+        rateText,
+        fonts.regular,
+        10.5,
+        layout.rate.x + layout.rate.width - layout.cellPaddingX,
+      ),
+      y: numericY,
+      size: 10.5,
+      font: fonts.regular,
+      color: rgb(0.2, 0.25, 0.33),
+    });
+    composer.currentPage.drawText(amountText, {
+      x: getRightAlignedTextX(
+        amountText,
+        fonts.bold,
+        10.5,
+        layout.amount.x + layout.amount.width - layout.cellPaddingX,
+      ),
+      y: numericY,
+      size: 10.5,
+      font: fonts.bold,
+      color: rgb(0.2, 0.25, 0.33),
+    });
+
+    composer.setCursor(rowBottom - layout.rowGap);
+  });
+};
+
 const renderInvoice = async (
   composer: DocumentComposer,
   draft: PdfCreatorDraft,
-  fonts: { regular: PdfFont; bold: PdfFont; mono: PdfFont },
+  fonts: { regular: PdfFont; bold: PdfFont; mono: PdfFont; signature?: SignatureFont | null },
   logo: Awaited<ReturnType<typeof PDFDocument.prototype.embedPng>> | null,
 ) => {
-  const { invoice } = draft;
-  const headerHeight = 82;
-  const businessName = sanitizeText(invoice.businessName) || "Invoice";
-  const invoiceLabel = "INVOICE";
-  const invoiceLabelSize = 18;
-  const headerTitleGap = 24;
-  const headerContentCenterY = composer.pageHeight - headerHeight / 2 + 4;
-  composer.currentPage.drawRectangle({
-    x: 0,
-    y: composer.pageHeight - headerHeight,
-    width: composer.pageWidth,
-    height: headerHeight,
-    color: composer.accentColor,
-  });
+  const isPayslip = draft.template === "payslip";
+  const invoice: CreatorInvoiceDraft = isPayslip
+    ? {
+        businessName: draft.payslip.companyName,
+        businessDetails: draft.payslip.companyAddress,
+        clientName: draft.payslip.employeeName,
+        clientDetails: draft.payslip.employeeDetails,
+        invoiceNumber: draft.payslip.payslipNumber,
+        companyReference: draft.payslip.companyReference,
+        detailsValueAlignment: draft.payslip.detailsValueAlignment,
+        footerLogoPosition: draft.payslip.footerLogoPosition,
+        includeBusinessNameInHeader: draft.payslip.includeCompanyNameInHeader,
+        headerTextColor: draft.payslip.headerTextColor,
+        status: "pending",
+        issueDate: draft.payslip.payDate,
+        dueDate: draft.payslip.payDate,
+        paidDate: "",
+        currency: draft.payslip.currency,
+        paymentDetails: "",
+        paymentLink: "",
+        notes: draft.payslip.notes,
+        signature: "",
+        lineItems: draft.payslip.lineItems,
+      }
+    : draft.invoice;
+  const invoiceStatus = normalizeInvoiceStatus(invoice.status);
+  const detailsValueAlignment = normalizeInvoiceDetailsAlignment(invoice.detailsValueAlignment);
+  const payslipTotals = isPayslip
+    ? calculatePayslipTotals(draft.payslip)
+    : { earnings: calculateInvoiceTotal(invoice.lineItems), deductions: 0, totalPay: 0 };
+  const total = isPayslip ? payslipTotals.totalPay : payslipTotals.earnings;
+  const totalLabel = isPayslip ? "Total Pay" : getInvoiceTotalLabel(invoiceStatus);
+  const contentAccentColor = getReadableAccentTextColor(draft.accentColor);
+  const accentTintColor = getAccentTintColor(draft.accentColor, 0.1);
+  const accentBorderColor = getAccentTintColor(draft.accentColor, 0.28);
+  const invoiceTheme = {
+    tint: accentTintColor,
+    border: accentBorderColor,
+    text: contentAccentColor,
+  };
+  const businessName = sanitizeText(invoice.businessName) || (isPayslip ? "Company" : "Invoice");
+  const page = composer.currentPage;
+  const topY = composer.pageHeight - composer.marginTop + 12;
+  const columnGap = 36;
+  const rightColumnWidth = Math.min(224, composer.contentWidth * 0.44);
+  const rightColumnX = composer.pageWidth - composer.marginX - rightColumnWidth;
+  const leftColumnRight = rightColumnX - columnGap;
+  const invoiceLabel = isPayslip ? "PAYSLIP" : "INVOICE";
+  const invoiceLabelSize = 16;
+  const invoiceTitleHeight = 32;
+  const headerTextColor = hexToRgb(invoice.headerTextColor, "#ffffff");
 
   let logoWidth = 0;
+  let logoHeight = 0;
   if (logo) {
-    const maxHeight = 36;
     const ratio = logo.width / logo.height || 1;
-    const width = maxHeight * ratio;
-    logoWidth = width;
-    composer.currentPage.drawImage(logo, {
-      x: composer.marginX,
-      y: headerContentCenterY - maxHeight / 2,
-      width,
-      height: maxHeight,
-    });
+    logoWidth = 108;
+    logoHeight = logoWidth / ratio;
+    if (logoHeight > 50) {
+      logoHeight = 50;
+      logoWidth = logoHeight * ratio;
+    }
   }
 
-  const invoiceLabelWidth = fonts.bold.widthOfTextAtSize(invoiceLabel, invoiceLabelSize);
-  const invoiceLabelX = composer.pageWidth - composer.marginX - invoiceLabelWidth;
   const businessNameX = composer.marginX + (logoWidth > 0 ? logoWidth + 18 : 0);
-  const businessNameMaxWidth = Math.max(120, invoiceLabelX - businessNameX - headerTitleGap);
-  let businessNameSize = 24;
+  const businessNameMaxWidth = Math.max(80, leftColumnRight - businessNameX);
+  let businessNameSize = 22;
   while (
-    businessNameSize > 16 &&
+    businessNameSize > 14 &&
     fonts.bold.widthOfTextAtSize(businessName, businessNameSize) > businessNameMaxWidth
   ) {
     businessNameSize -= 1;
   }
 
-  composer.currentPage.drawText(businessName, {
-    x: businessNameX,
-    y: headerContentCenterY - businessNameSize / 2,
-    size: businessNameSize,
-    font: fonts.bold,
-    color: rgb(1, 1, 1),
-  });
+  const topRowHeight = Math.max(
+    invoiceTitleHeight,
+    logoHeight,
+    invoice.includeBusinessNameInHeader ? businessNameSize : 0,
+  );
+  const topRowCenterY = topY - topRowHeight / 2;
 
-  composer.currentPage.drawText(invoiceLabel, {
-    x: invoiceLabelX,
-    y: headerContentCenterY - invoiceLabelSize / 2,
-    size: invoiceLabelSize,
-    font: fonts.bold,
-    color: rgb(1, 1, 1),
-  });
-
-  composer.setCursor(composer.pageHeight - headerHeight - 18);
-
-  const businessLines = parseMultiline(invoice.businessDetails);
-  const clientLines = parseMultiline(invoice.clientDetails);
-  const blockWidth = (composer.contentWidth - 32) / 2;
-
-  composer.currentPage.drawText("From", {
-    x: composer.marginX,
-    y: composer.currentY,
-    size: 11,
-    font: fonts.bold,
-    color: composer.accentColor,
-  });
-  composer.currentPage.drawText("Bill To", {
-    x: composer.marginX + blockWidth + 32,
-    y: composer.currentY,
-    size: 11,
-    font: fonts.bold,
-    color: composer.accentColor,
-  });
-  composer.moveCursor(18);
-
-  const leftBlock = [sanitizeText(invoice.businessName), ...businessLines].filter(Boolean);
-  const rightBlock = [sanitizeText(invoice.clientName), ...clientLines].filter(Boolean);
-  const blockRows = Math.max(leftBlock.length, rightBlock.length);
-
-  for (let index = 0; index < blockRows; index += 1) {
-    const left = leftBlock[index];
-    const right = rightBlock[index];
-    if (left) {
-      composer.currentPage.drawText(left, {
-        x: composer.marginX,
-        y: composer.currentY,
-        size: 10.5,
-        font: index === 0 ? fonts.bold : fonts.regular,
-        color: rgb(0.2, 0.25, 0.33),
-      });
-    }
-    if (right) {
-      composer.currentPage.drawText(right, {
-        x: composer.marginX + blockWidth + 32,
-        y: composer.currentY,
-        size: 10.5,
-        font: index === 0 ? fonts.bold : fonts.regular,
-        color: rgb(0.2, 0.25, 0.33),
-      });
-    }
-    composer.moveCursor(14);
+  if (logo) {
+    page.drawImage(logo, {
+      x: composer.marginX,
+      y: topRowCenterY - logoHeight / 2,
+      width: logoWidth,
+      height: logoHeight,
+    });
   }
 
-  composer.moveCursor(12);
-  composer.drawLabelValue("Invoice #", sanitizeText(invoice.invoiceNumber) || "Pending");
-  composer.drawLabelValue("Issue Date", sanitizeText(invoice.issueDate) || today());
-  composer.drawLabelValue(
-    "Due Date",
-    sanitizeText(invoice.dueDate) || sanitizeText(invoice.issueDate) || today(),
-  );
+  if (invoice.includeBusinessNameInHeader) {
+    page.drawText(businessName, {
+      x: businessNameX,
+      y: topRowCenterY - businessNameSize / 2,
+      size: businessNameSize,
+      font: fonts.bold,
+      color: rgb(0.11, 0.17, 0.29),
+    });
+  }
 
-  composer.drawDivider(6, 16);
+  const invoiceTitleY = topRowCenterY - invoiceTitleHeight / 2;
+  page.drawRectangle({
+    x: rightColumnX,
+    y: invoiceTitleY,
+    width: rightColumnWidth,
+    height: invoiceTitleHeight,
+    color: composer.accentColor,
+  });
+  const invoiceLabelWidth = fonts.bold.widthOfTextAtSize(invoiceLabel, invoiceLabelSize);
+  page.drawText(invoiceLabel, {
+    x: rightColumnX + (rightColumnWidth - invoiceLabelWidth) / 2,
+    y: invoiceTitleY + (invoiceTitleHeight - invoiceLabelSize) / 2,
+    size: invoiceLabelSize,
+    font: fonts.bold,
+    color: headerTextColor,
+  });
+
+  const addressLabelX = composer.marginX;
+  const addressValueX = composer.marginX + 78;
+  const addressValueWidth = leftColumnRight - addressValueX;
+  const drawAddressBlock = (label: string, values: string[], startY: number) => {
+    page.drawText(label, {
+      x: addressLabelX,
+      y: startY,
+      size: 11,
+      font: fonts.bold,
+      color: contentAccentColor,
+    });
+
+    let valueY = startY;
+    values.forEach((value, index) => {
+      const valueFont = index === 0 ? fonts.bold : fonts.regular;
+      const lines = wrapText(value, valueFont, 10.5, addressValueWidth);
+      lines.forEach((line) => {
+        page.drawText(line, {
+          x: addressValueX,
+          y: valueY,
+          size: 10.5,
+          font: valueFont,
+          color: rgb(0.2, 0.25, 0.33),
+        });
+        valueY -= 14;
+      });
+    });
+    return valueY;
+  };
+
+  const addressStartY = topY - topRowHeight - 28;
+  const billFromValues = [businessName, ...parseMultiline(invoice.businessDetails)].filter(Boolean);
+  const billToValues = [
+    sanitizeText(invoice.clientName),
+    ...parseMultiline(invoice.clientDetails),
+  ].filter(Boolean);
+  let identityBottom: number;
+  if (isPayslip) {
+    let companyY = addressStartY;
+    parseMultiline(invoice.businessDetails).forEach((value) => {
+      const lines = wrapText(value, fonts.regular, 10.5, leftColumnRight - composer.marginX);
+      lines.forEach((line) => {
+        page.drawText(line, {
+          x: composer.marginX,
+          y: companyY,
+          size: 10.5,
+          font: fonts.regular,
+          color: rgb(0.2, 0.25, 0.33),
+        });
+        companyY -= 14;
+      });
+    });
+
+    const employeeHeadingY = companyY - 18;
+    page.drawText("Employee Information", {
+      x: composer.marginX,
+      y: employeeHeadingY,
+      size: 11,
+      font: fonts.bold,
+      color: contentAccentColor,
+    });
+
+    let employeeY = employeeHeadingY - 18;
+    billToValues.forEach((value, index) => {
+      const valueFont = index === 0 ? fonts.bold : fonts.regular;
+      const lines = wrapText(value, valueFont, 10.5, leftColumnRight - composer.marginX);
+      lines.forEach((line) => {
+        page.drawText(line, {
+          x: composer.marginX,
+          y: employeeY,
+          size: 10.5,
+          font: valueFont,
+          color: rgb(0.2, 0.25, 0.33),
+        });
+        employeeY -= 14;
+      });
+    });
+    identityBottom = employeeY;
+  } else {
+    const billFromBottom = drawAddressBlock("Bill From", billFromValues, addressStartY);
+    identityBottom = drawAddressBlock("Bill To", billToValues, billFromBottom - 24);
+  }
+
+  const metadataLabelX = rightColumnX + 4;
+  const metadataRightX = rightColumnX + rightColumnWidth - 4;
+  const metadataValueWidth = rightColumnWidth * 0.56;
+  const metadataValueX = metadataRightX - metadataValueWidth;
+  let metadataY = invoiceTitleY - 24;
+  const drawInvoiceDetail = (label: string, value: string, emphasize = false) => {
+    const valueFont = emphasize ? fonts.bold : fonts.regular;
+    const lines = wrapText(value, valueFont, 10.5, metadataValueWidth);
+    page.drawText(label, {
+      x: metadataLabelX,
+      y: metadataY,
+      size: 10.5,
+      font: fonts.bold,
+      color: contentAccentColor,
+    });
+
+    let valueY = metadataY;
+    lines.forEach((line) => {
+      const lineWidth = valueFont.widthOfTextAtSize(line, 10.5);
+      page.drawText(line, {
+        x: detailsValueAlignment === "right" ? metadataRightX - lineWidth : metadataValueX,
+        y: valueY,
+        size: 10.5,
+        font: valueFont,
+        color: rgb(0.24, 0.29, 0.36),
+      });
+      valueY -= 15;
+    });
+    metadataY = valueY - 4;
+  };
+
+  drawInvoiceDetail(
+    isPayslip ? "Payslip #" : "Invoice #",
+    sanitizeText(invoice.invoiceNumber) || "Pending",
+  );
+  const companyReference = sanitizeText(invoice.companyReference);
+  if (companyReference) {
+    drawInvoiceDetail("Company Ref", companyReference);
+  }
+  if (isPayslip) {
+    drawInvoiceDetail("Pay Period", sanitizeText(draft.payslip.payPeriod) || "Not provided");
+  }
+  drawInvoiceDetail(
+    isPayslip ? "Pay Date" : "Issue Date",
+    sanitizeText(invoice.issueDate) || today(),
+  );
+  if (!isPayslip) {
+    drawInvoiceDetail(
+      "Due Date",
+      sanitizeText(invoice.dueDate) || sanitizeText(invoice.issueDate) || today(),
+    );
+    drawInvoiceDetail("Status", getInvoiceStatusLabel(invoiceStatus));
+    if (invoiceStatus === "paid") {
+      drawInvoiceDetail("Paid Date", sanitizeText(invoice.paidDate) || "Not provided", true);
+    }
+  }
+  drawInvoiceDetail(totalLabel, formatCurrency(total, invoice.currency), true);
+
+  composer.setCursor(Math.min(identityBottom, metadataY) - 24);
+
+  composer.drawDivider(6, 16, accentBorderColor);
 
   const tableLayout = createInvoiceTableLayout(composer);
 
-  drawInvoiceTableHeader(composer, fonts, tableLayout);
+  if (isPayslip) {
+    composer.currentPage.drawText("Earnings", {
+      x: composer.marginX,
+      y: composer.currentY,
+      size: 12,
+      font: fonts.bold,
+      color: contentAccentColor,
+    });
+    composer.moveCursor(20);
+  }
+
+  drawInvoiceTableHeader(composer, fonts, tableLayout, invoiceTheme);
 
   invoice.lineItems.forEach((item) => {
     const quantity = sanitizeCurrencyNumber(item.quantity);
@@ -1257,7 +2147,7 @@ const renderInvoice = async (
     );
 
     if (composer.ensureSpace(rowHeight + tableLayout.rowGap)) {
-      drawInvoiceTableHeader(composer, fonts, tableLayout);
+      drawInvoiceTableHeader(composer, fonts, tableLayout, invoiceTheme);
     }
 
     const rowBottom = composer.currentY - rowHeight;
@@ -1268,9 +2158,15 @@ const renderInvoice = async (
       height: rowHeight,
       color: rgb(1, 1, 1),
       borderWidth: 1,
-      borderColor: rgb(0.88, 0.94, 0.97),
+      borderColor: accentBorderColor,
     });
-    drawInvoiceTableColumnDividers(composer.currentPage, tableLayout, rowBottom, rowHeight);
+    drawInvoiceTableColumnDividers(
+      composer.currentPage,
+      tableLayout,
+      rowBottom,
+      rowHeight,
+      accentBorderColor,
+    );
 
     const descBlockHeight = 10.5 + Math.max(0, descriptionLines.length - 1) * rowLineHeight;
     let descY = rowBottom + (rowHeight - descBlockHeight) / 2 + descBlockHeight - 10.5;
@@ -1325,8 +2221,28 @@ const renderInvoice = async (
     composer.setCursor(rowBottom - tableLayout.rowGap);
   });
 
-  const total = calculateInvoiceTotal(invoice.lineItems);
-  const totalBoxHeight = 52;
+  if (isPayslip) {
+    composer.ensureSpace(110);
+    composer.moveCursor(22);
+    composer.currentPage.drawText("Deductions", {
+      x: composer.marginX,
+      y: composer.currentY,
+      size: 12,
+      font: fonts.bold,
+      color: contentAccentColor,
+    });
+    composer.moveCursor(20);
+    drawFinancialItemsTable(
+      composer,
+      fonts,
+      tableLayout,
+      invoiceTheme,
+      draft.payslip.deductions,
+      invoice.currency,
+    );
+  }
+
+  const totalBoxHeight = isPayslip ? 84 : 52;
   composer.ensureSpace(totalBoxHeight + 28);
   const totalBoxWidth = tableLayout.rate.width + tableLayout.amount.width;
   const totalBoxX = tableLayout.rate.x;
@@ -1337,37 +2253,90 @@ const renderInvoice = async (
     y: totalBoxY,
     width: totalBoxWidth,
     height: totalBoxHeight,
-    color: rgb(0.96, 0.99, 0.99),
+    color: accentTintColor,
     borderWidth: 1,
-    borderColor: rgb(0.88, 0.94, 0.97),
+    borderColor: accentBorderColor,
   });
-  composer.currentPage.drawText("Total Due", {
-    x: totalBoxX + 14,
-    y: totalBoxY + 30,
-    size: 11,
-    font: fonts.bold,
-    color: composer.accentColor,
-  });
-  const totalText = formatCurrency(total, invoice.currency);
-  composer.currentPage.drawText(totalText, {
-    x: getRightAlignedTextX(totalText, fonts.bold, 18, totalBoxX + totalBoxWidth - 14),
-    y: totalBoxY + 12,
-    size: 18,
-    font: fonts.bold,
-    color: rgb(0.18, 0.24, 0.31),
-  });
+  if (isPayslip) {
+    const summaryRightX = totalBoxX + totalBoxWidth - 14;
+    const drawSummaryRow = (label: string, value: string, y: number) => {
+      composer.currentPage.drawText(label, {
+        x: totalBoxX + 14,
+        y,
+        size: 10.5,
+        font: fonts.bold,
+        color: contentAccentColor,
+      });
+      composer.currentPage.drawText(value, {
+        x: getRightAlignedTextX(value, fonts.bold, 10.5, summaryRightX),
+        y,
+        size: 10.5,
+        font: fonts.bold,
+        color: rgb(0.18, 0.24, 0.31),
+      });
+    };
+
+    drawSummaryRow(
+      "Total Earnings",
+      formatCurrency(payslipTotals.earnings, invoice.currency),
+      totalBoxY + 62,
+    );
+    drawSummaryRow(
+      "Total Deductions",
+      `-${formatCurrency(payslipTotals.deductions, invoice.currency)}`,
+      totalBoxY + 44,
+    );
+    composer.currentPage.drawLine({
+      start: { x: totalBoxX + 14, y: totalBoxY + 34 },
+      end: { x: summaryRightX, y: totalBoxY + 34 },
+      thickness: 1,
+      color: accentBorderColor,
+      opacity: 1,
+    });
+    const totalText = formatCurrency(total, invoice.currency);
+    composer.currentPage.drawText(totalLabel, {
+      x: totalBoxX + 14,
+      y: totalBoxY + 14,
+      size: 11,
+      font: fonts.bold,
+      color: contentAccentColor,
+    });
+    composer.currentPage.drawText(totalText, {
+      x: getRightAlignedTextX(totalText, fonts.bold, 16, summaryRightX),
+      y: totalBoxY + 11,
+      size: 16,
+      font: fonts.bold,
+      color: rgb(0.18, 0.24, 0.31),
+    });
+  } else {
+    composer.currentPage.drawText(totalLabel, {
+      x: totalBoxX + 14,
+      y: totalBoxY + 30,
+      size: 11,
+      font: fonts.bold,
+      color: contentAccentColor,
+    });
+    const totalText = formatCurrency(total, invoice.currency);
+    composer.currentPage.drawText(totalText, {
+      x: getRightAlignedTextX(totalText, fonts.bold, 18, totalBoxX + totalBoxWidth - 14),
+      y: totalBoxY + 12,
+      size: 18,
+      font: fonts.bold,
+      color: rgb(0.18, 0.24, 0.31),
+    });
+  }
   composer.setCursor(totalBoxY - 22);
 
   const paymentDetails = sanitizeText(invoice.paymentDetails);
   const paymentLink = sanitizeText(invoice.paymentLink);
-  if (paymentDetails || paymentLink) {
+  if (!isPayslip && (paymentDetails || paymentLink)) {
     composer.ensureSpace(34);
     composer.currentPage.drawText("Payment Details", {
       x: composer.marginX,
       y: composer.currentY,
       size: 12,
       font: fonts.bold,
-      color: composer.accentColor,
+      color: contentAccentColor,
     });
     composer.moveCursor(20);
 
@@ -1381,6 +2350,8 @@ const renderInvoice = async (
     }
 
     if (paymentLink) {
+      // Keep the label on the same page as the first line of the link.
+      composer.ensureSpace(18 + 15);
       composer.currentPage.drawText("Payment Link", {
         x: composer.marginX,
         y: composer.currentY,
@@ -1394,7 +2365,7 @@ const renderInvoice = async (
         size: 10.5,
         lineHeight: 15,
         paragraphSpacing: 10,
-        color: composer.accentColor,
+        color: contentAccentColor,
       });
     }
   }
@@ -1407,7 +2378,7 @@ const renderInvoice = async (
       y: composer.currentY,
       size: 12,
       font: fonts.bold,
-      color: composer.accentColor,
+      color: contentAccentColor,
     });
     composer.moveCursor(20);
     composer.drawWrappedText(notes, {
@@ -1416,6 +2387,34 @@ const renderInvoice = async (
       lineHeight: 15,
       paragraphSpacing: 12,
     });
+  }
+
+  const signatureText = isPayslip ? "" : sanitizeText(invoice.signature);
+  const signature = fonts.signature?.isFallback
+    ? keepEncodableCharacters(signatureText, fonts.signature.font)
+    : signatureText;
+  if (signature) {
+    const signatureFont = fonts.signature?.font ?? fonts.bold;
+    const signatureSize = 28;
+    const signatureLineHeight = 34;
+    const signatureMaxWidth = Math.min(320, composer.contentWidth * 0.62);
+    const signatureLines = wrapText(signature, signatureFont, signatureSize, signatureMaxWidth);
+    const signatureHeight = signatureLines.length * signatureLineHeight + 8;
+    const signatureSpacingBefore = notes ? 15 : 75;
+
+    composer.ensureSpace(signatureHeight + signatureSpacingBefore);
+    composer.moveCursor(signatureSpacingBefore);
+    signatureLines.forEach((line) => {
+      composer.currentPage.drawText(line, {
+        x: composer.marginX,
+        y: composer.currentY,
+        size: signatureSize,
+        font: signatureFont,
+        color: rgb(0.04, 0.06, 0.09),
+      });
+      composer.moveCursor(signatureLineHeight);
+    });
+    composer.moveCursor(8);
   }
 };
 
@@ -1759,6 +2758,91 @@ const renderCvModern = async (
     composer.setCursor(headingY - 14);
   };
 
+  type PanelRow = { gapBefore: number; height: number; draw: (baselineY: number) => void };
+  const freshPageTop = composer.pageHeight - 54;
+
+  // Draws a shaded panel of text rows. A panel that fits on one page stays whole
+  // (moving to a new page if needed); a taller one is split line by line.
+  const drawPanel = (
+    rows: PanelRow[],
+    style: {
+      padding: number;
+      minHeight: number;
+      fill: ReturnType<typeof rgb>;
+      accentBar: boolean;
+      spacingAfter: number;
+    },
+  ) => {
+    const drawSlice = (slice: { row: PanelRow; gap: number }[], height: number) => {
+      const top = composer.currentY;
+      composer.currentPage.drawRectangle({
+        x: panelX,
+        y: top - height,
+        width: panelWidth,
+        height,
+        color: style.fill,
+        borderWidth: 1,
+        borderColor: rgb(0.88, 0.94, 0.97),
+      });
+      if (style.accentBar) {
+        composer.currentPage.drawRectangle({
+          x: panelX,
+          y: top - height,
+          width: 4,
+          height,
+          color: composer.accentColor,
+        });
+      }
+      let y = top - style.padding;
+      for (const { row, gap } of slice) {
+        y -= gap;
+        row.draw(y);
+        y -= row.height;
+      }
+      composer.setCursor(top - height - style.spacingAfter);
+    };
+    const startFreshPage = () => {
+      composer.addPage();
+      composer.setCursor(freshPageTop);
+    };
+
+    const contentHeight = rows.reduce((total, row) => total + row.gapBefore + row.height, 0);
+    const fullHeight = Math.max(style.minHeight, contentHeight + style.padding * 2);
+    if (fullHeight <= freshPageTop - composer.marginBottom) {
+      if (composer.ensureSpace(fullHeight)) {
+        composer.setCursor(freshPageTop);
+      }
+      drawSlice(
+        rows.map((row) => ({ row, gap: row.gapBefore })),
+        fullHeight,
+      );
+      return;
+    }
+
+    let index = 0;
+    while (index < rows.length) {
+      const spaceLeft = () => composer.currentY - composer.marginBottom - style.padding * 2;
+      if (spaceLeft() < rows[index].height) {
+        startFreshPage();
+      }
+      const available = spaceLeft();
+      const slice: { row: PanelRow; gap: number }[] = [];
+      let used = 0;
+      while (index < rows.length) {
+        const row = rows[index];
+        const gap = slice.length === 0 ? 0 : row.gapBefore;
+        if (slice.length > 0 && used + gap + row.height > available) break;
+        slice.push({ row, gap });
+        used += gap + row.height;
+        index += 1;
+      }
+      drawSlice(slice, used + style.padding * 2);
+      if (index < rows.length) {
+        startFreshPage();
+      }
+    }
+  };
+
   const drawEntryBlock = (
     titleText: string,
     subtitleText: string,
@@ -1766,167 +2850,117 @@ const renderCvModern = async (
     bodyLines: string[],
   ) => {
     const sidePadding = 14;
-    const verticalPadding = 16;
-    const titleLineHeight = 14;
-    const subtitleLineHeight = 12;
-    const bulletLineHeight = 13;
-    const subtitleGap = subtitleText ? 2 : 0;
-    const bodyGap = bodyLines.length > 0 ? 5 : 0;
-    const bulletGap = 2;
     const textMaxWidth = panelWidth - sidePadding * 2;
     const dateColumnWidth = 116;
-    const dateColumnGap = dateRange ? 12 : 0;
-    const textColumnWidth = textMaxWidth - dateColumnWidth - dateColumnGap;
-    const titleLines = wrapText(titleText, fonts.bold, 12, textColumnWidth);
-    const subtitleLines = subtitleText
-      ? wrapText(subtitleText, fonts.regular, 10.4, textColumnWidth)
-      : [];
-    const bulletBlocks = bodyLines.map((line) =>
-      wrapText(line, fonts.regular, 10.1, textMaxWidth - 12),
-    );
-    const titleHeight = titleLines.length * titleLineHeight;
-    const subtitleHeight = subtitleLines.length * subtitleLineHeight;
-    const bulletHeight = bulletBlocks.reduce(
-      (height, lines, index) =>
-        height +
-        Math.max(1, lines.length) * bulletLineHeight +
-        (index < bulletBlocks.length - 1 ? bulletGap : 0),
-      0,
-    );
-    const innerContentHeight = titleHeight + subtitleGap + subtitleHeight + bodyGap + bulletHeight;
-    const contentHeight = Math.max(52, innerContentHeight + verticalPadding * 2);
+    const textColumnWidth = textMaxWidth - dateColumnWidth - (dateRange ? 12 : 0);
+    const rows: PanelRow[] = [];
 
-    const startedNewPage = composer.ensureSpace(contentHeight);
-    if (startedNewPage) {
-      composer.setCursor(composer.pageHeight - 54);
-    }
-    const cardTop = composer.currentY;
-    const cardBottom = cardTop - contentHeight;
-    composer.currentPage.drawRectangle({
-      x: panelX,
-      y: cardBottom,
-      width: panelWidth,
-      height: contentHeight,
-      color: rgb(0.98, 0.99, 1),
-      borderWidth: 1,
-      borderColor: rgb(0.88, 0.94, 0.97),
-    });
-    composer.currentPage.drawRectangle({
-      x: panelX,
-      y: cardBottom,
-      width: 4,
-      height: contentHeight,
-      color: composer.accentColor,
-    });
-
-    let entryY = cardTop - verticalPadding;
-    titleLines.forEach((line) => {
-      composer.currentPage.drawText(line, {
-        x: panelX + sidePadding,
-        y: entryY,
-        size: 12,
-        font: fonts.bold,
-        color: rgb(0.14, 0.18, 0.25),
-      });
-      entryY -= titleLineHeight;
-    });
-
-    if (dateRange) {
-      composer.currentPage.drawText(dateRange, {
-        x: panelX + panelWidth - sidePadding - dateColumnWidth,
-        y: cardTop - verticalPadding + 1,
-        size: 9.8,
-        font: fonts.regular,
-        color: rgb(0.39, 0.45, 0.52),
-      });
-    }
-
-    if (subtitleLines.length > 0) {
-      entryY -= subtitleGap;
-    }
-    subtitleLines.forEach((line) => {
-      composer.currentPage.drawText(line, {
-        x: panelX + sidePadding,
-        y: entryY,
-        size: 10.4,
-        font: fonts.regular,
-        color: rgb(0.33, 0.38, 0.44),
-      });
-      entryY -= subtitleLineHeight;
-    });
-
-    if (bodyLines.length > 0) {
-      entryY -= bodyGap;
-      bulletBlocks.forEach((lines, blockIndex) => {
-        lines.forEach((line, lineIndex) => {
-          if (lineIndex === 0) {
-            composer.currentPage.drawText("•", {
-              x: panelX + sidePadding,
-              y: entryY,
-              size: 10.1,
-              font: fonts.bold,
-              color: rgb(0.2, 0.25, 0.33),
+    wrapText(titleText, fonts.bold, 12, textColumnWidth).forEach((line, index) => {
+      rows.push({
+        gapBefore: 0,
+        height: 14,
+        draw: (y) => {
+          composer.currentPage.drawText(line, {
+            x: panelX + sidePadding,
+            y,
+            size: 12,
+            font: fonts.bold,
+            color: rgb(0.14, 0.18, 0.25),
+          });
+          if (index === 0 && dateRange) {
+            composer.currentPage.drawText(dateRange, {
+              x: panelX + panelWidth - sidePadding - dateColumnWidth,
+              y: y + 1,
+              size: 9.8,
+              font: fonts.regular,
+              color: rgb(0.39, 0.45, 0.52),
             });
           }
-          composer.currentPage.drawText(line, {
-            x: panelX + sidePadding + 12,
-            y: entryY,
-            size: 10.1,
-            font: fonts.regular,
-            color: rgb(0.2, 0.25, 0.33),
-          });
-          entryY -= bulletLineHeight;
+        },
+      });
+    });
+
+    if (subtitleText) {
+      wrapText(subtitleText, fonts.regular, 10.4, textColumnWidth).forEach((line, index) => {
+        rows.push({
+          gapBefore: index === 0 ? 2 : 0,
+          height: 12,
+          draw: (y) => {
+            composer.currentPage.drawText(line, {
+              x: panelX + sidePadding,
+              y,
+              size: 10.4,
+              font: fonts.regular,
+              color: rgb(0.33, 0.38, 0.44),
+            });
+          },
         });
-        if (blockIndex < bulletBlocks.length - 1) {
-          entryY -= bulletGap;
-        }
       });
     }
 
-    composer.setCursor(cardBottom - 6);
+    bodyLines.forEach((bodyLine, blockIndex) => {
+      wrapText(bodyLine, fonts.regular, 10.1, textMaxWidth - 12).forEach((line, lineIndex) => {
+        rows.push({
+          gapBefore: lineIndex > 0 ? 0 : blockIndex === 0 ? 5 : 2,
+          height: 13,
+          draw: (y) => {
+            if (lineIndex === 0) {
+              composer.currentPage.drawText("•", {
+                x: panelX + sidePadding,
+                y,
+                size: 10.1,
+                font: fonts.bold,
+                color: rgb(0.2, 0.25, 0.33),
+              });
+            }
+            composer.currentPage.drawText(line, {
+              x: panelX + sidePadding + 12,
+              y,
+              size: 10.1,
+              font: fonts.regular,
+              color: rgb(0.2, 0.25, 0.33),
+            });
+          },
+        });
+      });
+    });
+
+    drawPanel(rows, {
+      padding: 16,
+      minHeight: 52,
+      fill: rgb(0.98, 0.99, 1),
+      accentBar: true,
+      spacingAfter: 6,
+    });
   };
 
   if (sanitizeText(cv.profileLabel) && sanitizeText(cv.profile)) {
     drawSectionHeading(cv.profileLabel);
-    const profileVerticalPadding = 12;
-    const profileLineHeight = 15;
-    const profileLines = wrapText(cv.profile, fonts.regular, 10.5, panelWidth - 28);
-    const profileTextHeight = profileLines.reduce(
-      (height, line) => height + (line === "" ? 10 : profileLineHeight),
-      0,
+    const rows = wrapText(cv.profile, fonts.regular, 10.5, panelWidth - 28).map(
+      (line): PanelRow =>
+        line === ""
+          ? { gapBefore: 0, height: 10, draw: () => undefined }
+          : {
+              gapBefore: 0,
+              height: 15,
+              draw: (y) => {
+                composer.currentPage.drawText(line, {
+                  x: panelX + 14,
+                  y,
+                  size: 10.5,
+                  font: fonts.regular,
+                  color: rgb(0.2, 0.25, 0.33),
+                });
+              },
+            },
     );
-    const profileHeight = Math.max(54, profileTextHeight + profileVerticalPadding * 2);
-    const startedNewPage = composer.ensureSpace(profileHeight);
-    if (startedNewPage) {
-      composer.setCursor(composer.pageHeight - 54);
-    }
-    const profileTop = composer.currentY;
-    const profileBottom = profileTop - profileHeight;
-    composer.currentPage.drawRectangle({
-      x: panelX,
-      y: profileBottom,
-      width: panelWidth,
-      height: profileHeight,
-      color: rgb(0.96, 0.99, 1),
-      borderWidth: 1,
-      borderColor: rgb(0.88, 0.94, 0.97),
+    drawPanel(rows, {
+      padding: 12,
+      minHeight: 54,
+      fill: rgb(0.96, 0.99, 1),
+      accentBar: false,
+      spacingAfter: 8,
     });
-    let profileY = profileTop - profileVerticalPadding;
-    profileLines.forEach((line) => {
-      if (line === "") {
-        profileY -= 10;
-        return;
-      }
-      composer.currentPage.drawText(line, {
-        x: panelX + 14,
-        y: profileY,
-        size: 10.5,
-        font: fonts.regular,
-        color: rgb(0.2, 0.25, 0.33),
-      });
-      profileY -= profileLineHeight;
-    });
-    composer.setCursor(profileBottom - 8);
   }
 
   if (sanitizeText(cv.experienceLabel) && cv.experiences.length > 0) {
@@ -2016,15 +3050,18 @@ const serializePdf = async (pdfDoc: PDFDocument) => {
 
 export async function createPdfFromDraft(draft: PdfCreatorDraft): Promise<CreatePdfResult> {
   const pdfDoc = await PDFDocument.create();
+  const signatureText = draft.template === "invoice" ? sanitizeText(draft.invoice.signature) : "";
   const fonts = {
     regular: await pdfDoc.embedFont(StandardFonts.Helvetica),
     bold: await pdfDoc.embedFont(StandardFonts.HelveticaBold),
     mono: await pdfDoc.embedFont(StandardFonts.Courier),
+    signature: await embedInvoiceSignatureFont(pdfDoc, Boolean(signatureText)),
   };
 
   const pageSize = getPageDimensions(draft.pageSize, draft.orientation);
-  const composer = new DocumentComposer(pdfDoc, fonts, pageSize, draft.accentColor);
   const logo = await embedLogo(pdfDoc, draft.logoDataUrl);
+  const watermark = await resolvePdfWatermark(pdfDoc, draft, logo, fonts.bold);
+  const composer = new DocumentComposer(pdfDoc, pageSize, draft.accentColor, watermark);
 
   switch (draft.template) {
     case "report":
@@ -2048,6 +3085,13 @@ export async function createPdfFromDraft(draft: PdfCreatorDraft): Promise<Create
       pdfDoc.setSubject("Invoice");
       pdfDoc.setKeywords(["Kyte PDF", "invoice"]);
       break;
+    case "payslip":
+      await renderInvoice(composer, draft, fonts, logo);
+      pdfDoc.setTitle(sanitizeText(draft.payslip.payslipNumber) || "Payslip");
+      pdfDoc.setAuthor(sanitizeText(draft.payslip.companyName) || "Kyte");
+      pdfDoc.setSubject("Payslip");
+      pdfDoc.setKeywords(["Kyte PDF", "payslip"]);
+      break;
     case "cv-harvard":
       await renderCvHarvard(composer, draft, fonts, logo);
       pdfDoc.setTitle(`${sanitizeText(draft.cv.fullName) || "Candidate"} CV`);
@@ -2069,7 +3113,23 @@ export async function createPdfFromDraft(draft: PdfCreatorDraft): Promise<Create
   pdfDoc.setCreationDate(new Date());
   pdfDoc.setModificationDate(new Date());
 
-  if (draft.includePageNumbers) {
+  if (draft.template === "invoice" || draft.template === "payslip") {
+    const financialDocument =
+      draft.template === "invoice"
+        ? { ...draft.invoice, copyrightNote: "" }
+        : {
+            companyReference: draft.payslip.companyReference,
+            copyrightNote: draft.payslip.copyrightNote,
+            footerLogoPosition: draft.payslip.footerLogoPosition,
+          };
+    drawInvoiceFooter(composer, fonts.regular, getReadableAccentTextColor(draft.accentColor), {
+      reference: sanitizeText(financialDocument.companyReference),
+      copyrightNote: sanitizeText(financialDocument.copyrightNote),
+      includePageNumbers: draft.includePageNumbers,
+      logo,
+      logoPosition: normalizeInvoiceFooterLogoPosition(financialDocument.footerLogoPosition),
+    });
+  } else if (draft.includePageNumbers) {
     drawPageNumbers(composer, fonts.regular, rgb(0.52, 0.58, 0.65));
   }
 

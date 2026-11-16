@@ -1,53 +1,65 @@
 import { logger } from "../utils/logger.ts";
 import {
-  type CreatorCvEducation,
-  type CreatorCvExperience,
-  type CreatorCvExtraSection,
-  type CreatorInvoiceItem,
   type CreatorParagraph,
   type CreatorSection,
   calculateInvoiceTotal,
+  calculatePayslipTotals,
   createDefaultCreatorDraft,
-  createDefaultCvEducation,
-  createDefaultCvExperience,
-  createDefaultCvExtraSection,
-  createDefaultInvoiceItem,
-  createDefaultLetterParagraph,
-  createDefaultReportSection,
   createPdfFromDraft,
+  getInvoiceTotalLabel,
   getTemplateLabel,
+  INVOICE_DETAILS_ALIGNMENT_OPTIONS,
+  INVOICE_FOOTER_LOGO_OPTIONS,
+  INVOICE_STATUS_OPTIONS,
+  normalizeInvoiceDetailsAlignment,
+  normalizeInvoiceFooterLogoPosition,
+  normalizeInvoiceStatus,
+  normalizeWatermarkSource,
+  normalizeWatermarkStyle,
+  PDF_CREATOR_TEMPLATES,
   type PdfCreatorDraft,
   type PdfCreatorTemplate,
+  WATERMARK_SOURCE_OPTIONS,
+  WATERMARK_STYLE_OPTIONS,
 } from "../utils/pdfCreator.ts";
+import {
+  addCvEducation,
+  addCvExperience,
+  addCvExtraSection,
+  addInvoiceItem,
+  addLetterParagraph,
+  addPayslipDeduction,
+  addPayslipItem,
+  addReportSection,
+  canFloatPreview,
+  clampFloatingPreviewPosition,
+  computePreviewMetaText,
+  computeSummaryText,
+  type DraftState,
+  FLOATING_PREVIEW_HEIGHT,
+  FLOATING_PREVIEW_TOP,
+  FLOATING_PREVIEW_WIDTH,
+  formatCurrencyAmount,
+  getDefaultFloatingPreviewPosition,
+  getDraftStatusText,
+  moveCollectionItem,
+  normalizeDraft,
+  removeCollectionItem,
+} from "../utils/pdfCreatorWorkflow.ts";
 import { PdfPreviewController } from "../utils/pdfPreview.ts";
-import { moveArrayItem } from "../utils/pdfUtils.ts";
 import { persistence } from "../utils/persistence.ts";
 import { BaseComponent } from "./BaseComponent.ts";
 
-type DraftState = "idle" | "saving" | "saved" | "restored";
 type PreviewMode = "floating" | "docked";
-
-const FLOATING_PREVIEW_BREAKPOINT = 1280;
-const FLOATING_PREVIEW_WIDTH = 420;
-const FLOATING_PREVIEW_GUTTER = 24;
-const FLOATING_PREVIEW_TOP = 112;
-const FLOATING_PREVIEW_HEIGHT = 560;
 
 const TEMPLATE_DESCRIPTIONS: Record<PdfCreatorTemplate, string> = {
   report: "Polished reports, proposals, and briefs with structured sections.",
   letter: "Formal letters with sender, recipient, subject, and signature blocks.",
   invoice: "Client-ready invoices with line items, totals, and payment notes.",
+  payslip: "Payroll-ready payslips with company, employee, earnings, and pay details.",
   "cv-harvard": "Classic Harvard-style CV with editable section titles and ATS-friendly structure.",
   "cv-modern": "Contemporary CV with stronger visual hierarchy and the same structured data model.",
 };
-
-const TEMPLATE_OPTIONS: PdfCreatorTemplate[] = [
-  "report",
-  "letter",
-  "invoice",
-  "cv-harvard",
-  "cv-modern",
-];
 
 export class PdfCreator extends BaseComponent {
   protected toolKey = "create-pdf";
@@ -84,7 +96,7 @@ export class PdfCreator extends BaseComponent {
           <div class="creator-status-bar">
             <div>
               <strong>Local draft:</strong>
-              <span id="draftStatusText">${this.getDraftStatusText()}</span>
+              <span id="draftStatusText">${getDraftStatusText(this.draftState)}</span>
             </div>
             <button id="resetDraftBtn" class="btn btn-secondary btn-sm" style="width: auto;">Start Over</button>
           </div>
@@ -111,7 +123,7 @@ export class PdfCreator extends BaseComponent {
                 </div>
               </div>
               <div class="creator-template-grid">
-                ${TEMPLATE_OPTIONS.map(
+                ${PDF_CREATOR_TEMPLATES.map(
                   (template) => `
                   <button
                     class="creator-template-option ${draft.template === template ? "active" : ""}"
@@ -211,7 +223,7 @@ export class PdfCreator extends BaseComponent {
             </div>
 
             <div class="creator-action-row">
-              <span id="creatorSummary">${this.getSummaryText()}</span>
+              <span id="creatorSummary">${computeSummaryText(this.draft, this.previewPageCount)}</span>
               <button id="createPdfBtn" class="btn btn-primary" ${this.isCreating ? "disabled" : ""}>
                 ${this.isCreating ? "Creating..." : "Create PDF"}
               </button>
@@ -230,6 +242,7 @@ export class PdfCreator extends BaseComponent {
         </div>
 
         <input type="file" id="logoInput" class="hidden" accept="image/png,image/jpeg" />
+        <input type="file" id="watermarkImageInput" class="hidden" accept="image/png,image/jpeg" />
 
         ${this.getProgressSection("Preparing document...")}
 
@@ -350,7 +363,7 @@ export class PdfCreator extends BaseComponent {
   }
 
   private renderPreviewCard(isFloating: boolean) {
-    const canFloat = this.canFloatPreview();
+    const canFloat = canFloatPreview(window);
     const modeLabel = isFloating ? "Dock Preview" : "Float Preview";
     const toggleButton = canFloat
       ? `<button id="togglePreviewModeBtn" class="btn btn-secondary btn-sm" style="width: auto;" type="button">${modeLabel}</button>`
@@ -364,7 +377,7 @@ export class PdfCreator extends BaseComponent {
         <div class="creator-card-header creator-preview-header">
           <div class="creator-preview-meta">
             <h3>Live Preview</h3>
-            <p id="previewMetaText">${this.getPreviewMetaText()}</p>
+            <p id="previewMetaText">${computePreviewMetaText(this.previewPageCount, null)}</p>
           </div>
           ${toggleButton ? `<div class="creator-preview-controls">${toggleButton}</div>` : ""}
         </div>
@@ -403,6 +416,8 @@ export class PdfCreator extends BaseComponent {
         return this.renderLetterEditor();
       case "invoice":
         return this.renderInvoiceEditor();
+      case "payslip":
+        return this.renderPayslipEditor();
       case "cv-harvard":
       case "cv-modern":
         return this.renderCvEditor();
@@ -538,6 +553,7 @@ export class PdfCreator extends BaseComponent {
 
   private renderInvoiceEditor() {
     const total = calculateInvoiceTotal(this.draft.invoice.lineItems);
+    const totalLabel = getInvoiceTotalLabel(normalizeInvoiceStatus(this.draft.invoice.status));
     return `
       <div class="creator-settings-grid">
         <div class="control-group">
@@ -548,6 +564,61 @@ export class PdfCreator extends BaseComponent {
           <label for="invoiceNumber">Invoice #</label>
           <input type="text" id="invoiceNumber" value="${this.sanitize(this.draft.invoice.invoiceNumber)}" />
         </div>
+      </div>
+
+      <div class="creator-settings-grid">
+        <div class="control-group">
+          <label>&nbsp;</label>
+          <label class="creator-inline-check">
+            <input type="checkbox" id="invoiceBusinessNameHeaderToggle" ${this.draft.invoice.includeBusinessNameInHeader ? "checked" : ""} />
+            <span>Show business name in header</span>
+          </label>
+        </div>
+        <div class="control-group">
+          <label for="invoiceHeaderTextColor">Header Text Color</label>
+          <input
+            type="color"
+            id="invoiceHeaderTextColor"
+            value="${this.sanitize(this.draft.invoice.headerTextColor)}"
+          />
+        </div>
+      </div>
+
+      <div class="creator-settings-grid">
+        <div class="control-group">
+          <label for="invoiceCompanyReference">Company Reference (Optional)</label>
+          <input
+            type="text"
+            id="invoiceCompanyReference"
+            value="${this.sanitize(this.draft.invoice.companyReference)}"
+            placeholder="PO, platform, or client reference"
+          />
+        </div>
+        <div class="control-group">
+          <label for="invoiceDetailsAlignment">Details Value Alignment</label>
+          <select id="invoiceDetailsAlignment">
+            ${INVOICE_DETAILS_ALIGNMENT_OPTIONS.map(
+              (option) => `
+              <option value="${option.value}" ${this.draft.invoice.detailsValueAlignment === option.value ? "selected" : ""}>
+                ${option.label}
+              </option>
+            `,
+            ).join("")}
+          </select>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label for="invoiceFooterLogoPosition">Footer Logo Position</label>
+        <select id="invoiceFooterLogoPosition">
+          ${INVOICE_FOOTER_LOGO_OPTIONS.map(
+            (option) => `
+            <option value="${option.value}" ${this.draft.invoice.footerLogoPosition === option.value ? "selected" : ""}>
+              ${option.label}
+            </option>
+          `,
+          ).join("")}
+        </select>
       </div>
 
       <div class="control-group">
@@ -583,6 +654,25 @@ export class PdfCreator extends BaseComponent {
         <div class="control-group">
           <label for="invoiceDueDate">Due Date</label>
           <input type="date" id="invoiceDueDate" value="${this.sanitize(this.draft.invoice.dueDate)}" />
+        </div>
+      </div>
+
+      <div class="creator-settings-grid">
+        <div class="control-group">
+          <label for="invoiceStatus">Status</label>
+          <select id="invoiceStatus">
+            ${INVOICE_STATUS_OPTIONS.map(
+              (option) => `
+              <option value="${option.value}" ${this.draft.invoice.status === option.value ? "selected" : ""}>
+                ${option.label}
+              </option>
+            `,
+            ).join("")}
+          </select>
+        </div>
+        <div class="control-group">
+          <label for="invoicePaidDate">Paid Date (If Paid)</label>
+          <input type="date" id="invoicePaidDate" value="${this.sanitize(this.draft.invoice.paidDate)}" />
         </div>
       </div>
 
@@ -643,17 +733,332 @@ export class PdfCreator extends BaseComponent {
       </div>
 
       <div class="creator-invoice-total">
-        <span>Total</span>
-        <strong>${total.toLocaleString(undefined, {
-          style: "currency",
-          currency: this.draft.invoice.currency,
-          maximumFractionDigits: 2,
-        })}</strong>
+        <span>${totalLabel}</span>
+        <strong>${formatCurrencyAmount(total, this.draft.invoice.currency)}</strong>
       </div>
 
       <div class="control-group">
         <label for="invoiceNotes">Notes</label>
         <textarea id="invoiceNotes" rows="4">${this.sanitize(this.draft.invoice.notes)}</textarea>
+      </div>
+
+      <div class="control-group">
+        <label for="invoiceSignature">Signature (Optional)</label>
+        <input
+          type="text"
+          id="invoiceSignature"
+          value="${this.sanitize(this.draft.invoice.signature)}"
+          placeholder="Name to sign on the invoice"
+        />
+      </div>
+    `;
+  }
+
+  private renderPayslipEditor() {
+    const { payslip } = this.draft;
+    const totals = calculatePayslipTotals(payslip);
+    return `
+      <div class="creator-settings-grid">
+        <div class="control-group">
+          <label for="payslipCompanyName">Company Name</label>
+          <input type="text" id="payslipCompanyName" value="${this.sanitize(payslip.companyName)}" />
+        </div>
+        <div class="control-group">
+          <label for="payslipNumber">Payslip #</label>
+          <input type="text" id="payslipNumber" value="${this.sanitize(payslip.payslipNumber)}" />
+        </div>
+      </div>
+
+      <div class="creator-settings-grid">
+        <div class="control-group">
+          <label>&nbsp;</label>
+          <label class="creator-inline-check">
+            <input type="checkbox" id="payslipCompanyNameHeaderToggle" ${payslip.includeCompanyNameInHeader ? "checked" : ""} />
+            <span>Show company name in header</span>
+          </label>
+        </div>
+        <div class="control-group">
+          <label for="payslipHeaderTextColor">Header Text Color</label>
+          <input
+            type="color"
+            id="payslipHeaderTextColor"
+            value="${this.sanitize(payslip.headerTextColor)}"
+          />
+        </div>
+      </div>
+
+      <div class="creator-settings-grid">
+        <div class="control-group">
+          <label for="payslipCompanyReference">Company Reference (Optional)</label>
+          <input
+            type="text"
+            id="payslipCompanyReference"
+            value="${this.sanitize(payslip.companyReference)}"
+            placeholder="Payroll, platform, or company reference"
+          />
+        </div>
+        <div class="control-group">
+          <label for="payslipDetailsAlignment">Details Value Alignment</label>
+          <select id="payslipDetailsAlignment">
+            ${INVOICE_DETAILS_ALIGNMENT_OPTIONS.map(
+              (option) => `
+              <option value="${option.value}" ${payslip.detailsValueAlignment === option.value ? "selected" : ""}>
+                ${option.label}
+              </option>
+            `,
+            ).join("")}
+          </select>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label for="payslipFooterLogoPosition">Footer Logo Position</label>
+        <select id="payslipFooterLogoPosition">
+          ${INVOICE_FOOTER_LOGO_OPTIONS.map(
+            (option) => `
+            <option value="${option.value}" ${payslip.footerLogoPosition === option.value ? "selected" : ""}>
+              ${option.label}
+            </option>
+          `,
+          ).join("")}
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label for="payslipCopyrightNote">Copyright Note (Optional)</label>
+        <input
+          type="text"
+          id="payslipCopyrightNote"
+          value="${this.sanitize(payslip.copyrightNote)}"
+          placeholder="© 2026 Company Name. All rights reserved."
+        />
+      </div>
+
+      <div class="creator-repeatable-header">
+        <h4>Watermark</h4>
+      </div>
+      <div class="control-group">
+        <label class="creator-inline-check">
+          <input type="checkbox" id="payslipWatermarkEnabled" ${payslip.watermark.enabled ? "checked" : ""} />
+          <span>Include watermark</span>
+        </label>
+      </div>
+
+      <div class="creator-settings-grid">
+        <div class="control-group">
+          <label for="payslipWatermarkSource">Watermark Source</label>
+          <select id="payslipWatermarkSource">
+            ${WATERMARK_SOURCE_OPTIONS.map(
+              (option) => `
+              <option value="${option.value}" ${payslip.watermark.source === option.value ? "selected" : ""}>
+                ${option.label}
+              </option>
+            `,
+            ).join("")}
+          </select>
+        </div>
+        <div class="control-group">
+          <label for="payslipWatermarkStyle">Watermark Style</label>
+          <select id="payslipWatermarkStyle">
+            ${WATERMARK_STYLE_OPTIONS.map(
+              (option) => `
+              <option value="${option.value}" ${payslip.watermark.style === option.value ? "selected" : ""}>
+                ${option.label}
+              </option>
+            `,
+            ).join("")}
+          </select>
+        </div>
+      </div>
+
+      ${
+        payslip.watermark.source === "custom-image"
+          ? `
+        <div class="creator-brand-row">
+          <button id="uploadWatermarkImageBtn" class="btn btn-secondary btn-sm" style="width: auto;" type="button">
+            ${payslip.watermark.customImageDataUrl ? "Replace Watermark Image" : "Upload Watermark Image"}
+          </button>
+          ${
+            payslip.watermark.customImageDataUrl
+              ? '<button id="clearWatermarkImageBtn" class="btn btn-secondary btn-sm" style="width: auto;" type="button">Remove Image</button>'
+              : ""
+          }
+        </div>
+        <p class="creator-logo-caption">
+          ${
+            payslip.watermark.customImageFileName
+              ? `Current watermark: ${this.sanitize(payslip.watermark.customImageFileName)}`
+              : "Upload a PNG or JPG to use instead of the company logo."
+          }
+        </p>
+      `
+          : ""
+      }
+
+      ${
+        payslip.watermark.source === "text"
+          ? `
+        <div class="control-group">
+          <label for="payslipWatermarkText">Watermark Text</label>
+          <input type="text" id="payslipWatermarkText" value="${this.sanitize(payslip.watermark.text)}" placeholder="CONFIDENTIAL" />
+        </div>
+      `
+          : ""
+      }
+
+      <div class="creator-settings-grid">
+        <div class="control-group">
+          <label for="payslipWatermarkOpacity">Opacity (%)</label>
+          <input type="number" id="payslipWatermarkOpacity" min="1" max="60" step="1" value="${payslip.watermark.opacity}" />
+        </div>
+        <div class="control-group">
+          <label for="payslipWatermarkSize">Size (%)</label>
+          <input type="number" id="payslipWatermarkSize" min="10" max="90" step="1" value="${payslip.watermark.size}" />
+        </div>
+      </div>
+
+      <div class="creator-settings-grid">
+        <div class="control-group">
+          <label for="payslipWatermarkRotation">Rotation (Degrees)</label>
+          <input type="number" id="payslipWatermarkRotation" min="-180" max="180" step="1" value="${payslip.watermark.rotation}" />
+        </div>
+        <div class="control-group">
+          <label>&nbsp;</label>
+          <label class="creator-inline-check">
+            <input type="checkbox" id="payslipWatermarkGrayscale" ${payslip.watermark.grayscale ? "checked" : ""} ${payslip.watermark.source === "text" ? "disabled" : ""} />
+            <span>Use grayscale image</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label for="payslipCompanyAddress">Company Address</label>
+        <textarea id="payslipCompanyAddress" rows="4" placeholder="Shown below the company logo">${this.sanitize(payslip.companyAddress)}</textarea>
+      </div>
+
+      <div class="creator-settings-grid">
+        <div class="control-group">
+          <label for="payslipEmployeeName">Employee Name</label>
+          <input type="text" id="payslipEmployeeName" value="${this.sanitize(payslip.employeeName)}" />
+        </div>
+        <div class="control-group">
+          <label for="payslipCurrency">Currency</label>
+          <select id="payslipCurrency">
+            <option value="USD" ${payslip.currency === "USD" ? "selected" : ""}>USD</option>
+            <option value="EUR" ${payslip.currency === "EUR" ? "selected" : ""}>EUR</option>
+            <option value="GBP" ${payslip.currency === "GBP" ? "selected" : ""}>GBP</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label for="payslipEmployeeDetails">Employee Information</label>
+        <textarea id="payslipEmployeeDetails" rows="4" placeholder="Employee ID, role, department, or address">${this.sanitize(payslip.employeeDetails)}</textarea>
+      </div>
+
+      <div class="creator-settings-grid">
+        <div class="control-group">
+          <label for="payslipPayPeriod">Pay Period</label>
+          <input type="text" id="payslipPayPeriod" value="${this.sanitize(payslip.payPeriod)}" placeholder="June 2026" />
+        </div>
+        <div class="control-group">
+          <label for="payslipPayDate">Pay Date</label>
+          <input type="date" id="payslipPayDate" value="${this.sanitize(payslip.payDate)}" />
+        </div>
+      </div>
+
+      <div class="creator-repeatable-header">
+        <h4>Earnings</h4>
+        <button id="addPayslipItemBtn" class="btn btn-secondary btn-sm" style="width: auto;" type="button">Add Earning</button>
+      </div>
+      <div class="creator-repeatable-list">
+        ${payslip.lineItems
+          .map(
+            (item, index) => `
+          <div class="creator-item-card">
+            <div class="creator-item-toolbar">
+              <span>Earning ${index + 1}</span>
+              <div class="creator-item-actions">
+                <button type="button" class="action-btn payslip-move-up" data-id="${item.id}" ${index === 0 ? "disabled" : ""}>↑</button>
+                <button type="button" class="action-btn payslip-move-down" data-id="${item.id}" ${index === payslip.lineItems.length - 1 ? "disabled" : ""}>↓</button>
+                <button type="button" class="action-btn payslip-remove" data-id="${item.id}" ${payslip.lineItems.length === 1 ? "disabled" : ""}>×</button>
+              </div>
+            </div>
+            <div class="control-group">
+              <label>Description</label>
+              <textarea class="payslip-item-description" data-id="${item.id}" rows="3">${this.sanitize(item.description)}</textarea>
+            </div>
+            <div class="creator-settings-grid">
+              <div class="control-group">
+                <label>Quantity</label>
+                <input type="number" min="0" step="1" class="payslip-item-quantity" data-id="${item.id}" value="${item.quantity}" />
+              </div>
+              <div class="control-group">
+                <label>Rate</label>
+                <input type="number" min="0" step="0.01" class="payslip-item-rate" data-id="${item.id}" value="${item.unitPrice}" />
+              </div>
+            </div>
+          </div>
+        `,
+          )
+          .join("")}
+      </div>
+
+      <div class="creator-repeatable-header">
+        <h4>Deductions</h4>
+        <button id="addPayslipDeductionBtn" class="btn btn-secondary btn-sm" style="width: auto;" type="button">Add Deduction</button>
+      </div>
+      <div class="creator-repeatable-list">
+        ${payslip.deductions
+          .map(
+            (item, index) => `
+          <div class="creator-item-card">
+            <div class="creator-item-toolbar">
+              <span>Deduction ${index + 1}</span>
+              <div class="creator-item-actions">
+                <button type="button" class="action-btn payslip-deduction-move-up" data-id="${item.id}" ${index === 0 ? "disabled" : ""}>↑</button>
+                <button type="button" class="action-btn payslip-deduction-move-down" data-id="${item.id}" ${index === payslip.deductions.length - 1 ? "disabled" : ""}>↓</button>
+                <button type="button" class="action-btn payslip-deduction-remove" data-id="${item.id}" ${payslip.deductions.length === 1 ? "disabled" : ""}>×</button>
+              </div>
+            </div>
+            <div class="control-group">
+              <label>Description</label>
+              <textarea class="payslip-deduction-description" data-id="${item.id}" rows="3">${this.sanitize(item.description)}</textarea>
+            </div>
+            <div class="creator-settings-grid">
+              <div class="control-group">
+                <label>Quantity</label>
+                <input type="number" min="0" step="1" class="payslip-deduction-quantity" data-id="${item.id}" value="${item.quantity}" />
+              </div>
+              <div class="control-group">
+                <label>Rate</label>
+                <input type="number" min="0" step="0.01" class="payslip-deduction-rate" data-id="${item.id}" value="${item.unitPrice}" />
+              </div>
+            </div>
+          </div>
+        `,
+          )
+          .join("")}
+      </div>
+
+      <div class="creator-invoice-total creator-payslip-totals">
+        <div class="creator-payslip-total-row">
+          <span>Total Earnings</span>
+          <strong data-payslip-total="earnings">${formatCurrencyAmount(totals.earnings, payslip.currency)}</strong>
+        </div>
+        <div class="creator-payslip-total-row">
+          <span>Total Deductions</span>
+          <strong data-payslip-total="deductions">-${formatCurrencyAmount(totals.deductions, payslip.currency)}</strong>
+        </div>
+        <div class="creator-payslip-total-row creator-payslip-net-total">
+          <span>Total Pay</span>
+          <strong data-payslip-total="net">${formatCurrencyAmount(totals.totalPay, payslip.currency)}</strong>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label for="payslipNotes">Notes</label>
+        <textarea id="payslipNotes" rows="4">${this.sanitize(payslip.notes)}</textarea>
       </div>
     `;
   }
@@ -891,17 +1296,11 @@ export class PdfCreator extends BaseComponent {
         this.bindInput("#reportSummary", (value) => {
           this.draft.report.summary = value;
         });
-        this.querySelector("#addReportSectionBtn")?.addEventListener("click", () => {
-          this.draft.report.sections.push(createDefaultReportSection());
-          this.refreshUi();
-          this.handleDraftMutation();
-        });
+        this.bindAddButton("#addReportSectionBtn", addReportSection);
         this.bindCollectionControls<CreatorSection>({
+          prefix: "report",
           headingSelector: ".report-section-heading",
           bodySelector: ".report-section-body",
-          removeSelector: ".report-remove",
-          moveUpSelector: ".report-move-up",
-          moveDownSelector: ".report-move-down",
           items: this.draft.report.sections,
           onHeading: (item, value) => {
             item.heading = value;
@@ -942,16 +1341,10 @@ export class PdfCreator extends BaseComponent {
         this.bindSelect("#letterDate", (value) => {
           this.draft.letter.date = value;
         });
-        this.querySelector("#addLetterParagraphBtn")?.addEventListener("click", () => {
-          this.draft.letter.paragraphs.push(createDefaultLetterParagraph());
-          this.refreshUi();
-          this.handleDraftMutation();
-        });
+        this.bindAddButton("#addLetterParagraphBtn", addLetterParagraph);
         this.bindCollectionControls<CreatorParagraph>({
+          prefix: "letter",
           bodySelector: ".letter-paragraph-text",
-          removeSelector: ".letter-remove",
-          moveUpSelector: ".letter-move-up",
-          moveDownSelector: ".letter-move-down",
           items: this.draft.letter.paragraphs,
           onBody: (item, value) => {
             item.text = value;
@@ -962,6 +1355,12 @@ export class PdfCreator extends BaseComponent {
         });
         break;
       case "invoice":
+        this.bindCheckbox("#invoiceBusinessNameHeaderToggle", (checked) => {
+          this.draft.invoice.includeBusinessNameInHeader = checked;
+        });
+        this.bindInput("#invoiceHeaderTextColor", (value) => {
+          this.draft.invoice.headerTextColor = value;
+        });
         this.bindInput("#invoiceBusinessName", (value) => {
           this.draft.invoice.businessName = value;
         });
@@ -977,11 +1376,27 @@ export class PdfCreator extends BaseComponent {
         this.bindInput("#invoiceNumber", (value) => {
           this.draft.invoice.invoiceNumber = value;
         });
+        this.bindInput("#invoiceCompanyReference", (value) => {
+          this.draft.invoice.companyReference = value;
+        });
+        this.bindSelect("#invoiceDetailsAlignment", (value) => {
+          this.draft.invoice.detailsValueAlignment = normalizeInvoiceDetailsAlignment(value);
+        });
+        this.bindSelect("#invoiceFooterLogoPosition", (value) => {
+          this.draft.invoice.footerLogoPosition = normalizeInvoiceFooterLogoPosition(value);
+        });
         this.bindSelect("#invoiceIssueDate", (value) => {
           this.draft.invoice.issueDate = value;
         });
         this.bindSelect("#invoiceDueDate", (value) => {
           this.draft.invoice.dueDate = value;
+        });
+        this.bindSelect("#invoiceStatus", (value) => {
+          this.draft.invoice.status = normalizeInvoiceStatus(value);
+          this.updateInvoiceTotalDisplay();
+        });
+        this.bindSelect("#invoicePaidDate", (value) => {
+          this.draft.invoice.paidDate = value;
         });
         this.bindSelect("#invoiceCurrency", (value) => {
           this.draft.invoice.currency = value as PdfCreatorDraft["invoice"]["currency"];
@@ -996,12 +1411,98 @@ export class PdfCreator extends BaseComponent {
         this.bindInput("#invoiceNotes", (value) => {
           this.draft.invoice.notes = value;
         });
-        this.querySelector("#addInvoiceItemBtn")?.addEventListener("click", () => {
-          this.draft.invoice.lineItems.push(createDefaultInvoiceItem());
-          this.refreshUi();
-          this.handleDraftMutation();
+        this.bindInput("#invoiceSignature", (value) => {
+          this.draft.invoice.signature = value;
         });
+        this.bindAddButton("#addInvoiceItemBtn", addInvoiceItem);
         this.bindInvoiceItemControls();
+        break;
+      case "payslip":
+        this.bindCheckbox("#payslipCompanyNameHeaderToggle", (checked) => {
+          this.draft.payslip.includeCompanyNameInHeader = checked;
+        });
+        this.bindInput("#payslipHeaderTextColor", (value) => {
+          this.draft.payslip.headerTextColor = value;
+        });
+        this.bindInput("#payslipCompanyName", (value) => {
+          this.draft.payslip.companyName = value;
+        });
+        this.bindInput("#payslipCompanyAddress", (value) => {
+          this.draft.payslip.companyAddress = value;
+        });
+        this.bindInput("#payslipEmployeeName", (value) => {
+          this.draft.payslip.employeeName = value;
+        });
+        this.bindInput("#payslipEmployeeDetails", (value) => {
+          this.draft.payslip.employeeDetails = value;
+        });
+        this.bindInput("#payslipNumber", (value) => {
+          this.draft.payslip.payslipNumber = value;
+        });
+        this.bindInput("#payslipCompanyReference", (value) => {
+          this.draft.payslip.companyReference = value;
+        });
+        this.bindSelect("#payslipDetailsAlignment", (value) => {
+          this.draft.payslip.detailsValueAlignment = normalizeInvoiceDetailsAlignment(value);
+        });
+        this.bindSelect("#payslipFooterLogoPosition", (value) => {
+          this.draft.payslip.footerLogoPosition = normalizeInvoiceFooterLogoPosition(value);
+        });
+        this.bindInput("#payslipCopyrightNote", (value) => {
+          this.draft.payslip.copyrightNote = value;
+        });
+        this.bindCheckbox("#payslipWatermarkEnabled", (checked) => {
+          this.draft.payslip.watermark.enabled = checked;
+        });
+        this.bindSelect("#payslipWatermarkSource", (value) => {
+          this.draft.payslip.watermark.source = normalizeWatermarkSource(value);
+          this.refreshUi();
+        });
+        this.bindSelect("#payslipWatermarkStyle", (value) => {
+          this.draft.payslip.watermark.style = normalizeWatermarkStyle(value);
+        });
+        this.bindInput("#payslipWatermarkText", (value) => {
+          this.draft.payslip.watermark.text = value;
+        });
+        this.bindInput("#payslipWatermarkOpacity", (value) => {
+          this.draft.payslip.watermark.opacity = Math.min(
+            60,
+            Math.max(1, Number.parseFloat(value) || 1),
+          );
+        });
+        this.bindInput("#payslipWatermarkSize", (value) => {
+          this.draft.payslip.watermark.size = Math.min(
+            90,
+            Math.max(10, Number.parseFloat(value) || 10),
+          );
+        });
+        this.bindInput("#payslipWatermarkRotation", (value) => {
+          this.draft.payslip.watermark.rotation = Math.min(
+            180,
+            Math.max(-180, Number.parseFloat(value) || 0),
+          );
+        });
+        this.bindCheckbox("#payslipWatermarkGrayscale", (checked) => {
+          this.draft.payslip.watermark.grayscale = checked;
+        });
+        this.bindWatermarkImageControls();
+        this.bindInput("#payslipPayPeriod", (value) => {
+          this.draft.payslip.payPeriod = value;
+        });
+        this.bindSelect("#payslipPayDate", (value) => {
+          this.draft.payslip.payDate = value;
+        });
+        this.bindSelect("#payslipCurrency", (value) => {
+          this.draft.payslip.currency = value as PdfCreatorDraft["payslip"]["currency"];
+          this.updateInvoiceTotalDisplay();
+        });
+        this.bindInput("#payslipNotes", (value) => {
+          this.draft.payslip.notes = value;
+        });
+        this.bindAddButton("#addPayslipItemBtn", addPayslipItem);
+        this.bindAddButton("#addPayslipDeductionBtn", addPayslipDeduction);
+        this.bindPayslipItemControls();
+        this.bindPayslipDeductionControls();
         break;
       case "cv-harvard":
       case "cv-modern":
@@ -1052,21 +1553,9 @@ export class PdfCreator extends BaseComponent {
         this.bindInput("#cvSkills", (value) => {
           this.draft.cv.skills = value;
         });
-        this.querySelector("#addCvExperienceBtn")?.addEventListener("click", () => {
-          this.draft.cv.experiences.push(createDefaultCvExperience());
-          this.refreshUi();
-          this.handleDraftMutation();
-        });
-        this.querySelector("#addCvEducationBtn")?.addEventListener("click", () => {
-          this.draft.cv.education.push(createDefaultCvEducation());
-          this.refreshUi();
-          this.handleDraftMutation();
-        });
-        this.querySelector("#addCvSectionBtn")?.addEventListener("click", () => {
-          this.draft.cv.additionalSections.push(createDefaultCvExtraSection());
-          this.refreshUi();
-          this.handleDraftMutation();
-        });
+        this.bindAddButton("#addCvExperienceBtn", addCvExperience);
+        this.bindAddButton("#addCvEducationBtn", addCvEducation);
+        this.bindAddButton("#addCvSectionBtn", addCvExtraSection);
         this.bindCvExperienceControls();
         this.bindCvEducationControls();
         this.bindCvExtraSectionControls();
@@ -1074,12 +1563,42 @@ export class PdfCreator extends BaseComponent {
     }
   }
 
+  private bindAddButton(selector: string, add: (draft: PdfCreatorDraft) => PdfCreatorDraft) {
+    this.querySelector(selector)?.addEventListener("click", () => {
+      this.draft = add(this.draft);
+      this.refreshUi();
+      this.handleDraftMutation();
+    });
+  }
+
+  /** Binds the remove, move-up and move-down buttons of one repeatable list. */
+  private bindOrderControls<T extends { id: string }>(
+    prefix: string,
+    items: T[],
+    onReplace: (items: T[]) => void,
+  ) {
+    const bind = (action: string, update: (id: string) => T[] | null) => {
+      this.querySelectorAll<HTMLElement>(`.${prefix}-${action}`).forEach((button) => {
+        button.addEventListener("click", () => {
+          const next = update(button.dataset.id ?? "");
+          // null: removing would empty the list; same array: the move is a no-op.
+          if (!next || next === items) return;
+          onReplace(next);
+          this.refreshUi();
+          this.handleDraftMutation();
+        });
+      });
+    };
+
+    bind("remove", (id) => removeCollectionItem(items, id));
+    bind("move-up", (id) => moveCollectionItem(items, id, -1));
+    bind("move-down", (id) => moveCollectionItem(items, id, 1));
+  }
+
   private bindCollectionControls<T extends { id: string }>(options: {
+    prefix: string;
     headingSelector?: string;
     bodySelector: string;
-    removeSelector: string;
-    moveUpSelector: string;
-    moveDownSelector: string;
     items: T[];
     onHeading?: (item: T, value: string) => void;
     onBody: (item: T, value: string) => void;
@@ -1105,34 +1624,46 @@ export class PdfCreator extends BaseComponent {
       });
     });
 
-    this.querySelectorAll<HTMLElement>(options.removeSelector).forEach((button) => {
-      button.addEventListener("click", () => {
-        const next = options.items.filter((entry) => entry.id !== button.dataset.id);
-        if (next.length === 0) return;
-        options.onReplace(next);
-        this.refreshUi();
-        this.handleDraftMutation();
-      });
-    });
+    this.bindOrderControls(options.prefix, options.items, options.onReplace);
+  }
 
-    this.querySelectorAll<HTMLElement>(options.moveUpSelector).forEach((button) => {
-      button.addEventListener("click", () => {
-        const index = options.items.findIndex((entry) => entry.id === button.dataset.id);
-        if (index < 1) return;
-        options.onReplace(moveArrayItem(options.items, index, -1));
-        this.refreshUi();
-        this.handleDraftMutation();
-      });
-    });
+  private bindWatermarkImageControls() {
+    const uploadButton = this.querySelector("#uploadWatermarkImageBtn") as HTMLButtonElement | null;
+    const clearButton = this.querySelector("#clearWatermarkImageBtn") as HTMLButtonElement | null;
+    const input = this.querySelector("#watermarkImageInput") as HTMLInputElement | null;
+    if (!uploadButton || !input) return;
 
-    this.querySelectorAll<HTMLElement>(options.moveDownSelector).forEach((button) => {
-      button.addEventListener("click", () => {
-        const index = options.items.findIndex((entry) => entry.id === button.dataset.id);
-        if (index < 0 || index === options.items.length - 1) return;
-        options.onReplace(moveArrayItem(options.items, index, 1));
+    uploadButton.addEventListener("click", () => input.click());
+    clearButton?.addEventListener("click", () => {
+      this.draft.payslip.watermark.customImageDataUrl = null;
+      this.draft.payslip.watermark.customImageFileName = null;
+      this.refreshUi();
+      this.handleDraftMutation();
+    });
+    input.addEventListener("change", async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (
+        !(await this.validateFile(file, {
+          maxSizeMB: 5,
+          allowedTypes: ["image/png", "image/jpeg"],
+        }))
+      ) {
+        input.value = "";
+        return;
+      }
+
+      try {
+        this.draft.payslip.watermark.customImageDataUrl = await this.fileToDataUrl(file);
+        this.draft.payslip.watermark.customImageFileName = file.name;
         this.refreshUi();
         this.handleDraftMutation();
-      });
+      } catch (error) {
+        logger.error("Failed to process watermark image upload", error);
+        await this.showErrorDialog("Could not read the selected watermark image.");
+      } finally {
+        input.value = "";
+      }
     });
   }
 
@@ -1168,34 +1699,84 @@ export class PdfCreator extends BaseComponent {
       });
     });
 
-    this.querySelectorAll<HTMLElement>(".invoice-remove").forEach((button) => {
-      button.addEventListener("click", () => {
-        const next = items.filter((entry) => entry.id !== button.dataset.id);
-        if (next.length === 0) return;
-        this.draft.invoice.lineItems = next;
-        this.refreshUi();
+    this.bindOrderControls("invoice", items, (next) => {
+      this.draft.invoice.lineItems = next;
+    });
+  }
+
+  private bindPayslipItemControls() {
+    const items = this.draft.payslip.lineItems;
+
+    this.querySelectorAll<HTMLTextAreaElement>(".payslip-item-description").forEach((textarea) => {
+      textarea.addEventListener("input", () => {
+        const item = items.find((entry) => entry.id === textarea.dataset.id);
+        if (!item) return;
+        item.description = textarea.value;
         this.handleDraftMutation();
       });
     });
 
-    this.querySelectorAll<HTMLElement>(".invoice-move-up").forEach((button) => {
-      button.addEventListener("click", () => {
-        const index = items.findIndex((entry) => entry.id === button.dataset.id);
-        if (index < 1) return;
-        this.draft.invoice.lineItems = moveArrayItem(items, index, -1) as CreatorInvoiceItem[];
-        this.refreshUi();
+    this.querySelectorAll<HTMLInputElement>(".payslip-item-quantity").forEach((input) => {
+      input.addEventListener("input", () => {
+        const item = items.find((entry) => entry.id === input.dataset.id);
+        if (!item) return;
+        item.quantity = Math.max(0, parseFloat(input.value || "0"));
+        this.updateInvoiceTotalDisplay();
         this.handleDraftMutation();
       });
     });
 
-    this.querySelectorAll<HTMLElement>(".invoice-move-down").forEach((button) => {
-      button.addEventListener("click", () => {
-        const index = items.findIndex((entry) => entry.id === button.dataset.id);
-        if (index < 0 || index === items.length - 1) return;
-        this.draft.invoice.lineItems = moveArrayItem(items, index, 1) as CreatorInvoiceItem[];
-        this.refreshUi();
+    this.querySelectorAll<HTMLInputElement>(".payslip-item-rate").forEach((input) => {
+      input.addEventListener("input", () => {
+        const item = items.find((entry) => entry.id === input.dataset.id);
+        if (!item) return;
+        item.unitPrice = Math.max(0, parseFloat(input.value || "0"));
+        this.updateInvoiceTotalDisplay();
         this.handleDraftMutation();
       });
+    });
+
+    this.bindOrderControls("payslip", items, (next) => {
+      this.draft.payslip.lineItems = next;
+    });
+  }
+
+  private bindPayslipDeductionControls() {
+    const items = this.draft.payslip.deductions;
+
+    this.querySelectorAll<HTMLTextAreaElement>(".payslip-deduction-description").forEach(
+      (textarea) => {
+        textarea.addEventListener("input", () => {
+          const item = items.find((entry) => entry.id === textarea.dataset.id);
+          if (!item) return;
+          item.description = textarea.value;
+          this.handleDraftMutation();
+        });
+      },
+    );
+
+    this.querySelectorAll<HTMLInputElement>(".payslip-deduction-quantity").forEach((input) => {
+      input.addEventListener("input", () => {
+        const item = items.find((entry) => entry.id === input.dataset.id);
+        if (!item) return;
+        item.quantity = Math.max(0, parseFloat(input.value || "0"));
+        this.updateInvoiceTotalDisplay();
+        this.handleDraftMutation();
+      });
+    });
+
+    this.querySelectorAll<HTMLInputElement>(".payslip-deduction-rate").forEach((input) => {
+      input.addEventListener("input", () => {
+        const item = items.find((entry) => entry.id === input.dataset.id);
+        if (!item) return;
+        item.unitPrice = Math.max(0, parseFloat(input.value || "0"));
+        this.updateInvoiceTotalDisplay();
+        this.handleDraftMutation();
+      });
+    });
+
+    this.bindOrderControls("payslip-deduction", items, (next) => {
+      this.draft.payslip.deductions = next;
     });
   }
 
@@ -1258,34 +1839,8 @@ export class PdfCreator extends BaseComponent {
       },
     );
 
-    this.querySelectorAll<HTMLElement>(".cv-experience-remove").forEach((button) => {
-      button.addEventListener("click", () => {
-        const next = items.filter((entry) => entry.id !== button.dataset.id);
-        if (next.length === 0) return;
-        this.draft.cv.experiences = next;
-        this.refreshUi();
-        this.handleDraftMutation();
-      });
-    });
-
-    this.querySelectorAll<HTMLElement>(".cv-experience-move-up").forEach((button) => {
-      button.addEventListener("click", () => {
-        const index = items.findIndex((entry) => entry.id === button.dataset.id);
-        if (index < 1) return;
-        this.draft.cv.experiences = moveArrayItem(items, index, -1) as CreatorCvExperience[];
-        this.refreshUi();
-        this.handleDraftMutation();
-      });
-    });
-
-    this.querySelectorAll<HTMLElement>(".cv-experience-move-down").forEach((button) => {
-      button.addEventListener("click", () => {
-        const index = items.findIndex((entry) => entry.id === button.dataset.id);
-        if (index < 0 || index === items.length - 1) return;
-        this.draft.cv.experiences = moveArrayItem(items, index, 1) as CreatorCvExperience[];
-        this.refreshUi();
-        this.handleDraftMutation();
-      });
+    this.bindOrderControls("cv-experience", items, (next) => {
+      this.draft.cv.experiences = next;
     });
   }
 
@@ -1346,34 +1901,8 @@ export class PdfCreator extends BaseComponent {
       });
     });
 
-    this.querySelectorAll<HTMLElement>(".cv-education-remove").forEach((button) => {
-      button.addEventListener("click", () => {
-        const next = items.filter((entry) => entry.id !== button.dataset.id);
-        if (next.length === 0) return;
-        this.draft.cv.education = next;
-        this.refreshUi();
-        this.handleDraftMutation();
-      });
-    });
-
-    this.querySelectorAll<HTMLElement>(".cv-education-move-up").forEach((button) => {
-      button.addEventListener("click", () => {
-        const index = items.findIndex((entry) => entry.id === button.dataset.id);
-        if (index < 1) return;
-        this.draft.cv.education = moveArrayItem(items, index, -1) as CreatorCvEducation[];
-        this.refreshUi();
-        this.handleDraftMutation();
-      });
-    });
-
-    this.querySelectorAll<HTMLElement>(".cv-education-move-down").forEach((button) => {
-      button.addEventListener("click", () => {
-        const index = items.findIndex((entry) => entry.id === button.dataset.id);
-        if (index < 0 || index === items.length - 1) return;
-        this.draft.cv.education = moveArrayItem(items, index, 1) as CreatorCvEducation[];
-        this.refreshUi();
-        this.handleDraftMutation();
-      });
+    this.bindOrderControls("cv-education", items, (next) => {
+      this.draft.cv.education = next;
     });
   }
 
@@ -1398,42 +1927,8 @@ export class PdfCreator extends BaseComponent {
       });
     });
 
-    this.querySelectorAll<HTMLElement>(".cv-section-remove").forEach((button) => {
-      button.addEventListener("click", () => {
-        const next = items.filter((entry) => entry.id !== button.dataset.id);
-        if (next.length === 0) return;
-        this.draft.cv.additionalSections = next;
-        this.refreshUi();
-        this.handleDraftMutation();
-      });
-    });
-
-    this.querySelectorAll<HTMLElement>(".cv-section-move-up").forEach((button) => {
-      button.addEventListener("click", () => {
-        const index = items.findIndex((entry) => entry.id === button.dataset.id);
-        if (index < 1) return;
-        this.draft.cv.additionalSections = moveArrayItem(
-          items,
-          index,
-          -1,
-        ) as CreatorCvExtraSection[];
-        this.refreshUi();
-        this.handleDraftMutation();
-      });
-    });
-
-    this.querySelectorAll<HTMLElement>(".cv-section-move-down").forEach((button) => {
-      button.addEventListener("click", () => {
-        const index = items.findIndex((entry) => entry.id === button.dataset.id);
-        if (index < 0 || index === items.length - 1) return;
-        this.draft.cv.additionalSections = moveArrayItem(
-          items,
-          index,
-          1,
-        ) as CreatorCvExtraSection[];
-        this.refreshUi();
-        this.handleDraftMutation();
-      });
+    this.bindOrderControls("cv-section", items, (next) => {
+      this.draft.cv.additionalSections = next;
     });
   }
 
@@ -1462,17 +1957,29 @@ export class PdfCreator extends BaseComponent {
   }
 
   private updateInvoiceTotalDisplay() {
-    if (this.draft.template !== "invoice") return;
+    if (this.draft.template !== "invoice" && this.draft.template !== "payslip") return;
+
+    if (this.draft.template === "payslip") {
+      const totals = calculatePayslipTotals(this.draft.payslip);
+      const format = (value: number) => formatCurrencyAmount(value, this.draft.payslip.currency);
+      const earnings = this.querySelector('[data-payslip-total="earnings"]');
+      const deductions = this.querySelector('[data-payslip-total="deductions"]');
+      const net = this.querySelector('[data-payslip-total="net"]');
+      if (earnings) earnings.textContent = format(totals.earnings);
+      if (deductions) deductions.textContent = `-${format(totals.deductions)}`;
+      if (net) net.textContent = format(totals.totalPay);
+      return;
+    }
 
     const totalValue = this.querySelector(".creator-invoice-total strong") as HTMLElement | null;
-    if (!totalValue) return;
+    const totalLabel = this.querySelector(".creator-invoice-total span") as HTMLElement | null;
+    if (!totalValue || !totalLabel) return;
 
     const total = calculateInvoiceTotal(this.draft.invoice.lineItems);
-    totalValue.textContent = total.toLocaleString(undefined, {
-      style: "currency",
-      currency: this.draft.invoice.currency,
-      maximumFractionDigits: 2,
-    });
+    totalLabel.textContent = getInvoiceTotalLabel(
+      normalizeInvoiceStatus(this.draft.invoice.status),
+    );
+    totalValue.textContent = formatCurrencyAmount(total, this.draft.invoice.currency);
   }
 
   private setupChromeListeners() {
@@ -1509,7 +2016,7 @@ export class PdfCreator extends BaseComponent {
     });
 
     resetPreviewPositionBtn?.addEventListener("click", () => {
-      this.previewPosition = this.getDefaultFloatingPreviewPosition();
+      this.previewPosition = this.getDefaultPreviewPosition();
       this.applyFloatingPreviewPosition();
     });
   }
@@ -1518,7 +2025,7 @@ export class PdfCreator extends BaseComponent {
     try {
       const savedDraft = await persistence.get<PdfCreatorDraft>(this.toolKey);
       if (savedDraft) {
-        this.draft = this.normalizeDraft(savedDraft);
+        this.draft = normalizeDraft(savedDraft);
         this.draftState = "restored";
         this.refreshUi();
       }
@@ -1531,88 +2038,6 @@ export class PdfCreator extends BaseComponent {
     this.queuePreviewRefresh(0);
   }
 
-  private normalizeDraft(value: Partial<PdfCreatorDraft>) {
-    const defaults = createDefaultCreatorDraft();
-    return {
-      ...defaults,
-      ...value,
-      report: {
-        ...defaults.report,
-        ...value.report,
-        sections:
-          value.report?.sections && value.report.sections.length > 0
-            ? value.report.sections.map((section) => ({
-                id: section.id || createDefaultReportSection().id,
-                heading: section.heading ?? "",
-                body: section.body ?? "",
-              }))
-            : defaults.report.sections,
-      },
-      letter: {
-        ...defaults.letter,
-        ...value.letter,
-        paragraphs:
-          value.letter?.paragraphs && value.letter.paragraphs.length > 0
-            ? value.letter.paragraphs.map((paragraph) => ({
-                id: paragraph.id || createDefaultLetterParagraph().id,
-                text: paragraph.text ?? "",
-              }))
-            : defaults.letter.paragraphs,
-      },
-      invoice: {
-        ...defaults.invoice,
-        ...value.invoice,
-        paymentDetails: value.invoice?.paymentDetails ?? defaults.invoice.paymentDetails,
-        paymentLink: value.invoice?.paymentLink ?? defaults.invoice.paymentLink,
-        lineItems:
-          value.invoice?.lineItems && value.invoice.lineItems.length > 0
-            ? value.invoice.lineItems.map((item) => ({
-                id: item.id || createDefaultInvoiceItem().id,
-                description: item.description ?? "",
-                quantity: Number.isFinite(item.quantity) ? item.quantity : 0,
-                unitPrice: Number.isFinite(item.unitPrice) ? item.unitPrice : 0,
-              }))
-            : defaults.invoice.lineItems,
-      },
-      cv: {
-        ...defaults.cv,
-        ...value.cv,
-        experiences:
-          value.cv?.experiences && value.cv.experiences.length > 0
-            ? value.cv.experiences.map((entry) => ({
-                id: entry.id || createDefaultCvExperience().id,
-                role: entry.role ?? "",
-                organization: entry.organization ?? "",
-                location: entry.location ?? "",
-                startDate: entry.startDate ?? "",
-                endDate: entry.endDate ?? "",
-                achievements: entry.achievements ?? "",
-              }))
-            : defaults.cv.experiences,
-        education:
-          value.cv?.education && value.cv.education.length > 0
-            ? value.cv.education.map((entry) => ({
-                id: entry.id || createDefaultCvEducation().id,
-                qualification: entry.qualification ?? "",
-                institution: entry.institution ?? "",
-                location: entry.location ?? "",
-                startDate: entry.startDate ?? "",
-                endDate: entry.endDate ?? "",
-                details: entry.details ?? "",
-              }))
-            : defaults.cv.education,
-        additionalSections:
-          value.cv?.additionalSections && value.cv.additionalSections.length > 0
-            ? value.cv.additionalSections.map((section) => ({
-                id: section.id || createDefaultCvExtraSection().id,
-                title: section.title ?? "",
-                body: section.body ?? "",
-              }))
-            : defaults.cv.additionalSections,
-      },
-    };
-  }
-
   private refreshUi() {
     this.activeDragCleanup?.();
     this.activeDragCleanup = null;
@@ -1621,21 +2046,19 @@ export class PdfCreator extends BaseComponent {
     this.unmountFloatingPreviewPortal();
     this.render();
     this.setupEventListeners();
+    // A re-render mid-creation draws a fresh, hidden progress bar; keep it showing.
+    if (this.isCreating) this.setProgressVisible(true);
     void this.restorePreviewSnapshot();
     this.updateDraftStatus();
     this.updateSummary();
   }
 
-  private handleDraftMutation(options: { rerender?: boolean } = {}) {
+  private handleDraftMutation() {
     this.draftState = "idle";
     this.updateDraftStatus();
     this.updateSummary();
     this.queueDraftSave();
     this.queuePreviewRefresh();
-
-    if (options.rerender) {
-      this.refreshUi();
-    }
   }
 
   private queueDraftSave(delay = 250) {
@@ -1696,9 +2119,7 @@ export class PdfCreator extends BaseComponent {
         "#previewState",
       ) as HTMLElement | null;
       previewState?.classList.add("hidden");
-      this.updatePreviewMeta(
-        `${result.pageCount} page${result.pageCount === 1 ? "" : "s"} · ${result.outputName}`,
-      );
+      this.updatePreviewMeta(computePreviewMetaText(result.pageCount, result.outputName));
       this.updateSummary();
     } catch (error) {
       logger.error("Preview generation failed", error);
@@ -1724,13 +2145,12 @@ export class PdfCreator extends BaseComponent {
   private async startCreation() {
     if (this.isCreating) return;
 
-    const createButton = this.querySelector("#createPdfBtn") as HTMLButtonElement | null;
-    const progressSection = this.querySelector("#progressSection") as HTMLElement | null;
-    const successDetails = this.querySelector("#successDetails") as HTMLElement | null;
-
+    // The editor can re-render while the PDF is built, so every element below is
+    // looked up when it is used rather than once here.
     this.isCreating = true;
+    const createButton = this.querySelector("#createPdfBtn") as HTMLButtonElement | null;
     if (createButton) createButton.disabled = true;
-    progressSection?.classList.remove("hidden");
+    this.setProgressVisible(true);
     this.updateProgress(12, "Composing pages...");
 
     try {
@@ -1751,15 +2171,14 @@ export class PdfCreator extends BaseComponent {
         pageCount: result.pageCount,
       });
 
+      const successDetails = this.querySelector("#successDetails") as HTMLElement | null;
       if (successDetails) {
         successDetails.textContent = `${getTemplateLabel(this.draft.template)} created with ${result.pageCount} page${result.pageCount === 1 ? "" : "s"}.`;
       }
 
       this.showSuccess(downloadBytes, result.outputName, "", ".pdf");
       await this.showSuccessDialog(`${getTemplateLabel(this.draft.template)} PDF is ready.`);
-      this.updatePreviewMeta(
-        `${result.pageCount} page${result.pageCount === 1 ? "" : "s"} · ${result.outputName}`,
-      );
+      this.updatePreviewMeta(computePreviewMetaText(result.pageCount, result.outputName));
       this.updateSummary();
     } catch (error) {
       logger.error("Failed to create PDF", error);
@@ -1768,9 +2187,18 @@ export class PdfCreator extends BaseComponent {
       );
     } finally {
       this.isCreating = false;
-      if (createButton) createButton.disabled = false;
-      progressSection?.classList.add("hidden");
+      // A re-render during creation draws the button as disabled "Creating...".
+      const currentButton = this.querySelector("#createPdfBtn") as HTMLButtonElement | null;
+      if (currentButton) {
+        currentButton.disabled = false;
+        currentButton.textContent = "Create PDF";
+      }
+      this.setProgressVisible(false);
     }
+  }
+
+  private setProgressVisible(visible: boolean) {
+    this.querySelector("#progressSection")?.classList.toggle("hidden", !visible);
   }
 
   private async resetDraft() {
@@ -1812,29 +2240,20 @@ export class PdfCreator extends BaseComponent {
     return controller;
   }
 
-  private canFloatPreview() {
-    return typeof window !== "undefined" && window.innerWidth >= FLOATING_PREVIEW_BREAKPOINT;
-  }
-
   private isFloatingPreviewActive() {
-    return this.previewMode === "floating" && this.canFloatPreview();
+    return this.previewMode === "floating" && canFloatPreview(window);
   }
 
-  private getDefaultFloatingPreviewPosition() {
-    if (typeof window === "undefined") {
-      return { x: 0, y: FLOATING_PREVIEW_TOP };
-    }
+  private getDefaultPreviewPosition() {
+    return getDefaultFloatingPreviewPosition(
+      window,
+      this.getFloatingPreviewAnchorRect()?.right ?? null,
+      this.getFloatingPreviewSize(),
+    );
+  }
 
-    const anchorRect = this.getFloatingPreviewAnchorRect();
-    const width = this.getFloatingPreviewSize().width;
-    const anchoredX = anchorRect
-      ? anchorRect.right - width - FLOATING_PREVIEW_GUTTER
-      : window.innerWidth - width - FLOATING_PREVIEW_GUTTER;
-
-    return this.clampFloatingPreviewPosition({
-      x: anchoredX,
-      y: FLOATING_PREVIEW_TOP,
-    });
+  private clampPreviewPosition(position: { x: number; y: number }) {
+    return clampFloatingPreviewPosition(position, window, this.getFloatingPreviewSize());
   }
 
   private getFloatingPreviewAnchorRect() {
@@ -1854,48 +2273,15 @@ export class PdfCreator extends BaseComponent {
     return rect;
   }
 
-  private getFloatingPreviewPosition() {
-    if (!this.isFloatingPreviewActive()) {
-      return this.previewPosition;
-    }
-
-    const current =
-      this.previewPosition.x === 0
-        ? this.getDefaultFloatingPreviewPosition()
-        : this.previewPosition;
-    const clamped = this.clampFloatingPreviewPosition(current);
-    this.previewPosition = clamped;
-    return clamped;
-  }
-
-  private clampFloatingPreviewPosition(position: { x: number; y: number }) {
-    if (typeof window === "undefined") {
-      return position;
-    }
-
-    const { width, height } = this.getFloatingPreviewSize();
-    const maxX = Math.max(
-      FLOATING_PREVIEW_GUTTER,
-      window.innerWidth - width - FLOATING_PREVIEW_GUTTER,
-    );
-    const maxY = Math.max(
-      FLOATING_PREVIEW_GUTTER,
-      window.innerHeight - height - FLOATING_PREVIEW_GUTTER,
-    );
-
-    return {
-      x: Math.min(Math.max(position.x, FLOATING_PREVIEW_GUTTER), maxX),
-      y: Math.min(Math.max(position.y, FLOATING_PREVIEW_GUTTER), maxY),
-    };
-  }
-
   private applyFloatingPreviewPosition() {
     if (!this.isFloatingPreviewActive()) return;
+    const current =
+      this.previewPosition.x === 0 ? this.getDefaultPreviewPosition() : this.previewPosition;
+    this.previewPosition = this.clampPreviewPosition(current);
     const floatingPreview = this.floatingPreviewPortal;
-    const position = this.getFloatingPreviewPosition();
     if (floatingPreview) {
-      floatingPreview.style.left = `${position.x}px`;
-      floatingPreview.style.top = `${position.y}px`;
+      floatingPreview.style.left = `${this.previewPosition.x}px`;
+      floatingPreview.style.top = `${this.previewPosition.y}px`;
     }
   }
 
@@ -1912,7 +2298,7 @@ export class PdfCreator extends BaseComponent {
     const offsetY = event.clientY - rect.top;
 
     const move = (moveEvent: PointerEvent) => {
-      this.previewPosition = this.clampFloatingPreviewPosition({
+      this.previewPosition = this.clampPreviewPosition({
         x: moveEvent.clientX - offsetX,
         y: moveEvent.clientY - offsetY,
       });
@@ -1937,18 +2323,18 @@ export class PdfCreator extends BaseComponent {
   private onWindowResize() {
     const hasFloatingPreview = !!this.floatingPreviewPortal;
 
-    if (this.previewMode === "floating" && this.canFloatPreview()) {
+    if (this.previewMode === "floating" && canFloatPreview(window)) {
       if (!hasFloatingPreview) {
         this.refreshUi();
         return;
       }
 
-      this.previewPosition = this.clampFloatingPreviewPosition(this.previewPosition);
+      this.previewPosition = this.clampPreviewPosition(this.previewPosition);
       this.applyFloatingPreviewPosition();
       return;
     }
 
-    if (hasFloatingPreview && !this.canFloatPreview()) {
+    if (hasFloatingPreview && !canFloatPreview(window)) {
       this.refreshUi();
     }
   }
@@ -1956,14 +2342,14 @@ export class PdfCreator extends BaseComponent {
   private updateDraftStatus() {
     const target = this.querySelector("#draftStatusText") as HTMLElement | null;
     if (target) {
-      target.textContent = this.getDraftStatusText();
+      target.textContent = getDraftStatusText(this.draftState);
     }
   }
 
   private updateSummary() {
     const target = this.querySelector("#creatorSummary") as HTMLElement | null;
     if (target) {
-      target.textContent = this.getSummaryText();
+      target.textContent = computeSummaryText(this.draft, this.previewPageCount);
     }
   }
 
@@ -2024,43 +2410,13 @@ export class PdfCreator extends BaseComponent {
         "#previewState",
       ) as HTMLElement | null;
       previewState?.classList.add("hidden");
-
-      if (this.previewPageCount && this.lastPreviewOutputName) {
-        this.updatePreviewMeta(
-          `${this.previewPageCount} page${this.previewPageCount === 1 ? "" : "s"} · ${this.lastPreviewOutputName}`,
-        );
-      }
+      // The snapshot bytes, page count and file name are always stored together.
+      this.updatePreviewMeta(
+        computePreviewMetaText(this.previewPageCount, this.lastPreviewOutputName),
+      );
     } catch (error) {
       logger.error("Failed to restore preview after layout change", error);
     }
-  }
-
-  private getDraftStatusText() {
-    switch (this.draftState) {
-      case "saving":
-        return "Saving your draft locally...";
-      case "saved":
-        return "Draft saved locally.";
-      case "restored":
-        return "Previous draft restored from this browser.";
-      default:
-        return "Changes will be saved locally as you edit.";
-    }
-  }
-
-  private getSummaryText() {
-    const base = `${getTemplateLabel(this.draft.template)} · ${this.draft.pageSize.toUpperCase()} ${this.draft.orientation}`;
-    if (this.previewPageCount) {
-      return `${base} · ${this.previewPageCount} preview page${this.previewPageCount === 1 ? "" : "s"}`;
-    }
-    return `${base} · Preview updates automatically`;
-  }
-
-  private getPreviewMetaText() {
-    if (this.previewPageCount) {
-      return `${this.previewPageCount} page${this.previewPageCount === 1 ? "" : "s"} ready`;
-    }
-    return "Preview updates automatically while you edit.";
   }
 
   private fileToDataUrl(file: File) {

@@ -124,6 +124,82 @@ describe("PdfCreator", () => {
     expect(component.querySelector("#invoiceBusinessName")).toBeTruthy();
   });
 
+  it("edits an independent payslip with company and employee information", async () => {
+    const component = await mountCreator();
+    await switchTemplate(component, "payslip");
+
+    setInputValue(component, "#payslipCompanyName", "Northstar Ltd");
+    setInputValue(component, "#payslipCompanyAddress", "1 Payroll Way\nLondon");
+    setInputValue(component, "#payslipEmployeeName", "Morgan Lee");
+    setInputValue(component, "#payslipEmployeeDetails", "Employee ID: EMP-42");
+    setInputValue(component, "#payslipCompanyReference", "PAYROLL-REF-42");
+    setInputValue(component, "#payslipDetailsAlignment", "left", "change");
+    setInputValue(component, "#payslipFooterLogoPosition", "right", "change");
+    setInputValue(component, "#payslipCopyrightNote", "© 2026 Northstar Ltd. All rights reserved.");
+    setInputValue(component, "#payslipHeaderTextColor", "#00aa55");
+    setInputValue(component, "#payslipWatermarkSource", "text", "change");
+    setInputValue(component, "#payslipWatermarkText", "PRIVATE PAYROLL");
+    setInputValue(component, "#payslipWatermarkStyle", "diagonal", "change");
+    setInputValue(component, "#payslipWatermarkOpacity", "15");
+    setInputValue(component, "#payslipWatermarkSize", "55");
+    setInputValue(component, "#payslipWatermarkRotation", "-30");
+    setInputValue(component, "#payslipPayPeriod", "June 2026");
+    setInputValue(component, "#payslipCurrency", "USD", "change");
+    setInputValue(component, ".payslip-item-rate", "4200");
+    const deductionCount = (component as any).draft.payslip.deductions.length;
+    (component.querySelector("#addPayslipDeductionBtn") as HTMLButtonElement).click();
+    setInputValue(component, ".payslip-deduction-description", "Tax adjustment");
+    setInputValue(component, ".payslip-deduction-quantity", "2");
+    setInputValue(component, ".payslip-deduction-rate", "100");
+    const companyNameToggle = component.querySelector(
+      "#payslipCompanyNameHeaderToggle",
+    ) as HTMLInputElement;
+    companyNameToggle.checked = false;
+    companyNameToggle.dispatchEvent(new Event("change", { bubbles: true }));
+
+    expect((component as any).draft.payslip).toEqual(
+      expect.objectContaining({
+        companyName: "Northstar Ltd",
+        companyAddress: "1 Payroll Way\nLondon",
+        employeeName: "Morgan Lee",
+        employeeDetails: "Employee ID: EMP-42",
+        companyReference: "PAYROLL-REF-42",
+        detailsValueAlignment: "left",
+        footerLogoPosition: "right",
+        copyrightNote: "© 2026 Northstar Ltd. All rights reserved.",
+        includeCompanyNameInHeader: false,
+        headerTextColor: "#00aa55",
+        payPeriod: "June 2026",
+        currency: "USD",
+        watermark: expect.objectContaining({
+          enabled: true,
+          source: "text",
+          style: "diagonal",
+          text: "PRIVATE PAYROLL",
+          opacity: 15,
+          size: 55,
+          rotation: -30,
+        }),
+      }),
+    );
+    expect((component as any).draft.invoice.businessName).toBe("Kyte Studio");
+    expect((component as any).draft.payslip.deductions).toHaveLength(deductionCount + 1);
+    expect((component as any).draft.payslip.deductions[0]).toEqual(
+      expect.objectContaining({
+        description: "Tax adjustment",
+        quantity: 2,
+        unitPrice: 100,
+      }),
+    );
+    expect(component.querySelector('[data-payslip-total="earnings"]')?.textContent).toContain("$");
+    expect(component.querySelector('[data-payslip-total="deductions"]')?.textContent).toContain(
+      "-$",
+    );
+    expect(component.querySelector('[data-payslip-total="net"]')?.textContent).toContain("$");
+    expect(component.textContent).not.toContain("Bill From");
+    expect(component.textContent).not.toContain("Bill To");
+  });
+
   it("switches to the Harvard CV template", async () => {
     const component = await mountCreator();
     const cvButton = component.querySelector('[data-template="cv-harvard"]') as HTMLButtonElement;
@@ -428,6 +504,28 @@ describe("PdfCreator", () => {
     (component.querySelector("#clearLogoBtn") as HTMLButtonElement).click();
     expect((component as any).draft.logoDataUrl).toBeNull();
 
+    await switchTemplate(component, "payslip");
+    setInputValue(component, "#payslipWatermarkSource", "custom-image", "change");
+    const watermarkInput = component.querySelector("#watermarkImageInput") as HTMLInputElement;
+    Object.defineProperty(watermarkInput, "files", {
+      configurable: true,
+      value: [new File(["watermark"], "watermark.png", { type: "image/png" })],
+    });
+    watermarkInput.dispatchEvent(new Event("change", { bubbles: true }));
+    await flush();
+    expect((component as any).draft.payslip.watermark.customImageDataUrl).toBe(
+      "data:image/png;base64,logo",
+    );
+    expect((component as any).draft.payslip.watermark.customImageFileName).toBe("watermark.png");
+    const grayscaleToggle = component.querySelector(
+      "#payslipWatermarkGrayscale",
+    ) as HTMLInputElement;
+    grayscaleToggle.checked = true;
+    grayscaleToggle.dispatchEvent(new Event("change", { bubbles: true }));
+    expect((component as any).draft.payslip.watermark.grayscale).toBe(true);
+    (component.querySelector("#clearWatermarkImageBtn") as HTMLButtonElement).click();
+    expect((component as any).draft.payslip.watermark.customImageDataUrl).toBeNull();
+
     (component.querySelector("#resetDraftBtn") as HTMLButtonElement).click();
     await flush();
     expect(persistence.delete).toHaveBeenCalledWith("create-pdf");
@@ -700,17 +798,15 @@ describe("PdfCreator", () => {
     Object.defineProperty(window, "innerHeight", { configurable: true, value: 900 });
     const component = await mountCreator();
 
-    expect((component as any).getDraftStatusText()).toBe(
-      "Changes will be saved locally as you edit.",
-    );
-    (component as any).draftState = "saving";
-    expect((component as any).getDraftStatusText()).toBe("Saving your draft locally...");
-    (component as any).draftState = "saved";
-    expect((component as any).getDraftStatusText()).toBe("Draft saved locally.");
-    (component as any).draftState = "restored";
-    expect((component as any).getDraftStatusText()).toBe(
-      "Previous draft restored from this browser.",
-    );
+    const statusFor = (state: string) => {
+      (component as any).draftState = state;
+      (component as any).updateDraftStatus();
+      return component.querySelector("#draftStatusText")?.textContent;
+    };
+    expect(statusFor("idle")).toBe("Changes will be saved locally as you edit.");
+    expect(statusFor("saving")).toBe("Saving your draft locally...");
+    expect(statusFor("saved")).toBe("Draft saved locally.");
+    expect(statusFor("restored")).toBe("Previous draft restored from this browser.");
 
     await (component as any).refreshPreview();
     expect(previewMock.load).toHaveBeenCalled();
@@ -881,5 +977,695 @@ describe("PdfCreator", () => {
     const letter = await mountCreator();
     expect((letter as any).draft.letter.paragraphs[0].id).toBeTruthy();
     expect((letter.querySelector(".letter-paragraph-text") as HTMLTextAreaElement).value).toBe("");
+  });
+
+  const query = <T extends Element = HTMLElement>(component: PdfCreator, selector: string) =>
+    component.querySelector(selector) as T;
+  const setChecked = (component: PdfCreator, selector: string, checked: boolean) => {
+    const input = query<HTMLInputElement>(component, selector);
+    input.checked = checked;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  const deferred = <T>() => {
+    let resolve!: (value: T) => void;
+    let reject!: (error: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  };
+  const payslipTotals = (component: PdfCreator) => ({
+    earnings: query(component, '[data-payslip-total="earnings"]').textContent,
+    deductions: query(component, '[data-payslip-total="deductions"]').textContent,
+    net: query(component, '[data-payslip-total="net"]').textContent,
+  });
+  const ids = (items: { id: string }[]) => items.map((item) => item.id);
+
+  it("edits invoice header, reference, alignment, status, and signature fields", async () => {
+    const component = await mountCreator();
+    await switchTemplate(component, "invoice");
+
+    setChecked(component, "#invoiceBusinessNameHeaderToggle", false);
+    setInputValue(component, "#invoiceHeaderTextColor", "#111827");
+    setInputValue(component, "#invoiceCompanyReference", "PO-4471");
+    setInputValue(component, "#invoiceDetailsAlignment", "left", "change");
+    setInputValue(component, "#invoiceFooterLogoPosition", "center", "change");
+    setInputValue(component, "#invoiceStatus", "paid", "change");
+    setInputValue(component, "#invoicePaidDate", "2026-05-01", "change");
+    setInputValue(component, "#invoiceSignature", "Habeeb Tijani");
+
+    expect((component as any).draft.invoice).toEqual(
+      expect.objectContaining({
+        includeBusinessNameInHeader: false,
+        headerTextColor: "#111827",
+        companyReference: "PO-4471",
+        detailsValueAlignment: "left",
+        footerLogoPosition: "center",
+        status: "paid",
+        paidDate: "2026-05-01",
+        signature: "Habeeb Tijani",
+      }),
+    );
+    expect(query(component, ".creator-invoice-total span").textContent).toBe("Total Paid");
+
+    await switchTemplate(component, "report");
+    await switchTemplate(component, "invoice");
+
+    expect(query<HTMLInputElement>(component, "#invoiceBusinessNameHeaderToggle").checked).toBe(
+      false,
+    );
+    expect(query<HTMLSelectElement>(component, "#invoiceStatus").value).toBe("paid");
+    expect(query<HTMLSelectElement>(component, "#invoiceFooterLogoPosition").value).toBe("center");
+    expect(query<HTMLInputElement>(component, "#invoiceSignature").value).toBe("Habeeb Tijani");
+    expect(query(component, ".creator-invoice-total span").textContent?.trim()).toBe("Total Paid");
+  });
+
+  it("saves a burst of edits once, after typing pauses", async () => {
+    const component = await mountCreator();
+    await flush();
+    (persistence.set as any).mockClear();
+
+    setInputValue(component, "#reportTitle", "Q");
+    setInputValue(component, "#reportTitle", "Q3");
+    setInputValue(component, "#reportTitle", "Q3 Review");
+
+    expect(query(component, "#draftStatusText").textContent).toBe("Saving your draft locally...");
+    await vi.waitFor(() => expect(persistence.set).toHaveBeenCalled());
+    expect(persistence.set).toHaveBeenCalledTimes(1);
+    expect(persistence.set).toHaveBeenCalledWith(
+      "create-pdf",
+      expect.objectContaining({ report: expect.objectContaining({ title: "Q3 Review" }) }),
+    );
+    await vi.waitFor(() =>
+      expect(query(component, "#draftStatusText").textContent).toBe("Draft saved locally."),
+    );
+  });
+
+  it("edits payslip earnings and deductions and keeps the totals in step", async () => {
+    const component = await mountCreator();
+    await switchTemplate(component, "payslip");
+
+    // Defaults: £3,500 + 4 × £35 earned; £420 + £175 deducted.
+    expect(payslipTotals(component)).toEqual({
+      earnings: "£3,640.00",
+      deductions: "-£595.00",
+      net: "£3,045.00",
+    });
+
+    setInputValue(component, ".payslip-item-description", "Base pay");
+    setInputValue(component, ".payslip-item-quantity", "2");
+    setInputValue(component, ".payslip-item-rate", "3600");
+    setInputValue(component, ".payslip-deduction-description", "PAYE");
+    setInputValue(component, ".payslip-deduction-quantity", "");
+    setInputValue(component, ".payslip-deduction-rate", "-50");
+
+    expect((component as any).draft.payslip.lineItems[0]).toEqual(
+      expect.objectContaining({ description: "Base pay", quantity: 2, unitPrice: 3600 }),
+    );
+    expect((component as any).draft.payslip.deductions[0]).toEqual(
+      expect.objectContaining({ description: "PAYE", quantity: 0, unitPrice: 0 }),
+    );
+    expect(payslipTotals(component)).toEqual({
+      earnings: "£7,340.00",
+      deductions: "-£175.00",
+      net: "£7,165.00",
+    });
+
+    const earningIds = ids((component as any).draft.payslip.lineItems);
+    query<HTMLButtonElement>(component, "#addPayslipItemBtn").click();
+    await flush();
+    const added = (component as any).draft.payslip.lineItems.at(-1);
+    expect(added).toEqual(expect.objectContaining({ description: "Earning", unitPrice: 0 }));
+
+    (component.querySelectorAll(".payslip-move-up")[2] as HTMLButtonElement).click();
+    expect(ids((component as any).draft.payslip.lineItems)).toEqual([
+      earningIds[0],
+      added.id,
+      earningIds[1],
+    ]);
+    (component.querySelectorAll(".payslip-move-down")[0] as HTMLButtonElement).click();
+    expect(ids((component as any).draft.payslip.lineItems)).toEqual([
+      added.id,
+      earningIds[0],
+      earningIds[1],
+    ]);
+    (component.querySelectorAll(".payslip-remove")[0] as HTMLButtonElement).click();
+    expect(ids((component as any).draft.payslip.lineItems)).toEqual(earningIds);
+
+    const deductionIds = ids((component as any).draft.payslip.deductions);
+    query<HTMLButtonElement>(component, "#addPayslipDeductionBtn").click();
+    await flush();
+    const addedDeduction = (component as any).draft.payslip.deductions.at(-1);
+    (component.querySelectorAll(".payslip-deduction-move-up")[2] as HTMLButtonElement).click();
+    (component.querySelectorAll(".payslip-deduction-move-down")[1] as HTMLButtonElement).click();
+    expect(ids((component as any).draft.payslip.deductions)).toEqual([
+      deductionIds[0],
+      deductionIds[1],
+      addedDeduction.id,
+    ]);
+    (component.querySelectorAll(".payslip-deduction-remove")[2] as HTMLButtonElement).click();
+    expect(ids((component as any).draft.payslip.deductions)).toEqual(deductionIds);
+    expect(payslipTotals(component).net).toBe("£7,165.00");
+  });
+
+  it("treats a cleared quantity or price as zero and updates the totals", async () => {
+    const component = await mountCreator();
+    await switchTemplate(component, "invoice");
+    const invoiceTotal = () => query(component, ".creator-invoice-total strong").textContent;
+
+    // Defaults: 1 × $1,400 + 8 × $165.
+    expect(invoiceTotal()).toBe("$2,720.00");
+    setInputValue(component, ".invoice-item-quantity", "");
+    expect(invoiceTotal()).toBe("$1,320.00");
+    const secondRate = component.querySelectorAll(".invoice-item-rate")[1] as HTMLInputElement;
+    secondRate.value = "";
+    secondRate.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(invoiceTotal()).toBe("$0.00");
+    expect(
+      (component as any).draft.invoice.lineItems.map((item: any) => [
+        item.quantity,
+        item.unitPrice,
+      ]),
+    ).toEqual([
+      [0, 1400],
+      [8, 0],
+    ]);
+
+    await switchTemplate(component, "payslip");
+    setInputValue(component, ".payslip-item-quantity", "");
+    const secondEarningRate = component.querySelectorAll(
+      ".payslip-item-rate",
+    )[1] as HTMLInputElement;
+    secondEarningRate.value = "";
+    secondEarningRate.dispatchEvent(new Event("input", { bubbles: true }));
+    setInputValue(component, ".payslip-deduction-rate", "");
+
+    expect(payslipTotals(component)).toEqual({
+      earnings: "£0.00",
+      deductions: "-£175.00",
+      net: "-£175.00",
+    });
+  });
+
+  it("ignores payslip edits aimed at rows that no longer exist", async () => {
+    const component = await mountCreator();
+    await switchTemplate(component, "payslip");
+    const before = structuredClone((component as any).draft.payslip);
+    const mutationSpy = vi.spyOn(component as any, "handleDraftMutation");
+
+    for (const selector of [
+      ".payslip-item-description",
+      ".payslip-item-quantity",
+      ".payslip-item-rate",
+      ".payslip-deduction-description",
+      ".payslip-deduction-quantity",
+      ".payslip-deduction-rate",
+    ]) {
+      setInputValueForMissingItem(component, selector, "7");
+    }
+    for (const selector of [".payslip-move-down", ".payslip-deduction-move-down"]) {
+      const button = query<HTMLButtonElement>(component, selector);
+      button.dataset.id = "missing-item";
+      button.click();
+    }
+    const unlabelled = component.querySelectorAll(".payslip-move-up")[1] as HTMLButtonElement;
+    delete unlabelled.dataset.id;
+    unlabelled.click();
+
+    expect((component as any).draft.payslip).toEqual(before);
+    expect(mutationSpy).not.toHaveBeenCalled();
+  });
+
+  it("never empties a collection or moves past its ends, even from a stale enabled control", async () => {
+    const component = await mountCreator();
+    const draft = () => (component as any).draft;
+    const cases = [
+      { template: "report", prefix: "report", list: () => draft().report.sections },
+      { template: "letter", prefix: "letter", list: () => draft().letter.paragraphs },
+      { template: "invoice", prefix: "invoice", list: () => draft().invoice.lineItems },
+      { template: "payslip", prefix: "payslip", list: () => draft().payslip.lineItems },
+      { template: "payslip", prefix: "payslip-deduction", list: () => draft().payslip.deductions },
+      { template: "cv-modern", prefix: "cv-experience", list: () => draft().cv.experiences },
+      { template: "cv-modern", prefix: "cv-education", list: () => draft().cv.education },
+      { template: "cv-modern", prefix: "cv-section", list: () => draft().cv.additionalSections },
+    ];
+
+    for (const { template, prefix, list } of cases) {
+      await switchTemplate(component, template);
+      list().splice(1);
+      (component as any).refreshUi();
+      const before = ids(list());
+      const mutationSpy = vi.spyOn(component as any, "handleDraftMutation");
+
+      for (const action of ["remove", "move-up", "move-down"]) {
+        const button = query<HTMLButtonElement>(component, `.${prefix}-${action}`);
+        expect(button.disabled).toBe(true);
+        button.disabled = false;
+        button.click();
+      }
+
+      expect({ prefix, ids: ids(list()) }).toEqual({ prefix, ids: before });
+      expect(mutationSpy).not.toHaveBeenCalled();
+      mutationSpy.mockRestore();
+    }
+  });
+
+  it("edits payslip identifiers and clamps watermark numbers to their allowed ranges", async () => {
+    const component = await mountCreator();
+    await switchTemplate(component, "payslip");
+    const watermark = () => (component as any).draft.payslip.watermark;
+
+    setInputValue(component, "#payslipNumber", "PAY-77");
+    setChecked(component, "#payslipWatermarkEnabled", false);
+    setInputValue(component, "#payslipPayDate", "2026-06-30", "change");
+    setInputValue(component, "#payslipNotes", "Paid by bank transfer");
+
+    expect((component as any).draft.payslip).toEqual(
+      expect.objectContaining({
+        payslipNumber: "PAY-77",
+        payDate: "2026-06-30",
+        notes: "Paid by bank transfer",
+      }),
+    );
+    expect(watermark().enabled).toBe(false);
+
+    const expectations: [string, string, string, number][] = [
+      ["#payslipWatermarkOpacity", "", "opacity", 1],
+      ["#payslipWatermarkOpacity", "95", "opacity", 60],
+      ["#payslipWatermarkSize", "", "size", 10],
+      ["#payslipWatermarkSize", "200", "size", 90],
+      ["#payslipWatermarkRotation", "", "rotation", 0],
+      ["#payslipWatermarkRotation", "-400", "rotation", -180],
+      ["#payslipWatermarkRotation", "45", "rotation", 45],
+    ];
+    for (const [selector, value, field, expected] of expectations) {
+      setInputValue(component, selector, value);
+      expect({ selector, value, result: watermark()[field] }).toEqual({
+        selector,
+        value,
+        result: expected,
+      });
+    }
+  });
+
+  it("restores a saved payslip and repairs damaged rows and watermark values", async () => {
+    (persistence.get as any).mockResolvedValueOnce({
+      template: "payslip",
+      payslip: {
+        companyName: "Northstar Ltd",
+        currency: "EUR",
+        includeCompanyNameInHeader: false,
+        lineItems: [{ description: "Salary", quantity: Number.NaN, unitPrice: 4000 }],
+        deductions: [
+          { id: "tax", description: null, quantity: 1, unitPrice: Number.POSITIVE_INFINITY },
+        ],
+        watermark: {
+          enabled: false,
+          source: "text",
+          style: "bogus",
+          opacity: 500,
+          size: 1,
+          rotation: -999,
+        },
+      },
+    });
+
+    const restored = await mountCreator();
+    const { payslip } = (restored as any).draft;
+
+    expect(payslip.lineItems[0].id).toBeTruthy();
+    expect(payslip.lineItems[0]).toEqual(
+      expect.objectContaining({ description: "Salary", quantity: 0, unitPrice: 4000 }),
+    );
+    expect(payslip.deductions[0]).toEqual({
+      id: "tax",
+      description: "",
+      quantity: 1,
+      unitPrice: 0,
+    });
+    expect(payslip.watermark).toEqual(
+      expect.objectContaining({
+        enabled: false,
+        source: "text",
+        style: "centered",
+        text: "CONFIDENTIAL",
+        opacity: 60,
+        size: 10,
+        rotation: -180,
+      }),
+    );
+    expect(query(restored, "#draftStatusText").textContent).toBe(
+      "Previous draft restored from this browser.",
+    );
+    expect(query<HTMLSelectElement>(restored, "#payslipCurrency").value).toBe("EUR");
+    expect(query<HTMLInputElement>(restored, "#payslipCompanyNameHeaderToggle").checked).toBe(
+      false,
+    );
+    expect(query<HTMLInputElement>(restored, "#payslipWatermarkEnabled").checked).toBe(false);
+    expect(query<HTMLInputElement>(restored, "#payslipWatermarkText").value).toBe("CONFIDENTIAL");
+    expect(query<HTMLInputElement>(restored, "#payslipWatermarkOpacity").value).toBe("60");
+    expect(query<HTMLButtonElement>(restored, ".payslip-remove").disabled).toBe(true);
+    expect(query<HTMLButtonElement>(restored, ".payslip-deduction-remove").disabled).toBe(true);
+    expect(payslipTotals(restored)).toEqual({
+      earnings: "€0.00",
+      deductions: "-€0.00",
+      net: "€0.00",
+    });
+  });
+
+  it("restores a saved invoice and repairs rows with missing ids or amounts", async () => {
+    (persistence.get as any).mockResolvedValueOnce({
+      template: "invoice",
+      invoice: {
+        currency: "EUR",
+        includeBusinessNameInHeader: false,
+        lineItems: [
+          { description: undefined, quantity: 2, unitPrice: Number.NaN },
+          { id: "kept", description: "Retainer", quantity: Number.NaN, unitPrice: 300 },
+        ],
+      },
+    });
+
+    const restored = await mountCreator();
+    const items = (restored as any).draft.invoice.lineItems;
+
+    expect(items[0].id).toBeTruthy();
+    expect(items[0]).toEqual(expect.objectContaining({ description: "", unitPrice: 0 }));
+    expect(items[1]).toEqual({ id: "kept", description: "Retainer", quantity: 0, unitPrice: 300 });
+    expect(query<HTMLSelectElement>(restored, "#invoiceCurrency").value).toBe("EUR");
+    expect(query<HTMLInputElement>(restored, "#invoiceBusinessNameHeaderToggle").checked).toBe(
+      false,
+    );
+    expect(query(restored, ".creator-invoice-total strong").textContent).toBe("€0.00");
+  });
+
+  it("restores a saved CV whose entries lost ids, fields, and section labels", async () => {
+    (persistence.get as any).mockResolvedValueOnce({
+      template: "cv-harvard",
+      cv: {
+        experienceLabel: "",
+        educationLabel: "",
+        experiences: [{ role: "Designer" }],
+        education: [{ qualification: "BA Design" }],
+        additionalSections: [{ title: undefined, body: undefined }],
+      },
+    });
+
+    const restored = await mountCreator();
+    const { cv } = (restored as any).draft;
+
+    expect([cv.experiences[0].id, cv.education[0].id, cv.additionalSections[0].id]).toEqual([
+      expect.any(String),
+      expect.any(String),
+      expect.any(String),
+    ]);
+    expect(cv.experiences[0]).toEqual(
+      expect.objectContaining({ role: "Designer", organization: "", achievements: "" }),
+    );
+    expect(cv.education[0]).toEqual(
+      expect.objectContaining({ qualification: "BA Design", institution: "", details: "" }),
+    );
+    expect(query(restored, "#cvExperienceHeading").textContent).toBe("Experience");
+    expect(query(restored, "#cvEducationHeading").textContent).toBe("Education");
+    expect(query<HTMLInputElement>(restored, ".cv-section-title").value).toBe("");
+  });
+
+  it("renames the education heading as its label is edited", async () => {
+    const component = await mountCreator();
+    await switchTemplate(component, "cv-harvard");
+
+    setInputValue(component, "#cvEducationLabel", "  ");
+    expect(query(component, "#cvEducationHeading").textContent).toBe("Education");
+    setInputValue(component, "#cvEducationLabel", "Study");
+    expect(query(component, "#cvEducationHeading").textContent).toBe("Study");
+
+    query(component, "#cvEducationHeading").remove();
+    query(component, "#cvExperienceHeading").remove();
+    setInputValue(component, "#cvEducationLabel", "Training");
+    setInputValue(component, "#cvExperienceLabel", "Roles");
+    expect((component as any).draft.cv).toEqual(
+      expect.objectContaining({ educationLabel: "Training", experienceLabel: "Roles" }),
+    );
+  });
+
+  it("only accepts valid watermark images and reports read failures", async () => {
+    const component = await mountCreator();
+    const dialog = document.getElementById("globalDialog") as any;
+    await switchTemplate(component, "payslip");
+    setInputValue(component, "#payslipWatermarkSource", "custom-image", "change");
+    const input = query<HTMLInputElement>(component, "#watermarkImageInput");
+    const watermark = () => (component as any).draft.payslip.watermark;
+    const choose = async (files: File[]) => {
+      Object.defineProperty(input, "files", { configurable: true, value: files });
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      await flush();
+    };
+
+    const clickSpy = vi.spyOn(input, "click");
+    query<HTMLButtonElement>(component, "#uploadWatermarkImageBtn").click();
+    expect(clickSpy).toHaveBeenCalled();
+
+    await choose([]);
+    expect(dialog.show).not.toHaveBeenCalled();
+
+    await choose([new File(["notes"], "notes.txt", { type: "text/plain" })]);
+    expect(dialog.show).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "error",
+        message: expect.stringContaining("Invalid file type"),
+      }),
+    );
+    expect(watermark().customImageDataUrl).toBeNull();
+
+    const originalFileReader = globalThis.FileReader;
+    class NoDetailErrorReader {
+      error = null;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      readAsDataURL() {
+        this.onerror?.();
+      }
+    }
+    globalThis.FileReader = NoDetailErrorReader as any;
+    try {
+      await choose([new File(["png"], "mark.png", { type: "image/png" })]);
+    } finally {
+      globalThis.FileReader = originalFileReader;
+    }
+
+    expect(dialog.show).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: "error",
+        message: "Could not read the selected watermark image.",
+      }),
+    );
+    expect(watermark().customImageDataUrl).toBeNull();
+    expect(watermark().customImageFileName).toBeNull();
+  });
+
+  it("ignores a slower, older preview that finishes after a newer one", async () => {
+    const component = await mountCreator();
+    await flush();
+    const meta = () => document.querySelector("#previewMetaText")?.textContent;
+    const older = deferred<any>();
+    creatorMocks.createPdfFromDraft
+      .mockImplementationOnce(() => older.promise)
+      .mockResolvedValueOnce({ bytes: new Uint8Array([7]), pageCount: 3, outputName: "newer.pdf" });
+    previewMock.load.mockClear();
+
+    const first = (component as any).refreshPreview();
+    await (component as any).refreshPreview();
+    older.resolve({ bytes: new Uint8Array([9]), pageCount: 9, outputName: "older.pdf" });
+    await first;
+
+    expect((component as any).previewPageCount).toBe(3);
+    expect(meta()).toBe("3 pages · newer.pdf");
+    expect(previewMock.load).toHaveBeenCalledTimes(1);
+    expect(previewMock.load).toHaveBeenCalledWith(new Uint8Array([7]));
+  });
+
+  it("ignores an older preview failure once a newer preview has succeeded", async () => {
+    const component = await mountCreator();
+    await flush();
+    const older = deferred<any>();
+    creatorMocks.createPdfFromDraft
+      .mockImplementationOnce(() => older.promise)
+      .mockResolvedValueOnce({ bytes: new Uint8Array([4]), pageCount: 1, outputName: "fresh.pdf" });
+
+    const first = (component as any).refreshPreview();
+    await (component as any).refreshPreview();
+    older.reject(new Error("late failure"));
+    await first;
+
+    const previewState = document.querySelector("#previewState") as HTMLElement;
+    expect(previewState.classList.contains("error")).toBe(false);
+    expect(previewState.classList.contains("hidden")).toBe(true);
+    expect(document.querySelector("#previewMetaText")?.textContent).toBe("1 page · fresh.pdf");
+    expect(query(component, "#creatorSummary").textContent).toContain("· 1 preview page");
+    expect(query(component, "#creatorSummary").textContent).not.toContain("pages");
+  });
+
+  it("does not let an older preview overwrite the page label after its canvas load", async () => {
+    const component = await mountCreator();
+    await flush();
+    const slowLoad = deferred<void>();
+    creatorMocks.createPdfFromDraft
+      .mockResolvedValueOnce({ bytes: new Uint8Array([1]), pageCount: 4, outputName: "slow.pdf" })
+      .mockResolvedValueOnce({ bytes: new Uint8Array([2]), pageCount: 2, outputName: "fast.pdf" });
+    previewMock.load.mockImplementationOnce(() => slowLoad.promise);
+
+    const first = (component as any).refreshPreview();
+    await flush();
+    await (component as any).refreshPreview();
+    slowLoad.resolve();
+    await first;
+
+    expect(document.querySelector("#previewMetaText")?.textContent).toBe("2 pages · fast.pdf");
+    expect((component as any).previewPageCount).toBe(2);
+  });
+
+  it("re-enables the Create PDF button when the editor re-renders during creation", async () => {
+    const component = await mountCreator();
+    await flush();
+    const creation = deferred<any>();
+    creatorMocks.createPdfFromDraft.mockImplementationOnce(() => creation.promise);
+
+    query<HTMLButtonElement>(component, "#createPdfBtn").click();
+    await switchTemplate(component, "invoice");
+
+    const busyButton = query<HTMLButtonElement>(component, "#createPdfBtn");
+    expect(busyButton.disabled).toBe(true);
+    expect(busyButton.textContent?.trim()).toBe("Creating...");
+
+    creation.resolve({ bytes: new Uint8Array([5]), pageCount: 1, outputName: "invoice.pdf" });
+    await vi.waitFor(() => expect((component as any).isCreating).toBe(false));
+
+    const button = query<HTMLButtonElement>(component, "#createPdfBtn");
+    expect(persistence.addJob).toHaveBeenCalled();
+    expect(button.disabled).toBe(false);
+    expect(button.textContent?.trim()).toBe("Create PDF");
+  });
+
+  it("keeps progress and success details on screen when the editor re-renders during creation", async () => {
+    const component = await mountCreator();
+    await flush();
+    const creation = deferred<any>();
+    creatorMocks.createPdfFromDraft.mockImplementationOnce(() => creation.promise);
+
+    query<HTMLButtonElement>(component, "#createPdfBtn").click();
+    await switchTemplate(component, "invoice");
+
+    expect(query(component, "#progressSection").classList.contains("hidden")).toBe(false);
+
+    creation.resolve({ bytes: new Uint8Array([5]), pageCount: 3, outputName: "invoice.pdf" });
+    await vi.waitFor(() => expect((component as any).isCreating).toBe(false));
+
+    expect(query(component, "#successDetails").textContent).toBe("Invoice created with 3 pages.");
+    expect(query(component, "#successMessage").classList.contains("hidden")).toBe(false);
+    expect(query(component, "#progressSection").classList.contains("hidden")).toBe(true);
+  });
+
+  it("opens a saved draft with unknown settings as a normal default document", async () => {
+    (persistence.get as any).mockResolvedValueOnce({
+      fileName: "old-brochure",
+      template: "brochure",
+      pageSize: "a3",
+      orientation: "sideways",
+      invoice: { currency: "JPY" },
+    });
+
+    const restored = await mountCreator();
+
+    expect(restored.innerHTML).not.toContain("undefined");
+    expect(query(restored, '[data-template="report"]').classList.contains("active")).toBe(true);
+    expect(query<HTMLInputElement>(restored, "#reportTitle")).toBeTruthy();
+    expect(query<HTMLSelectElement>(restored, "#pageSizeSelect").value).toBe("letter");
+    expect(query<HTMLSelectElement>(restored, "#orientationSelect").value).toBe("portrait");
+    expect(query(restored, "#creatorSummary").textContent).toContain(
+      "Project Report · LETTER portrait",
+    );
+    expect(creatorMocks.createPdfFromDraft).toHaveBeenLastCalledWith(
+      expect.objectContaining({ template: "report", pageSize: "letter" }),
+    );
+
+    await switchTemplate(restored, "invoice");
+    expect(query<HTMLSelectElement>(restored, "#invoiceCurrency").value).toBe("USD");
+  });
+
+  it("describes a one-page result in the singular", async () => {
+    creatorMocks.createPdfFromDraft.mockResolvedValue({
+      bytes: new Uint8Array([1]),
+      pageCount: 1,
+      outputName: "brief.pdf",
+    });
+    const component = await mountCreator();
+
+    await (component as any).startCreation();
+
+    expect(query(component, "#successDetails").textContent).toBe(
+      "Project Report created with 1 page.",
+    );
+    expect(document.querySelector("#previewMetaText")?.textContent).toBe("1 page · brief.pdf");
+    expect(persistence.addJob).toHaveBeenCalled();
+  });
+
+  it("floats the preview when the window grows and keeps it on screen when it shrinks", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 900 });
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 900 });
+    const component = await mountCreator();
+    const refreshSpy = vi.spyOn(component as any, "refreshUi");
+
+    window.dispatchEvent(new Event("resize"));
+    expect(refreshSpy).not.toHaveBeenCalled();
+    expect(document.body.querySelector("#floatingPreview")).toBeFalsy();
+
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 });
+    window.dispatchEvent(new Event("resize"));
+    const portal = document.body.querySelector("#floatingPreview") as HTMLElement;
+    expect(portal).toBeTruthy();
+    expect(component.querySelector(".creator-floating-banner")).toBeTruthy();
+
+    (component as any).previewPosition = { x: 1000, y: 112 };
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1300 });
+    window.dispatchEvent(new Event("resize"));
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+    expect(portal.style.left).toBe(`${1300 - 420 - 24}px`);
+    expect(portal.style.top).toBe("112px");
+  });
+
+  it("restores the last preview after docking and survives a failed restore", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 });
+    creatorMocks.createPdfFromDraft.mockResolvedValue({
+      bytes: new Uint8Array([1]),
+      pageCount: 1,
+      outputName: "one.pdf",
+    });
+    const component = await mountCreator();
+    await flush();
+
+    query<HTMLButtonElement>(document.body as any, "#togglePreviewModeBtn").click();
+    await flush();
+    expect(query(component, "#previewMetaText").textContent).toBe("1 page · one.pdf");
+    expect(query(component, "#creatorSummary").textContent).toContain("· 1 preview page");
+
+    previewMock.load.mockRejectedValueOnce(new Error("canvas lost"));
+    query<HTMLButtonElement>(component, "#togglePreviewModeBtn").click();
+    await flush();
+
+    const portal = document.body.querySelector("#floatingPreview") as HTMLElement;
+    expect(portal.querySelector("#previewMetaText")?.textContent).toBe("1 page ready");
+    expect(portal.querySelector("#previewState")?.classList.contains("hidden")).toBe(false);
+  });
+
+  it("ignores the about and account buttons when their dialogs are unavailable", async () => {
+    const component = await mountCreator();
+    delete (window as any).showAbout;
+    delete (window as any).showAccountModal;
+
+    expect(() => {
+      query<HTMLButtonElement>(component, "#aboutBtn").click();
+      query<HTMLButtonElement>(component, "#userAccountBtn").click();
+    }).not.toThrow();
   });
 });

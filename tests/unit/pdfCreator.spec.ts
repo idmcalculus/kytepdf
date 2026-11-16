@@ -15,9 +15,16 @@ const pdfCreatorMock = vi.hoisted(() => {
       pages.push(page);
       return page;
     }),
-    embedFont: vi.fn(async () => ({
+    embedFont: vi.fn(async (source: unknown) => ({
+      source,
       widthOfTextAtSize: (text: string, size: number) => text.length * size * 0.52,
+      // Printable Latin-1, standing in for the WinAnsi set of the standard fonts.
+      getCharacterSet: () =>
+        Array.from({ length: 224 }, (_, index) => index + 32).filter(
+          (code) => code < 127 || code > 159,
+        ),
     })),
+    registerFontkit: vi.fn(),
     embedPng: vi.fn(async () => ({ width: 120, height: 60 })),
     embedJpg: vi.fn(async () => ({ width: 120, height: 60 })),
     setTitle: vi.fn(),
@@ -56,12 +63,15 @@ vi.mock("../../utils/pdfConfig", () => ({
     Helvetica: "Helvetica",
     HelveticaBold: "HelveticaBold",
     Courier: "Courier",
+    TimesRomanItalic: "TimesRomanItalic",
   },
+  degrees: (angle: number) => ({ angle }),
   rgb: (r: number, g: number, b: number) => ({ r, g, b }),
 }));
 
 import {
   calculateInvoiceTotal,
+  calculatePayslipTotals,
   createDefaultCreatorDraft,
   createDefaultCvExtraSection,
   createDefaultReportSection,
@@ -74,6 +84,13 @@ const getRenderedTexts = () =>
 describe("pdfCreator", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        arrayBuffer: async () => new Uint8Array([1, 2, 3, 4]).buffer,
+      })),
+    );
   });
 
   it("calculates invoice totals from all line items", () => {
@@ -99,6 +116,24 @@ describe("pdfCreator", () => {
     ];
 
     expect(calculateInvoiceTotal(draft.invoice.lineItems)).toBe(0);
+  });
+
+  it("subtracts payslip deductions from earnings", () => {
+    const draft = createDefaultCreatorDraft();
+    draft.payslip.lineItems = [
+      { id: "salary", description: "Salary", quantity: 1, unitPrice: 5000 },
+      { id: "bonus", description: "Bonus", quantity: 2, unitPrice: 250 },
+    ];
+    draft.payslip.deductions = [
+      { id: "tax", description: "Tax", quantity: 1, unitPrice: 750 },
+      { id: "pension", description: "Pension", quantity: 2, unitPrice: 100 },
+    ];
+
+    expect(calculatePayslipTotals(draft.payslip)).toEqual({
+      earnings: 5500,
+      deductions: 950,
+      totalPay: 4550,
+    });
   });
 
   it("falls back to a generated id when crypto UUID is unavailable", () => {
@@ -284,6 +319,129 @@ describe("pdfCreator", () => {
     expect(pdfCreatorMock.doc.setTitle).toHaveBeenCalledWith("INV-2026-001");
   });
 
+  it("creates a payslip with company and employee details but no billing labels", async () => {
+    const draft = createDefaultCreatorDraft();
+    draft.template = "payslip";
+    draft.fileName = "June Payslip";
+    draft.payslip.companyAddress = "1 Payroll Way\nLondon";
+    draft.payslip.employeeName = "Morgan Lee";
+    draft.payslip.employeeDetails = "Employee ID: EMP-42\nEngineering";
+    draft.payslip.payslipNumber = "PAY-42";
+    draft.payslip.companyReference = "PAYROLL-REF-42";
+    draft.payslip.detailsValueAlignment = "left";
+    draft.payslip.footerLogoPosition = "right";
+    draft.payslip.includeCompanyNameInHeader = false;
+    draft.payslip.headerTextColor = "#00aa55";
+    draft.payslip.payPeriod = "June 2026";
+    draft.payslip.payDate = "2026-06-30";
+    draft.payslip.lineItems = [
+      { id: "salary", description: "Salary", quantity: 1, unitPrice: 5000 },
+      { id: "bonus", description: "Bonus", quantity: 2, unitPrice: 250 },
+    ];
+    draft.payslip.deductions = [
+      { id: "tax", description: "Tax", quantity: 1, unitPrice: 750 },
+      { id: "pension", description: "Pension", quantity: 2, unitPrice: 100 },
+    ];
+    draft.logoDataUrl = "data:image/png;base64,AQID";
+
+    const result = await createPdfFromDraft(draft);
+    const texts = getRenderedTexts();
+
+    expect(result.outputName).toBe("June Payslip.pdf");
+    expect(texts).toContain("PAYSLIP");
+    expect(texts).toContain("1 Payroll Way");
+    expect(texts).toContain("Employee Information");
+    expect(texts).toContain("Morgan Lee");
+    expect(texts).toContain("Payslip #");
+    expect(texts).toContain("Company Ref");
+    expect(texts).toContain("PAYROLL-REF-42");
+    expect(texts).toContain("Ref: PAYROLL-REF-42");
+    expect(texts).toContain("Pay Period");
+    expect(texts).toContain("Pay Date");
+    expect(texts).toContain("Total Pay");
+    expect(texts).toContain("Earnings");
+    expect(texts).toContain("Deductions");
+    expect(texts).toContain("Total Earnings");
+    expect(texts).toContain("Total Deductions");
+    expect(texts).toContain("£5,500.00");
+    expect(texts).toContain("-£950.00");
+    expect(texts).toContain("£4,550.00");
+    expect(texts).not.toContain("Bill From");
+    expect(texts).not.toContain("Bill To");
+    expect(texts).not.toContain("Kyte Studio");
+    const payslipHeaderCall = pdfCreatorMock.pages[0].drawText.mock.calls.find(
+      ([text]: [string]) => text === "PAYSLIP",
+    );
+    const footerLogoCall = pdfCreatorMock.pages[0].drawImage.mock.calls.find(
+      ([, options]: [unknown, { y: number }]) => options.y < 50,
+    );
+    expect(payslipHeaderCall[1].color).toEqual({ r: 0, g: 170 / 255, b: 85 / 255 });
+    expect(footerLogoCall).toBeTruthy();
+    expect(pdfCreatorMock.doc.setTitle).toHaveBeenCalledWith("PAY-42");
+    expect(pdfCreatorMock.doc.setSubject).toHaveBeenCalledWith("Payslip");
+  });
+
+  it("uses the company logo as the default payslip background watermark", async () => {
+    const draft = createDefaultCreatorDraft();
+    draft.template = "payslip";
+    draft.logoDataUrl = "data:image/png;base64,AQID";
+
+    await createPdfFromDraft(draft);
+
+    const watermarkCall = pdfCreatorMock.pages[0].drawImage.mock.calls.find(
+      ([, options]: [unknown, { opacity?: number }]) => options.opacity === 0.08,
+    );
+    expect(draft.payslip.watermark.source).toBe("company-logo");
+    expect(watermarkCall).toBeTruthy();
+    expect(watermarkCall[1]).toEqual(
+      expect.objectContaining({
+        opacity: 0.08,
+        rotate: { angle: 0 },
+      }),
+    );
+  });
+
+  it("renders diagonal text and tiled custom-image watermark styles", async () => {
+    const textDraft = createDefaultCreatorDraft();
+    textDraft.template = "payslip";
+    textDraft.payslip.watermark = {
+      ...textDraft.payslip.watermark,
+      source: "text",
+      style: "diagonal",
+      text: "PRIVATE",
+      opacity: 12,
+      size: 50,
+      rotation: 0,
+    };
+
+    await createPdfFromDraft(textDraft);
+
+    const textWatermark = pdfCreatorMock.pages[0].drawText.mock.calls.find(
+      ([text]: [string]) => text === "PRIVATE",
+    );
+    expect(textWatermark[1]).toEqual(
+      expect.objectContaining({ opacity: 0.12, rotate: { angle: -35 } }),
+    );
+
+    const imageDraft = createDefaultCreatorDraft();
+    imageDraft.template = "payslip";
+    imageDraft.payslip.watermark = {
+      ...imageDraft.payslip.watermark,
+      source: "custom-image",
+      style: "tiled",
+      customImageDataUrl: "data:image/png;base64,AQID",
+      customImageFileName: "watermark.png",
+      grayscale: true,
+    };
+
+    await createPdfFromDraft(imageDraft);
+
+    const tiledWatermarks = pdfCreatorMock.pages[0].drawImage.mock.calls.filter(
+      ([, options]: [unknown, { opacity?: number }]) => options.opacity === 0.08,
+    );
+    expect(tiledWatermarks.length).toBeGreaterThan(1);
+  });
+
   it("right-aligns invoice rate and amount columns to consistent edges", async () => {
     const draft = createDefaultCreatorDraft();
     draft.template = "invoice";
@@ -382,7 +540,7 @@ describe("pdfCreator", () => {
 
     const page = pdfCreatorMock.pages[0];
     const texts = page.drawText.mock.calls.map(([text]: [string]) => text);
-    const totalIndex = texts.indexOf("Total Due");
+    const totalIndex = texts.indexOf("Total Pending");
     const paymentDetailsIndex = texts.indexOf("Payment Details");
     const paymentLinkIndex = texts.indexOf("Payment Link");
     const notesIndex = texts.indexOf("Notes");
@@ -391,6 +549,363 @@ describe("pdfCreator", () => {
     expect(paymentLinkIndex).toBeGreaterThan(paymentDetailsIndex);
     expect(notesIndex).toBeGreaterThan(paymentLinkIndex);
     expect(texts).toContain("https://pay.kytepdf.com/invoice/INV-2026-001");
+  });
+
+  it("renders optional invoice reference and signature details", async () => {
+    const draft = createDefaultCreatorDraft();
+    draft.template = "invoice";
+    draft.invoice.companyReference = "DEEL REF: 5099601";
+    draft.invoice.signature = "Habeeb Tijani";
+
+    await createPdfFromDraft(draft);
+
+    const page = pdfCreatorMock.pages[0];
+    const texts = page.drawText.mock.calls.map(([text]: [string]) => text);
+    const invoiceNumberIndex = texts.indexOf("Invoice #");
+    const referenceLabelIndex = texts.indexOf("Company Ref");
+    const issueDateIndex = texts.indexOf("Issue Date");
+    const notesIndex = texts.indexOf("Notes");
+    const signatureIndex = texts.indexOf("Habeeb Tijani");
+    const signatureCall = page.drawText.mock.calls[signatureIndex];
+
+    expect(referenceLabelIndex).toBeGreaterThan(invoiceNumberIndex);
+    expect(issueDateIndex).toBeGreaterThan(referenceLabelIndex);
+    expect(texts).toContain("DEEL REF: 5099601");
+    expect(signatureIndex).toBeGreaterThan(notesIndex);
+    expect(texts).not.toContain("Signature");
+    expect(signatureCall[1].size).toBe(28);
+    expect(signatureCall[1].font.source).toBeInstanceOf(Uint8Array);
+    expect(pdfCreatorMock.doc.registerFontkit).toHaveBeenCalledOnce();
+    expect(texts).toContain("Ref: DEEL REF: 5099601");
+  });
+
+  it.each([
+    { position: "left" as const, pageSlot: "right", referenceSlot: "center" },
+    { position: "center" as const, pageSlot: "right", referenceSlot: "left" },
+    { position: "right" as const, pageSlot: "left", referenceSlot: "center" },
+  ])("places invoice footer items correctly with the logo at $position", async ({
+    position,
+    pageSlot,
+    referenceSlot,
+  }) => {
+    const draft = createDefaultCreatorDraft();
+    draft.template = "invoice";
+    draft.logoDataUrl = "data:image/png;base64,AQID";
+    draft.invoice.companyReference = "REF-123";
+    draft.invoice.footerLogoPosition = position;
+
+    await createPdfFromDraft(draft);
+
+    const page = pdfCreatorMock.pages[0];
+    const footerLogoCall = page.drawImage.mock.calls.find(
+      ([, options]: [unknown, { y: number }]) => options.y < 50,
+    );
+    const referenceCall = page.drawText.mock.calls.find(
+      ([text]: [string]) => text === "Ref: REF-123",
+    );
+    const pageNumberCall = page.drawText.mock.calls.find(([text]: [string]) =>
+      text.startsWith("Page "),
+    );
+    const logoOptions = footerLogoCall[1] as { x: number; width: number };
+    const referenceOptions = referenceCall[1] as { x: number; size: number };
+    const pageNumberOptions = pageNumberCall[1] as { x: number };
+
+    if (position === "left") expect(logoOptions.x).toBe(56);
+    if (position === "center") {
+      expect(logoOptions.x + logoOptions.width / 2).toBeCloseTo(306, 5);
+    }
+    if (position === "right") {
+      expect(logoOptions.x + logoOptions.width).toBeCloseTo(556, 5);
+    }
+
+    if (referenceSlot === "left") {
+      expect(referenceOptions.x).toBe(56);
+    } else {
+      const referenceWidth = "Ref: REF-123".length * referenceOptions.size * 0.52;
+      expect(referenceOptions.x + referenceWidth / 2).toBeCloseTo(306, 5);
+    }
+
+    if (pageSlot === "left") expect(pageNumberOptions.x).toBe(56);
+    if (pageSlot === "right") expect(pageNumberOptions.x).toBeGreaterThan(306);
+  });
+
+  it.each([
+    { position: "none" as const, referenceSlot: "left" },
+    { position: "left" as const, referenceSlot: "center" },
+    { position: "center" as const, referenceSlot: "left" },
+    { position: "right" as const, referenceSlot: "center" },
+  ])("places the payslip copyright note below the footer reference at $position", async ({
+    position,
+    referenceSlot,
+  }) => {
+    const draft = createDefaultCreatorDraft();
+    draft.template = "payslip";
+    draft.logoDataUrl = "data:image/png;base64,AQID";
+    draft.payslip.companyReference = "PAYROLL-REF";
+    draft.payslip.copyrightNote = "© 2026 Northstar Ltd. All rights reserved.";
+    draft.payslip.footerLogoPosition = position;
+
+    await createPdfFromDraft(draft);
+
+    const page = pdfCreatorMock.pages[0];
+    const referenceCall = page.drawText.mock.calls.find(
+      ([text]: [string]) => text === "Ref: PAYROLL-REF",
+    );
+    const copyrightCall = page.drawText.mock.calls.find(
+      ([text]: [string]) => text === "© 2026 Northstar Ltd. All rights reserved.",
+    );
+    const referenceOptions = referenceCall[1] as { x: number; y: number; size: number };
+    const copyrightOptions = copyrightCall[1] as { x: number; y: number; size: number };
+
+    expect(copyrightOptions.y).toBeLessThan(referenceOptions.y);
+    if (referenceSlot === "left") {
+      expect(referenceOptions.x).toBe(56);
+      expect(copyrightOptions.x).toBe(56);
+    } else {
+      const referenceWidth = "Ref: PAYROLL-REF".length * referenceOptions.size * 0.52;
+      const copyrightWidth =
+        "© 2026 Northstar Ltd. All rights reserved.".length * copyrightOptions.size * 0.52;
+      expect(referenceOptions.x + referenceWidth / 2).toBeCloseTo(306, 5);
+      expect(copyrightOptions.x + copyrightWidth / 2).toBeCloseTo(306, 5);
+    }
+  });
+
+  it("falls back to a standard italic font if the signature font cannot load", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("offline");
+      }),
+    );
+    const draft = createDefaultCreatorDraft();
+    draft.template = "invoice";
+    draft.invoice.signature = "Habeeb Tijani";
+
+    await createPdfFromDraft(draft);
+
+    const signatureCall = pdfCreatorMock.pages[0].drawText.mock.calls.find(
+      ([text]: [string]) => text === "Habeeb Tijani",
+    );
+    expect(signatureCall[1].font.source).toBe("TimesRomanItalic");
+  });
+
+  it("stacks billing addresses on the left and places invoice details on the right", async () => {
+    const draft = createDefaultCreatorDraft();
+    draft.template = "invoice";
+    draft.invoice.businessDetails = "Sender address";
+    draft.invoice.clientDetails = "Client address";
+
+    await createPdfFromDraft(draft);
+
+    const calls = pdfCreatorMock.pages[0].drawText.mock.calls;
+    const billFromCall = calls.find(([text]: [string]) => text === "Bill From");
+    const billToCall = calls.find(([text]: [string]) => text === "Bill To");
+    const invoiceNumberCall = calls.find(([text]: [string]) => text === "Invoice #");
+
+    expect(billFromCall[1].x).toBeLessThan(invoiceNumberCall[1].x);
+    expect(billToCall[1].x).toBeCloseTo(billFromCall[1].x, 5);
+    expect(billToCall[1].y).toBeLessThan(billFromCall[1].y);
+    expect(invoiceNumberCall[1].y).toBeGreaterThan(billToCall[1].y);
+  });
+
+  it("uses context-aware spacing before the invoice signature", async () => {
+    const withoutNotes = createDefaultCreatorDraft();
+    withoutNotes.template = "invoice";
+    withoutNotes.invoice.notes = "";
+    withoutNotes.invoice.signature = "Habeeb Tijani";
+
+    await createPdfFromDraft(withoutNotes);
+
+    const noNotesCalls = pdfCreatorMock.pages[0].drawText.mock.calls;
+    const totalCall = noNotesCalls.filter(([text]: [string]) => text === "$2,720.00").at(-1);
+    const noNotesSignatureCall = noNotesCalls.find(([text]: [string]) => text === "Habeeb Tijani");
+    expect(totalCall[1].y - noNotesSignatureCall[1].y).toBeGreaterThanOrEqual(100);
+
+    const withNotes = createDefaultCreatorDraft();
+    withNotes.template = "invoice";
+    withNotes.invoice.notes = "Payment received.";
+    withNotes.invoice.signature = "Habeeb Tijani";
+
+    await createPdfFromDraft(withNotes);
+
+    const notesCalls = pdfCreatorMock.pages[0].drawText.mock.calls;
+    const noteCall = notesCalls.find(([text]: [string]) => text === "Payment received.");
+    const notesSignatureCall = notesCalls.find(([text]: [string]) => text === "Habeeb Tijani");
+    expect(noteCall[1].y - notesSignatureCall[1].y).toBeCloseTo(42, 5);
+  });
+
+  it("renders paid invoice status, paid date, and total paid labels", async () => {
+    const draft = createDefaultCreatorDraft();
+    draft.template = "invoice";
+    draft.invoice.status = "paid";
+    draft.invoice.paidDate = "2022-11-09";
+
+    await createPdfFromDraft(draft);
+
+    const page = pdfCreatorMock.pages[0];
+    const texts = page.drawText.mock.calls.map(([text]: [string]) => text);
+    const dueDateIndex = texts.indexOf("Due Date");
+    const statusIndex = texts.indexOf("Status");
+    const paidDateIndex = texts.indexOf("Paid Date");
+    const totalPaidIndex = texts.indexOf("Total Paid");
+
+    expect(statusIndex).toBeGreaterThan(dueDateIndex);
+    expect(paidDateIndex).toBeGreaterThan(statusIndex);
+    expect(totalPaidIndex).toBeGreaterThan(paidDateIndex);
+    expect(texts).toContain("Paid");
+    expect(texts).toContain("2022-11-09");
+    expect(texts).not.toContain("Total Pending");
+  });
+
+  it("right-aligns invoice detail values to a shared edge by default", async () => {
+    const draft = createDefaultCreatorDraft();
+    draft.template = "invoice";
+    draft.invoice.invoiceNumber = "INV-ALIGN";
+    draft.invoice.companyReference = "REF-ALIGN";
+    draft.invoice.issueDate = "2026-05-29";
+    draft.invoice.dueDate = "2026-06-05";
+    draft.invoice.status = "paid";
+    draft.invoice.paidDate = "2026-06-02";
+
+    await createPdfFromDraft(draft);
+
+    const detailValues = [
+      "INV-ALIGN",
+      "REF-ALIGN",
+      "2026-05-29",
+      "2026-06-05",
+      "Paid",
+      "2026-06-02",
+    ];
+    const calls = detailValues.map((value) =>
+      pdfCreatorMock.pages[0].drawText.mock.calls.find(([text]: [string]) => text === value),
+    );
+    const rightEdges = calls.map(
+      ([text, options]: [string, { x: number; size: number }]) =>
+        options.x + text.length * options.size * 0.52,
+    );
+
+    rightEdges.forEach((edge) => {
+      expect(edge).toBeCloseTo(rightEdges[0], 5);
+    });
+  });
+
+  it("left-aligns invoice detail values to a fixed column when selected", async () => {
+    const draft = createDefaultCreatorDraft();
+    draft.template = "invoice";
+    draft.invoice.detailsValueAlignment = "left";
+    draft.invoice.invoiceNumber = "INV-LEFT";
+    draft.invoice.issueDate = "2026-05-29";
+    draft.invoice.dueDate = "2026-06-05";
+
+    await createPdfFromDraft(draft);
+
+    const detailValues = ["INV-LEFT", "2026-05-29", "2026-06-05", "Pending"];
+    const valueXs = detailValues.map((value) => {
+      const call = pdfCreatorMock.pages[0].drawText.mock.calls.find(
+        ([text]: [string]) => text === value,
+      );
+      return call[1].x as number;
+    });
+
+    valueXs.forEach((x) => {
+      expect(x).toBeCloseTo(valueXs[0], 5);
+    });
+  });
+
+  it("uses the selected invoice header text color", async () => {
+    const draft = createDefaultCreatorDraft();
+    draft.template = "invoice";
+    draft.accentColor = "#ffffff";
+    draft.invoice.headerTextColor = "#111827";
+
+    await createPdfFromDraft(draft);
+
+    const page = pdfCreatorMock.pages[0];
+    const headerCalls = page.drawText.mock.calls.filter(([text]: [string]) => text === "INVOICE");
+
+    expect(headerCalls).toHaveLength(1);
+    headerCalls.forEach(([, options]: [string, { color: unknown }]) => {
+      expect(options.color).toEqual({ r: 17 / 255, g: 24 / 255, b: 39 / 255 });
+    });
+  });
+
+  it("applies the payslip accent color across the document theme", async () => {
+    const draft = createDefaultCreatorDraft();
+    draft.template = "payslip";
+    draft.accentColor = "#c026d3";
+    draft.payslip.companyReference = "PAYROLL-REF";
+
+    await createPdfFromDraft(draft);
+
+    const page = pdfCreatorMock.pages[0];
+    const rectangles = page.drawRectangle.mock.calls.map(
+      ([options]: [
+        {
+          x: number;
+          height: number;
+          color: unknown;
+          borderColor?: unknown;
+        },
+      ]) => options,
+    );
+    const title = rectangles.find((rectangle) => rectangle.x > 56 && rectangle.height === 32);
+    const tableHeader = rectangles.find(
+      (rectangle) => rectangle.x === 56 && rectangle.height === 30,
+    );
+    const tableRow = rectangles.find((rectangle) => rectangle.x === 56 && rectangle.height === 34);
+    const total = rectangles.find((rectangle) => rectangle.x > 56 && rectangle.height === 84);
+    const divider = page.drawLine.mock.calls
+      .map(([options]: [{ start: { x: number }; end: { x: number }; color: unknown }]) => options)
+      .find((line) => line.start.x === 56 && line.end.x > line.start.x);
+    const accent = { r: 192 / 255, g: 38 / 255, b: 211 / 255 };
+
+    expect(title?.color).toEqual(accent);
+    expect(tableHeader?.color).toEqual(total?.color);
+    expect(tableHeader?.color).not.toEqual({ r: 0.94, g: 0.98, b: 0.99 });
+    expect(tableHeader?.borderColor).toEqual(tableRow?.borderColor);
+    expect(divider?.color).toEqual(tableHeader?.borderColor);
+
+    ["Employee Information", "Total Pay", "Notes", "Ref: PAYROLL-REF"].forEach((label) => {
+      const call = page.drawText.mock.calls.find(([text]: [string]) => text === label);
+      expect(call[1].color).toEqual(accent);
+    });
+  });
+
+  it("keeps invoice section labels readable with a near-white accent", async () => {
+    const draft = createDefaultCreatorDraft();
+    draft.template = "invoice";
+    draft.accentColor = "#ffffff";
+
+    await createPdfFromDraft(draft);
+
+    const page = pdfCreatorMock.pages[0];
+    const sectionLabels = ["Bill From", "Bill To", "Total Pending", "Notes"];
+    sectionLabels.forEach((label) => {
+      const call = page.drawText.mock.calls.find(([text]: [string]) => text === label);
+      expect(call[1].color).toEqual({ r: 0.11, g: 0.17, b: 0.29 });
+    });
+  });
+
+  it("omits only the business name from the header when disabled", async () => {
+    const draft = createDefaultCreatorDraft();
+    draft.template = "invoice";
+    draft.invoice.includeBusinessNameInHeader = false;
+    draft.logoDataUrl = "data:image/png;base64,AQID";
+
+    await createPdfFromDraft(draft);
+
+    const page = pdfCreatorMock.pages[0];
+    const texts = page.drawText.mock.calls.map(([text]: [string]) => text);
+    const businessNameCalls = texts.filter((text: string) => text === "Kyte Studio");
+    const headerRectangle = page.drawRectangle.mock.calls.find(
+      ([options]: [{ x: number; height: number }]) => options.x > 56 && options.height === 32,
+    );
+
+    expect(texts).toContain("INVOICE");
+    expect(businessNameCalls).toHaveLength(1);
+    expect(headerRectangle).toBeTruthy();
+    expect(page.drawImage).toHaveBeenCalledOnce();
   });
 
   it("places the invoice business name beside the logo in the header", async () => {
@@ -409,7 +924,7 @@ describe("pdfCreator", () => {
         x: options.x,
         size: options.size,
       }))
-      .find((call) => call.text === "Jumis Cake Studio" && call.size >= 16);
+      .find((call) => call.text === "Jumis Cake Studio");
 
     expect(imageCall).toBeTruthy();
     expect(headerTitleCall).toBeTruthy();
@@ -435,7 +950,7 @@ describe("pdfCreator", () => {
     const companyCall = pdfCreatorMock.pages
       .flatMap((page) => page.drawText.mock.calls)
       .find(([text]: [string]) => text === draft.invoice.businessName);
-    expect(companyCall?.[1].size).toBeLessThan(24);
+    expect(companyCall?.[1].size).toBeLessThan(22);
     expect(pdfCreatorMock.pages.length).toBeGreaterThan(1);
   });
 

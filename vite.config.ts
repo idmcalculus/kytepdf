@@ -80,6 +80,9 @@ export default defineConfig({
           // PDF.js — PDF rendering engine (largest dep)
           if (id.includes("/pdfjs-dist/")) return "vendor-pdfjs";
 
+          // Loaded on demand only when an invoice includes a text signature.
+          if (id.includes("/@pdf-lib/fontkit/")) return "vendor-fontkit";
+
           // pdf-lib + its deps (pako compression, standard fonts)
           if (
             id.includes("/pdf-lib-with-encrypt/") ||

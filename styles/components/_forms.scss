@@ -483,6 +483,32 @@
   }
 }
 
+.creator-payslip-totals {
+  flex-direction: column;
+  align-items: stretch;
+  gap: $spacing-sm;
+}
+
+.creator-payslip-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: $spacing-md;
+
+  strong {
+    font-size: $font-size-md;
+  }
+}
+
+.creator-payslip-net-total {
+  padding-top: $spacing-sm;
+  border-top: 1px solid rgba(6, 182, 212, 0.18);
+
+  strong {
+    font-size: $font-size-xl;
+  }
+}
+
 .creator-action-row {
   margin-top: $spacing-sm;
   padding: $spacing-md $spacing-lg;
