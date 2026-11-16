@@ -335,8 +335,10 @@ describe("PdfSign", () => {
       typeTab.click();
       (component.querySelector("#nameInput") as HTMLInputElement).value = "No Context";
 
-      HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValueOnce(null) as any;
+      const getContext = vi.fn().mockReturnValueOnce(null);
+      HTMLCanvasElement.prototype.getContext = getContext as any;
       (component.querySelector("#saveTypedSigBtn") as HTMLButtonElement).click();
+      await vi.waitFor(() => expect(getContext).toHaveBeenCalled());
 
       expect(component.querySelector("#signStatus")?.classList.contains("hidden")).toBe(true);
       HTMLCanvasElement.prototype.getContext = originalGetContext;
@@ -612,7 +614,7 @@ describe("PdfSign", () => {
       expect(preview.style.height).toBe("60px");
     });
 
-    it("draws a typed name exactly as typed, in the last chosen font", () => {
+    it("draws a typed name exactly as typed, in the last chosen font, once it has loaded", async () => {
       const ctx = {
         fillText: vi.fn(),
         measureText: vi.fn().mockReturnValue({ width: 300 }),
@@ -621,6 +623,8 @@ describe("PdfSign", () => {
       const getContext = vi
         .spyOn(HTMLCanvasElement.prototype, "getContext")
         .mockReturnValue(ctx as any);
+      const loadFont = vi.fn(async () => []);
+      Object.defineProperty(document, "fonts", { value: { load: loadFont }, configurable: true });
 
       try {
         const fontButtons = component.querySelectorAll<HTMLElement>(".font-btn");
@@ -631,12 +635,20 @@ describe("PdfSign", () => {
         const nameInput = component.querySelector("#nameInput") as HTMLInputElement;
         nameInput.value = "  O'Brien & <Co>  ";
         (component.querySelector("#saveTypedSigBtn") as HTMLButtonElement).click();
+        await vi.waitFor(() => expect(ctx.fillText).toHaveBeenCalled());
 
         expect(ctx.fillText).toHaveBeenCalledWith("O'Brien & <Co>", 180, 90);
-        expect(ctx.font).toBe("italic 120px 'Great Vibes', cursive");
+        // Signature 2 is the bundled handwriting font, under its own name.
+        expect(ctx.font).toBe("italic 120px 'Kyte Signature', cursive");
+        // A canvas would draw in a fallback font if the web font were not loaded yet.
+        expect(loadFont).toHaveBeenCalledWith("italic 120px 'Kyte Signature', cursive");
+        expect(loadFont.mock.invocationCallOrder[0]).toBeLessThan(
+          ctx.fillText.mock.invocationCallOrder[0],
+        );
         expect(fontButtons[0].classList.contains("active")).toBe(true);
       } finally {
         getContext.mockRestore();
+        delete (document as { fonts?: unknown }).fonts;
       }
     });
 

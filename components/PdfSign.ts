@@ -4,6 +4,7 @@ import { getPdfPreviewErrorMessage, PdfPreviewController } from "../utils/pdfPre
 import { loadProcessablePdf } from "../utils/pdfSecurity.ts";
 import { calculateSignaturePlacement, generateOutputFilename } from "../utils/pdfUtils.ts";
 import { persistence } from "../utils/persistence.ts";
+import { loadSignatureFont, SIGNATURE_FONT_FAMILY } from "../utils/signatureImage.ts";
 import { BaseComponent } from "./BaseComponent.ts";
 
 interface SigPlacement {
@@ -85,7 +86,7 @@ export class PdfSign extends BaseComponent {
                 <input type="text" id="nameInput" placeholder="Type your name or initials..." class="name-input" maxlength="30" />
                 <div class="font-selector">
                   <button class="font-btn active" style="font-family: 'Dancing Script', cursive;" data-font="'Dancing Script', cursive">Signature 1</button>
-                  <button class="font-btn" style="font-family: 'Great Vibes', cursive;" data-font="'Great Vibes', cursive">Signature 2</button>
+                  <button class="font-btn" style="font-family: '${SIGNATURE_FONT_FAMILY}', cursive;" data-font="'${SIGNATURE_FONT_FAMILY}', cursive">Signature 2</button>
                   <button class="font-btn" style="font-family: 'Sacramento', cursive;" data-font="'Sacramento', cursive">Signature 3</button>
                   <button class="font-btn" style="font-family: 'Alex Brush', cursive;" data-font="'Alex Brush', cursive">Signature 4</button>
                 </div>
@@ -444,6 +445,8 @@ export class PdfSign extends BaseComponent {
     const fontBtns = this.querySelectorAll(".font-btn");
     const saveTypedSigBtn = this.querySelector("#saveTypedSigBtn") as HTMLButtonElement;
     let selectedFont = "'Dancing Script', cursive";
+    // Signature 2 is the bundled Great Vibes, so it works offline too.
+    void loadSignatureFont();
 
     fontBtns.forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -455,7 +458,7 @@ export class PdfSign extends BaseComponent {
       });
     });
 
-    saveTypedSigBtn.addEventListener("click", () => {
+    saveTypedSigBtn.addEventListener("click", async () => {
       // Drawn on a canvas, never parsed as HTML, so it is used as typed:
       // escaping it would draw "O&#39;Brien" for "O'Brien".
       const text = nameInput.value.trim();
@@ -464,14 +467,19 @@ export class PdfSign extends BaseComponent {
         return;
       }
 
-      logger.info("Creating typed signature", { textLength: text.length, font: selectedFont });
+      const font = selectedFont;
+      logger.info("Creating typed signature", { textLength: text.length, font });
+
+      const fontSize = 120;
+      // A canvas draws in a fallback font until the web font has loaded.
+      if (font.includes(SIGNATURE_FONT_FAMILY)) await loadSignatureFont();
+      await document.fonts?.load(`italic ${fontSize}px ${font}`).catch(() => undefined);
 
       const tempCanvas = document.createElement("canvas");
       const tCtx = tempCanvas.getContext("2d");
       if (!tCtx) return;
 
-      const fontSize = 120;
-      tCtx.font = `italic ${fontSize}px ${selectedFont}`;
+      tCtx.font = `italic ${fontSize}px ${font}`;
       const metrics = tCtx.measureText(text);
       const textWidth = Math.ceil(metrics.width);
       const padding = 60;
@@ -479,7 +487,7 @@ export class PdfSign extends BaseComponent {
       tempCanvas.width = textWidth + padding;
       tempCanvas.height = fontSize * 1.5;
 
-      tCtx.font = `italic ${fontSize}px ${selectedFont}`;
+      tCtx.font = `italic ${fontSize}px ${font}`;
       tCtx.fillStyle = "black";
       tCtx.textAlign = "center";
       tCtx.textBaseline = "middle";

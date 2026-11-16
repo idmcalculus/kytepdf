@@ -46,6 +46,7 @@
 - `pulumi up` for the OCI auth deployment loads again, and its default settings pass validation.
 - Pages with JBIG2, CCITT fax or JPEG 2000 images show those images in previews, thumbnails and exports.
 - A PDF that fails to open no longer leaves its pdf.js worker running.
+- The Sign tool's second typed style uses the bundled handwriting font, so it works offline, and typed signatures wait for their font to load before drawing.
 - SheetJS comes from its own CDN at 0.20.3. The npm release stops at 0.18.5, which has known prototype-pollution and ReDoS flaws.
 - The auth server's lockfile takes the security fixes its dependencies allow, which clears 8 of the 17 packages `npm audit` flagged. The other 9 are nodemailer, `@hono/node-server`, SendGrid's packages and the `@fortressauth` packages that pin them to affected versions; the server's `console` and Resend email settings never load nodemailer or SendGrid.
 
