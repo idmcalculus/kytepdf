@@ -23,6 +23,11 @@
 - History keeps each file's type, so Markdown, text, Word and Excel results download correctly, and each tool offers only recent files it can open.
 - The OCI auth deployment sends email through Resend instead of AWS SES, and compresses its start-up data to fit OCI's limit.
 - The production Content-Security-Policy allows WebAssembly and the bundled font, and blocks plugins, `<base>` changes and cross-site form posts.
+- Every dependency moves to its latest release, including pdf.js 6, Vite 8, Vitest 5, TypeScript 7, jsdom 31, Biome 2.6, Playwright 1.65, lucide 1, tesseract.js 7, anydoc 0.2 and pdf-inspector 1.26.
+- pdf.js runs from its legacy build, so the app still works in browsers older than Chrome 147 and Safari 26.2. Dev and build copy its worker and image decoders from the installed package, instead of keeping a copy in git.
+- The app loads only the 17 icons it uses, which cuts the icon bundle from 457 kB to 6 kB.
+- PDF to Word keeps superscript, subscript, strikethrough and underlined text.
+- The OCI auth deployment moves to `@pulumi/oci` 5 and Vitest 5. Its build uses TypeScript 7, while Pulumi, which cannot run TypeScript 7 yet, loads TypeScript 6.
 
 ### Removed
 
@@ -38,6 +43,10 @@
 - The service worker no longer reloads open tabs on update, which lost unsaved work.
 - Login errors show readable messages instead of codes such as `INVALID_CREDENTIALS`, and verify and reset links work for signed-in users.
 - `pulumi up` for the OCI auth deployment loads again, and its default settings pass validation.
+- Pages with JBIG2, CCITT fax or JPEG 2000 images show those images in previews, thumbnails and exports.
+- A PDF that fails to open no longer leaves its pdf.js worker running.
+- SheetJS comes from its own CDN at 0.20.3. The npm release stops at 0.18.5, which has known prototype-pollution and ReDoS flaws.
+- The auth server's lockfile takes the security fixes its dependencies allow, which clears 8 of the 17 packages `npm audit` flagged. The other 9 are nodemailer, `@hono/node-server`, SendGrid's packages and the `@fortressauth` packages that pin them to affected versions; the server's `console` and Resend email settings never load nodemailer or SendGrid.
 
 ## Earlier changes
 
