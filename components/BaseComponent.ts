@@ -1,4 +1,4 @@
-import { mapError } from "../utils/errorMapper.ts";
+import { describeFailure, mapError } from "../utils/errorMapper.ts";
 import { logger } from "../utils/logger.ts";
 import { persistence } from "../utils/persistence.ts";
 import { telemetry } from "../utils/telemetry.ts";
@@ -336,8 +336,9 @@ export class BaseComponent extends HTMLElement {
       return false;
     }
 
-    if (options.maxSizeMB && file.size > options.maxSizeMB * 1024 * 1024) {
-      const msg = `File is too large (${this.formatBytes(file.size)}). Max allowed: ${options.maxSizeMB}MB`;
+    const maxSizeBytes = (options.maxSizeMB ?? 0) * 1024 * 1024;
+    if (options.maxSizeMB && file.size > maxSizeBytes) {
+      const msg = `This file is too large (${this.formatBytes(file.size)}). The maximum size is ${this.formatBytes(maxSizeBytes)}.`;
       logger.error(msg);
       this.showErrorDialog(msg);
       return false;
@@ -491,7 +492,7 @@ export class BaseComponent extends HTMLElement {
       }
     } catch (err: any) {
       logger.error("Save error:", err);
-      this.showErrorDialog(`Failed to save PDF: ${err.message}`);
+      this.showErrorDialog(describeFailure("Failed to save the file.", err));
       return false;
     }
   }
@@ -523,10 +524,16 @@ export class BaseComponent extends HTMLElement {
     return await this.showDialog({ title, message, type: "success" });
   }
 
-  async showErrorDialog(error: any, title = "Error") {
-    const mappedMessage = mapError(error);
-    logger.error(`Showing error dialog: ${mappedMessage}`, { original: error });
-    return await this.showDialog({ title, message: mappedMessage, type: "error" });
+  /**
+   * Shows an error dialog.
+   * @param error Either text written for the user, which is shown as is, or a
+   *   caught error, which `mapError` turns into a plain-language message. To
+   *   add context to a caught error, pass `describeFailure(action, error)`.
+   */
+  async showErrorDialog(error: unknown, title = "Error") {
+    const message = typeof error === "string" ? error : mapError(error);
+    logger.error(`Showing error dialog: ${message}`, { original: error });
+    return await this.showDialog({ title, message, type: "error" });
   }
 
   async showConfirmDialog(message: string, title = "Confirm") {
@@ -600,6 +607,17 @@ export class BaseComponent extends HTMLElement {
     pdfBytes: Uint8Array,
     metadata?: Record<string, any>,
   ) {
+    // A result bigger than the whole history budget would be evicted straight
+    // away, and the eviction below would delete every older entry first.
+    if (pdfBytes.length > BaseComponent.MAX_STORED_JOB_BYTES) {
+      logger.info("Result is too large to keep in history; not recorded", {
+        toolName,
+        fileName,
+        size: pdfBytes.length,
+      });
+      return;
+    }
+
     try {
       const job = {
         tool: toolName,

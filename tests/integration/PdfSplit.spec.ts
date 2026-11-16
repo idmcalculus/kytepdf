@@ -151,7 +151,7 @@ describe("PdfSplit", () => {
 
       expect((document.getElementById("globalDialog") as any).show).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: "An unexpected error occurred.",
+          message: "Preview error message",
           title: "Error",
           type: "error",
         }),
@@ -288,7 +288,7 @@ describe("PdfSplit", () => {
 
       expect((document.getElementById("globalDialog") as any).show).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: "An unexpected error occurred.",
+          message: "Failed to extract pages. Please try again.",
           title: "Error",
           type: "error",
         }),

@@ -1,3 +1,4 @@
+import { describeFailure } from "../utils/errorMapper.ts";
 import { logger } from "../utils/logger.ts";
 import { getPdfPreviewErrorMessage, PdfPreviewController } from "../utils/pdfPreview.ts";
 import { loadProcessablePdf } from "../utils/pdfSecurity.ts";
@@ -821,7 +822,7 @@ export class PdfSign extends BaseComponent {
       this.showSuccessDialog("Your signature has been embedded into the document.");
     } catch (error: any) {
       logger.error("Sign error", error);
-      this.showErrorDialog(`Failed to sign PDF. ${error.message}`);
+      this.showErrorDialog(describeFailure("Failed to sign PDF.", error));
     } finally {
       finalizeBtn.disabled = false;
     }

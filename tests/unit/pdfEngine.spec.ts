@@ -58,7 +58,6 @@ vi.mock("../../utils/pdfConfig", () => {
 });
 
 import {
-  compressPdf,
   convertImagesToPdf,
   convertPdfToImages,
   embedAllAnnotations,
@@ -92,68 +91,6 @@ describe("pdfEngine", () => {
       }
       return originalCreateElement(tagName);
     });
-  });
-
-  it("should compress a PDF successfully", async () => {
-    const mockFile = new File([""], "test.pdf", { type: "application/pdf" });
-    const onProgress = vi.fn();
-
-    const result = await compressPdf(mockFile, 100, onProgress);
-
-    expect(result).toBeInstanceOf(Uint8Array);
-    expect(onProgress).toHaveBeenCalledWith(100, "Finalizing...");
-  });
-
-  it("should handle compression failure", async () => {
-    const { PDFDocument } = await import("../../utils/pdfConfig");
-    (PDFDocument.create as any).mockRejectedValueOnce(new Error("Failed to create PDF"));
-
-    const mockFile = new File([""], "test.pdf", { type: "application/pdf" });
-    const onProgress = vi.fn();
-
-    await expect(compressPdf(mockFile, 100, onProgress)).rejects.toThrow("Failed to create PDF");
-  });
-
-  it("should call progress callback multiple times", async () => {
-    const mockFile = new File([""], "test.pdf", { type: "application/pdf" });
-    const onProgress = vi.fn();
-
-    await compressPdf(mockFile, 100, onProgress);
-
-    expect(onProgress).toHaveBeenCalled();
-  });
-
-  it("should handle file with arrayBuffer", async () => {
-    const buffer = new ArrayBuffer(10);
-    const mockFile = new File([buffer], "buffer.pdf", { type: "application/pdf" });
-    const onProgress = vi.fn();
-
-    const result = await compressPdf(mockFile, 100, onProgress);
-
-    expect(result).toBeInstanceOf(Uint8Array);
-  });
-
-  it("uses lower render scale for aggressive compression profiles", async () => {
-    const { pdfjsLib } = await import("../../utils/pdfConfig");
-    const getViewport = vi.fn().mockReturnValue({ height: 100, width: 100 });
-    vi.mocked(pdfjsLib.getDocument).mockReturnValueOnce({
-      promise: Promise.resolve({
-        getPage: vi.fn().mockResolvedValue({
-          getViewport,
-          render: vi.fn().mockReturnValue({ promise: Promise.resolve() }),
-        }),
-        numPages: 1,
-      }),
-    } as any);
-
-    await compressPdf(
-      new File([new Uint8Array(1024 * 100)], "test.pdf", { type: "application/pdf" }),
-      10,
-      vi.fn(),
-      { targetRatio: 0.1 },
-    );
-
-    expect(getViewport).toHaveBeenCalledWith({ scale: 0.85 });
   });
 
   it("should embed text annotations into a PDF", async () => {
@@ -388,69 +325,6 @@ describe("pdfEngine", () => {
 
     vi.mocked(PDFDocument.load).mockRejectedValueOnce(new Error("shape failed"));
     await expect(embedShapeAnnotations(new Uint8Array([1]), [])).rejects.toThrow("shape failed");
-  });
-
-  it("should fail compression when canvas context or image blobs are unavailable", async () => {
-    vi.mocked(document.createElement).mockImplementationOnce((tagName: string) => {
-      if (tagName === "canvas") {
-        return {
-          getContext: vi.fn().mockReturnValue(null),
-        } as any;
-      }
-      return originalCreateElement(tagName);
-    });
-
-    await expect(
-      compressPdf(new File([""], "test.pdf", { type: "application/pdf" }), 100, vi.fn()),
-    ).rejects.toThrow("Could not get 2D context");
-
-    vi.mocked(document.createElement).mockImplementationOnce((tagName: string) => {
-      if (tagName === "canvas") {
-        return {
-          getContext: vi.fn().mockReturnValue({}),
-          height: 0,
-          toBlob: vi.fn((cb) => cb(null)),
-          width: 0,
-        } as any;
-      }
-      return originalCreateElement(tagName);
-    });
-
-    await expect(
-      compressPdf(new File([""], "test.pdf", { type: "application/pdf" }), 100, vi.fn()),
-    ).rejects.toThrow("Failed to create blob from canvas");
-  });
-
-  it("should yield while compressing multi-page PDFs and keep the best result after later errors", async () => {
-    const { PDFDocument, pdfjsLib } = await import("../../utils/pdfConfig");
-    const page = {
-      getViewport: vi.fn().mockReturnValue({ height: 100, width: 100 }),
-      render: vi.fn().mockReturnValue({ promise: Promise.resolve() }),
-    };
-    vi.mocked(pdfjsLib.getDocument).mockReturnValueOnce({
-      promise: Promise.resolve({
-        getPage: vi.fn().mockResolvedValue(page),
-        numPages: 2,
-      }),
-    } as any);
-
-    const currentPdf = {
-      addPage: vi.fn().mockReturnValue({ drawImage: vi.fn() }),
-      embedJpg: vi.fn().mockResolvedValue({}),
-      save: vi.fn().mockResolvedValue(new Uint8Array(2048)),
-    };
-    vi.mocked(PDFDocument.create)
-      .mockResolvedValueOnce(currentPdf as any)
-      .mockRejectedValueOnce(new Error("later iteration failed"));
-
-    const result = await compressPdf(
-      new File([""], "two-pages.pdf", { type: "application/pdf" }),
-      1,
-      vi.fn(),
-    );
-
-    expect(result).toEqual(new Uint8Array(2048));
-    expect(page.render).toHaveBeenCalledTimes(2);
   });
 
   it("should convert PDF pages to image blobs and skip unavailable page blobs", async () => {

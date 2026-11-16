@@ -440,14 +440,14 @@ describe("image conversion components", () => {
         asFileList([new File(["pdf"], "sample.pdf", { type: "application/pdf" })]),
       );
       expect((document.getElementById("globalDialog") as any).show).toHaveBeenCalledWith(
-        expect.objectContaining({ message: "An unexpected error occurred.", type: "error" }),
+        expect.objectContaining({ message: "Preview failed", type: "error" }),
       );
 
       mocks.convertPdfToImages.mockRejectedValueOnce(new Error("render failed"));
       await component.handleConvert();
       expect((document.getElementById("globalDialog") as any).show).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: "An unexpected error occurred.",
+          message: "Conversion failed. Please try again.",
           title: "Error",
           type: "error",
         }),

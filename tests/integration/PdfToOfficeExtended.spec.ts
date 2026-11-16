@@ -130,7 +130,7 @@ describe("PdfToOffice extended behavior", () => {
     mocks.preview.load.mockRejectedValueOnce(new Error("preview failed"));
     await component.handleFiles(asFileList([pdfFile("bad.pdf")]));
     expect((document.getElementById("globalDialog") as any).show).toHaveBeenCalledWith(
-      expect.objectContaining({ message: "An unexpected error occurred.", type: "error" }),
+      expect.objectContaining({ message: "Preview error message", type: "error" }),
     );
 
     const saved = pdfFile("saved.pdf");

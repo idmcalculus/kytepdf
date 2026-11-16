@@ -1,11 +1,15 @@
+import { describeFailure, mapError } from "../utils/errorMapper.ts";
 import { logger } from "../utils/logger.ts";
-import { compressPdf } from "../utils/pdfEngine.ts";
+import { compressPdf } from "../utils/pdfCompression.ts";
 import { getPdfPreviewErrorMessage, PdfPreviewController } from "../utils/pdfPreview.ts";
 import { calculateSavingsPercent, generateOutputFilename } from "../utils/pdfUtils.ts";
 import { persistence } from "../utils/persistence.ts";
 import { BaseComponent } from "./BaseComponent.ts";
 
 export class PdfCompressor extends BaseComponent {
+  /** 1 GB. Pages are compressed one at a time, so the file is the main memory cost. */
+  static readonly MAX_FILE_SIZE_MB = 1024;
+
   private selectedRatio: number | null = 0.4;
   private previewController: PdfPreviewController | null = null;
   protected toolKey = "pdf-compressor";
@@ -180,8 +184,6 @@ export class PdfCompressor extends BaseComponent {
   updatePreset(btn: HTMLElement) {
     const targetSizeGroup = this.querySelector("#targetSizeGroup") as HTMLElement;
     const estSizeInfo = this.querySelector("#estSizeInfo") as HTMLElement;
-    const estSizeValue = this.querySelector("#estSizeValue") as HTMLElement;
-    const targetSizeInput = this.querySelector("#targetSize") as HTMLInputElement;
 
     if (btn.id === "customPresetBtn") {
       targetSizeGroup.classList.remove("hidden");
@@ -190,20 +192,31 @@ export class PdfCompressor extends BaseComponent {
     } else {
       targetSizeGroup.classList.add("hidden");
       this.selectedRatio = parseFloat(btn.dataset.ratio as string);
-      if (this.selectedFile) {
-        const estKb = Math.round((this.selectedFile.size / 1024) * this.selectedRatio);
-        targetSizeInput.value = String(estKb);
-        estSizeValue.textContent = `${estKb} KB`;
-        estSizeInfo.classList.remove("hidden");
-      }
+      this.showPresetEstimate();
     }
     this.updateCompressionButtonState();
     this.checkWarning();
   }
 
+  /** Fills the target size from the selected preset and shows it. */
+  private showPresetEstimate() {
+    if (!this.selectedFile || this.selectedRatio === null) return;
+
+    const estKb = Math.round((this.selectedFile.size / 1024) * this.selectedRatio);
+    (this.querySelector("#targetSize") as HTMLInputElement).value = String(estKb);
+    (this.querySelector("#estSizeValue") as HTMLElement).textContent = this.formatBytes(
+      estKb * 1024,
+    );
+    (this.querySelector("#estSizeInfo") as HTMLElement).classList.remove("hidden");
+  }
+
   async handleFiles(files: FileList) {
     const file = files[0];
-    if (!(await this.validateFile(file))) return;
+    const isValid = await this.validateFile(file, {
+      maxSizeMB: PdfCompressor.MAX_FILE_SIZE_MB,
+      allowedTypes: ["application/pdf"],
+    });
+    if (!isValid) return;
 
     this.selectedFile = file;
     logger.info("File loaded for compression", { name: file.name, size: file.size });
@@ -227,16 +240,11 @@ export class PdfCompressor extends BaseComponent {
       await this.previewController?.load(this.selectedFile);
     } catch (err) {
       logger.error("Preview load error", err);
-      this.showErrorDialog(getPdfPreviewErrorMessage("preview"));
+      // Name the cause when it is known (password, damaged file, memory).
+      this.showErrorDialog(mapError(err, getPdfPreviewErrorMessage("preview")));
     }
 
-    if (this.selectedRatio !== null) {
-      const estKb = Math.round((this.selectedFile.size / 1024) * this.selectedRatio);
-      (this.querySelector("#targetSize") as HTMLInputElement).value = String(estKb);
-      (this.querySelector("#estSizeValue") as HTMLElement).textContent = `${estKb} KB`;
-      (this.querySelector("#estSizeInfo") as HTMLElement).classList.remove("hidden");
-    }
-
+    this.showPresetEstimate();
     this.updateCompressionButtonState();
     this.checkWarning();
   }
@@ -348,16 +356,18 @@ export class PdfCompressor extends BaseComponent {
         (percent, status) => {
           this.updateProgress(percent, status);
         },
-        { targetRatio: this.getTargetRatio(targetSizeKb) },
+        {
+          targetRatio: this.getTargetRatio(targetSizeKb),
+          // Reuse the preview's copy of the file rather than loading it again.
+          document: this.previewController?.document,
+        },
       );
 
-      if (!compressedBytes) throw new Error("Compression failed to produce output");
-
-      const finalSizeKb = compressedBytes.length / 1024;
       const savedPercent = calculateSavingsPercent(this.selectedFile.size, compressedBytes.length);
 
-      (this.querySelector("#finalSizeValue") as HTMLElement).textContent =
-        `${finalSizeKb.toFixed(1)} KB`;
+      (this.querySelector("#finalSizeValue") as HTMLElement).textContent = this.formatBytes(
+        compressedBytes.length,
+      );
       (this.querySelector("#savedPercentValue") as HTMLElement).textContent = `${savedPercent}%`;
 
       const fileName = generateOutputFilename(this.selectedFile.name, "_compressed");
@@ -369,9 +379,9 @@ export class PdfCompressor extends BaseComponent {
 
       this.showSuccess(compressedBytes, this.selectedFile.name, "_compressed");
       this.showSuccessDialog(`Compression complete! Your file was reduced by ${savedPercent}%.`);
-    } catch (error: any) {
+    } catch (error) {
       logger.error("Compression error", error);
-      this.showErrorDialog(`An error occurred during compression. ${error.message}`);
+      this.showErrorDialog(describeFailure("Compression failed.", error));
     } finally {
       compressBtn.disabled = false;
     }

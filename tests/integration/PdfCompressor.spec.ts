@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PdfCompressor } from "../../components/PdfCompressor";
-import { compressPdf } from "../../utils/pdfEngine";
+import { UserFacingError } from "../../utils/errorMapper";
+import { compressPdf } from "../../utils/pdfCompression";
 import { persistence } from "../../utils/persistence";
 
 const previewMocks = vi.hoisted(() => ({
@@ -8,6 +9,7 @@ const previewMocks = vi.hoisted(() => ({
   load: vi.fn().mockResolvedValue(undefined),
   next: vi.fn(),
   prev: vi.fn(),
+  document: null as unknown,
 }));
 
 // Mock dependencies
@@ -36,7 +38,7 @@ vi.mock("../../utils/pdfConfig", () => ({
   },
 }));
 
-vi.mock("../../utils/pdfEngine", () => ({
+vi.mock("../../utils/pdfCompression", () => ({
   compressPdf: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
 }));
 
@@ -46,6 +48,9 @@ vi.mock("../../utils/pdfPreview.ts", () => ({
     load = previewMocks.load;
     next = previewMocks.next;
     prev = previewMocks.prev;
+    get document() {
+      return previewMocks.document;
+    }
   },
 }));
 
@@ -53,6 +58,13 @@ const asFileList = (files: File[]) => files as unknown as FileList;
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 const pdfFile = (name = "test.pdf", size = 12) =>
   new File([new Uint8Array(size)], name, { type: "application/pdf" });
+/** A small PDF that reports `size` bytes, so size limits can be tested without allocating them. */
+const pdfFileReportingSize = (name: string, size: number) => {
+  const file = new File(["%PDF-1.7"], name, { type: "application/pdf" });
+  Object.defineProperty(file, "size", { value: size });
+  return file;
+};
+const MB = 1024 * 1024;
 
 describe("PdfCompressor", () => {
   let component: PdfCompressor;
@@ -67,6 +79,7 @@ describe("PdfCompressor", () => {
     vi.mocked(persistence.addJob).mockResolvedValue(1);
     vi.mocked(compressPdf).mockResolvedValue(new Uint8Array([1, 2, 3]));
     previewMocks.load.mockResolvedValue(undefined);
+    previewMocks.document = null;
     document.body.innerHTML = '<div id="globalDialog"></div>';
     (document.getElementById("globalDialog") as any).show = vi.fn();
 
@@ -103,6 +116,7 @@ describe("PdfCompressor", () => {
     const targetSizeInput = component.querySelector("#targetSize") as HTMLInputElement;
     // 100KB * 0.1 = 10KB
     expect(targetSizeInput.value).toBe("10");
+    expect(component.querySelector("#estSizeValue")?.textContent).toBe("10 KB");
   });
 
   it("should start compression and show success", async () => {
@@ -128,6 +142,66 @@ describe("PdfCompressor", () => {
     expect(component.querySelector("#statusText")?.textContent).toBe("Optimizing pages...");
     expect(persistence.addJob).toHaveBeenCalled();
     expect(component.querySelector("#successMessage")?.classList.contains("hidden")).toBe(false);
+    expect(component.querySelector("#finalSizeValue")?.textContent).toBe("3 Bytes");
+  });
+
+  it("reuses the preview's open document instead of loading the file again", async () => {
+    const previewDocument = { numPages: 1 };
+    previewMocks.document = previewDocument;
+    await component.handleFiles(asFileList([pdfFile("shared.pdf", 100 * 1024)]));
+
+    await component.startCompression();
+
+    expect(compressPdf).toHaveBeenCalledWith(
+      expect.any(File),
+      expect.any(Number),
+      expect.any(Function),
+      expect.objectContaining({ document: previewDocument }),
+    );
+  });
+
+  describe("file size limit", () => {
+    it.each([
+      [140 * MB, "140 MB"],
+      [1024 * MB, "1 GB"],
+    ])("accepts a %i-byte file, above the general 100 MB limit", async (size, label) => {
+      const dialog = document.getElementById("globalDialog") as any;
+
+      await component.handleFiles(asFileList([pdfFileReportingSize("scan.pdf", size)]));
+
+      expect(dialog.show).not.toHaveBeenCalled();
+      expect(component.querySelector("#fileName")?.textContent).toBe("scan.pdf");
+      expect(component.querySelector("#fileSize")?.textContent).toBe(label);
+    });
+
+    it("rejects files over 1 GB and says why", async () => {
+      const dialog = document.getElementById("globalDialog") as any;
+
+      await component.handleFiles(asFileList([pdfFileReportingSize("huge.pdf", 1536 * MB)]));
+
+      expect(dialog.show).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: "This file is too large (1.5 GB). The maximum size is 1 GB.",
+          type: "error",
+        }),
+      );
+      expect(component.querySelector("#mainLayout")?.classList.contains("hidden")).toBe(true);
+    });
+
+    it("still rejects files that are not PDFs", async () => {
+      const dialog = document.getElementById("globalDialog") as any;
+      const notes = new File(["hello"], "notes.txt", { type: "text/plain" });
+
+      await component.handleFiles(asFileList([notes]));
+
+      expect(dialog.show).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: "Invalid file type: text/plain. Expected: application/pdf",
+          type: "error",
+        }),
+      );
+      expect(component.querySelector("#mainLayout")?.classList.contains("hidden")).toBe(true);
+    });
   });
 
   describe("preset buttons", () => {
@@ -256,9 +330,22 @@ describe("PdfCompressor", () => {
       expect(previewMocks.load).toHaveBeenCalledWith(expect.any(File));
       expect(dialog.show).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: "An unexpected error occurred.",
+          message: "Preview failed",
           title: "Error",
           type: "error",
+        }),
+      );
+    });
+
+    it("names a known cause when the preview fails to load", async () => {
+      const dialog = document.getElementById("globalDialog") as any;
+      previewMocks.load.mockRejectedValueOnce(new Error("No password given"));
+
+      await component.handleFiles(asFileList([pdfFile("locked.pdf")]));
+
+      expect(dialog.show).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: "This PDF is password-protected. Please remove the password and try again.",
         }),
       );
     });
@@ -335,30 +422,28 @@ describe("PdfCompressor", () => {
       expect(compressPdf).not.toHaveBeenCalled();
     });
 
-    it("reports missing compressor output and thrown compression failures", async () => {
+    it.each([
+      [new Error("engine unavailable"), "Compression failed. Please try again."],
+      [
+        new RangeError("Array buffer allocation failed"),
+        "Compression failed. The file is too large or complex for your browser's memory. Try a smaller file.",
+      ],
+      [
+        new UserFacingError("Your browser could not encode page 3."),
+        "Compression failed. Your browser could not encode page 3.",
+      ],
+    ])("explains compression failures: %s", async (error, message) => {
       await component.handleFiles(asFileList([pdfFile("failure.pdf", 64 * 1024)]));
       const dialog = document.getElementById("globalDialog") as any;
+      const compressBtn = component.querySelector("#compressBtn") as HTMLButtonElement;
 
-      vi.mocked(compressPdf).mockResolvedValueOnce(null as any);
+      vi.mocked(compressPdf).mockRejectedValueOnce(error);
       await component.startCompression();
-      expect(dialog.show).toHaveBeenCalledWith(
-        expect.objectContaining({
-          message: "An unexpected error occurred.",
-          title: "Error",
-          type: "error",
-        }),
-      );
 
-      dialog.show.mockClear();
-      vi.mocked(compressPdf).mockRejectedValueOnce(new Error("engine unavailable"));
-      await component.startCompression();
       expect(dialog.show).toHaveBeenCalledWith(
-        expect.objectContaining({
-          message: "An unexpected error occurred.",
-          title: "Error",
-          type: "error",
-        }),
+        expect.objectContaining({ message, title: "Error", type: "error" }),
       );
+      expect(compressBtn.disabled).toBe(false);
     });
   });
 });

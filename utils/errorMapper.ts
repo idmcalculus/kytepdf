@@ -3,6 +3,17 @@
  * Translates technical error messages into human-friendly instructions.
  */
 
+export const DEFAULT_ERROR_MESSAGE = "An unexpected error occurred.";
+
+/**
+ * An error whose message was written for the user. `mapError` shows its
+ * message as is, so code deep in the stack can explain a failure in plain
+ * words without the message being replaced by a generic one.
+ */
+export class UserFacingError extends Error {
+  override name = "UserFacingError";
+}
+
 interface ErrorEntry {
   pattern: RegExp;
   userMessage: string;
@@ -35,11 +46,18 @@ const ERROR_MAP: ErrorEntry[] = [
     userMessage: "The file appears to be corrupted or is not a valid PDF document.",
   },
   {
+    // Browsers raise these when a selected file is moved, renamed or changed
+    // on disk before the app has finished reading it.
+    pattern: /NotReadableError|NotFoundError: A requested file/i,
+    userMessage:
+      "Kyte could not read this file. It may have been moved, renamed or changed since you selected it. Select it again and retry.",
+  },
+  {
     pattern: /out of memory|OOM|buffer/i,
     userMessage: "The file is too large or complex for your browser's memory. Try a smaller file.",
   },
   {
-    pattern: /File System Access API|showSaveFilePicker/i,
+    pattern: /File System Access API|showSaveFilePicker|createWritable|FileSystemFileHandle/i,
     userMessage:
       "Your browser blocked the save request or doesn't support direct saving. Check your permissions.",
   },
@@ -59,22 +77,48 @@ const ERROR_MAP: ErrorEntry[] = [
 ];
 
 /**
+ * Returns the text the patterns are matched against. The error's name is
+ * included when it is more specific than "Error", because browser errors such
+ * as `NotReadableError` or `QuotaExceededError` carry their meaning in the
+ * name rather than the message.
+ */
+function getErrorText(error: unknown): string {
+  if (error !== null && typeof error === "object" && "message" in error) {
+    const { name, message } = error as { name?: unknown; message?: unknown };
+    const text = typeof message === "string" ? message : String(message);
+    return typeof name === "string" && name !== "" && name !== "Error" ? `${name}: ${text}` : text;
+  }
+  return String(error);
+}
+
+/**
  * Translates a technical error into a user-friendly message.
- * @param error
- * @param fallback
+ * @param error A caught error, or the message of one.
+ * @param fallback Shown when the error matches no known pattern. Pass an
+ *   empty string to fall back to the error's own text.
  * @returns
  */
-export function mapError(
-  error: Error | string,
-  fallback: string = "An unexpected error occurred.",
-): string {
-  const message = error instanceof Error ? error.message : String(error);
+export function mapError(error: unknown, fallback: string = DEFAULT_ERROR_MESSAGE): string {
+  if (error instanceof UserFacingError) {
+    return error.message;
+  }
+
+  const text = getErrorText(error);
 
   for (const entry of ERROR_MAP) {
-    if (entry.pattern.test(message)) {
+    if (entry.pattern.test(text)) {
       return entry.userMessage;
     }
   }
 
-  return fallback || message;
+  return fallback || text;
+}
+
+/**
+ * Builds a message that says what failed and, where the cause is known, why.
+ * @example describeFailure("Compression failed.", error)
+ * // "Compression failed. The file is too large or complex for your browser's memory. ..."
+ */
+export function describeFailure(action: string, error: unknown): string {
+  return `${action} ${mapError(error, "Please try again.")}`;
 }

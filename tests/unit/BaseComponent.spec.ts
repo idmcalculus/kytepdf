@@ -125,6 +125,19 @@ describe("BaseComponent", () => {
       expect(await component.validateFile(null as any)).toBe(false);
     });
 
+    it("tells the user the file size and the limit when a file is too large", async () => {
+      const dialogElement = document.getElementById("globalDialog") as any;
+      const file = new File(["%PDF-1.7"], "scan.pdf", { type: "application/pdf" });
+      Object.defineProperty(file, "size", { value: 140 * 1024 * 1024 });
+
+      expect(await component.validateFile(file)).toBe(false);
+      expect(dialogElement.show).toHaveBeenCalledWith({
+        title: "Error",
+        message: "This file is too large (140 MB). The maximum size is 100 MB.",
+        type: "error",
+      });
+    });
+
     it("should reject files with invalid PDF header in browser environments", async () => {
       // Note: In JSDOM, File.slice().text() may not accurately reflect file content.
       // This test verifies the validation path exists; full verification requires a real browser.
@@ -311,6 +324,34 @@ describe("BaseComponent", () => {
       expect(dialogElement.show).toHaveBeenCalled();
     });
 
+    it.each([
+      "Please select at least one page from the gallery.",
+      // Mentions passwords, but is not a password error and must not be rewritten as one.
+      "Could not load PDF. Please ensure it's a valid PDF file and not password protected.",
+    ])("shows text written for the user as is: %s", async (message) => {
+      const dialogElement = document.getElementById("globalDialog") as any;
+
+      await component.showErrorDialog(message);
+
+      expect(dialogElement.show).toHaveBeenCalledWith({ title: "Error", message, type: "error" });
+    });
+
+    it("translates caught errors into plain language", async () => {
+      const dialogElement = document.getElementById("globalDialog") as any;
+
+      await component.showErrorDialog(new Error("Invalid PDF structure."));
+      await component.showErrorDialog(new TypeError("x is undefined"));
+
+      expect(dialogElement.show).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ message: expect.stringContaining("appears to be corrupted") }),
+      );
+      expect(dialogElement.show).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ message: "An unexpected error occurred." }),
+      );
+    });
+
     it("should call showSuccessDialog", async () => {
       const dialogElement = document.getElementById("globalDialog") as any;
 
@@ -394,6 +435,18 @@ describe("BaseComponent", () => {
 
       expect(persistence.deleteJob).toHaveBeenCalledWith(3);
       expect(persistence.deleteJob).toHaveBeenCalledWith(2);
+    });
+
+    it("does not record a result bigger than the whole history budget", async () => {
+      const { persistence } = await import("../../utils/persistence");
+      // Only the length is read before the size check returns.
+      const oversized = { length: 251 * 1024 * 1024 } as Uint8Array;
+
+      await component.recordJob("Compress", "scan_compressed.pdf", oversized);
+
+      // Recording it would have evicted every older entry and then the new one.
+      expect(persistence.addJob).not.toHaveBeenCalled();
+      expect(persistence.deleteJob).not.toHaveBeenCalled();
     });
 
     it("should tolerate record failures", async () => {

@@ -1,4 +1,5 @@
 import JSZip from "jszip";
+import { describeFailure } from "../utils/errorMapper.ts";
 import { logger } from "../utils/logger.ts";
 import { convertPdfToImages } from "../utils/pdfEngine.ts";
 import {
@@ -373,7 +374,7 @@ export class PdfToImage extends BaseComponent {
       }
     } catch (err: any) {
       logger.error("Conversion failed", err);
-      this.showErrorDialog(`Conversion failed: ${err.message}`);
+      this.showErrorDialog(describeFailure("Conversion failed.", err));
     } finally {
       convertBtn.disabled = false;
       progressSection.classList.add("hidden");

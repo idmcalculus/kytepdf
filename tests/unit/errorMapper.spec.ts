@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { mapError } from "../../utils/errorMapper";
+import {
+  DEFAULT_ERROR_MESSAGE,
+  describeFailure,
+  mapError,
+  UserFacingError,
+} from "../../utils/errorMapper";
 
 describe("errorMapper", () => {
   it("should map PDFs without passwords", () => {
@@ -68,5 +73,60 @@ describe("errorMapper", () => {
     const error = "Something went wrong";
     const mapped = mapError(error, "");
     expect(mapped).toBe("Something went wrong");
+  });
+
+  it("passes the message of a UserFacingError through unchanged", () => {
+    // Would match the password pattern if it were treated as a technical error.
+    const message = "Enter a password of at least 8 characters.";
+    expect(mapError(new UserFacingError(message))).toBe(message);
+  });
+
+  it("recognises browser errors by name when the message alone is vague", () => {
+    const error = new DOMException(
+      "The requested file could not be read, typically due to permission problems.",
+      "NotReadableError",
+    );
+    expect(mapError(error)).toBe(
+      "Kyte could not read this file. It may have been moved, renamed or changed since you selected it. Select it again and retry.",
+    );
+  });
+
+  it("explains a save the browser refused to write", () => {
+    const error = new DOMException(
+      "Failed to execute 'createWritable' on 'FileSystemFileHandle': The request is not allowed by the user agent or the platform in the current context.",
+      "NotAllowedError",
+    );
+    expect(mapError(error)).toBe(
+      "Your browser blocked the save request or doesn't support direct saving. Check your permissions.",
+    );
+  });
+
+  it("handles values that are not errors", () => {
+    expect(mapError(undefined)).toBe(DEFAULT_ERROR_MESSAGE);
+    expect(mapError({ message: "Out of memory" })).toBe(
+      "The file is too large or complex for your browser's memory. Try a smaller file.",
+    );
+  });
+
+  describe("describeFailure", () => {
+    it("adds the known cause to the failed action", () => {
+      expect(
+        describeFailure("Compression failed.", new RangeError("Array buffer allocation failed")),
+      ).toBe(
+        "Compression failed. The file is too large or complex for your browser's memory. Try a smaller file.",
+      );
+    });
+
+    it("keeps a user-facing reason", () => {
+      expect(describeFailure("Compression failed.", new UserFacingError("Page 3 is empty."))).toBe(
+        "Compression failed. Page 3 is empty.",
+      );
+    });
+
+    it("asks the user to retry when the cause is unknown", () => {
+      expect(describeFailure("Compression failed.", new Error("x is undefined"))).toBe(
+        "Compression failed. Please try again.",
+      );
+    });
   });
 });

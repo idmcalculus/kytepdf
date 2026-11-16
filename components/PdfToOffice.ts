@@ -1,4 +1,5 @@
 import { type ConversionFormat, cloudConversionService } from "../utils/CloudConversionService.ts";
+import { describeFailure } from "../utils/errorMapper.ts";
 import {
   type ConversionQuality,
   type ConversionResult,
@@ -320,7 +321,7 @@ export class PdfToOffice extends BaseComponent {
       }
     } catch (err: any) {
       logger.error("Conversion failed", err);
-      this.showErrorDialog(`Conversion failed: ${err.message}`);
+      this.showErrorDialog(describeFailure("Conversion failed.", err));
     } finally {
       convertBtn.disabled = false;
       progressSection.classList.add("hidden");

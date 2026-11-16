@@ -1,3 +1,4 @@
+import { describeFailure } from "../utils/errorMapper.ts";
 import { logger } from "../utils/logger.ts";
 import { PDFDocument } from "../utils/pdfConfig.ts";
 import {
@@ -263,7 +264,7 @@ export class PdfSplit extends BaseComponent {
       this.showSuccessDialog(`Successfully extracted ${pagesToExtract.length} pages.`);
     } catch (error: any) {
       logger.error("Split error", error);
-      this.showErrorDialog(`Failed to extract pages. ${error.message}`);
+      this.showErrorDialog(describeFailure("Failed to extract pages.", error));
     } finally {
       splitBtn.disabled = false;
     }

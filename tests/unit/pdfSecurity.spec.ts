@@ -18,6 +18,7 @@ import {
   INCORRECT_PASSWORD_ERROR,
   isPdfEncrypted,
   KNOWN_PASSWORD_REQUIRED_ERROR,
+  loadProcessablePdfJsDocument,
   NOT_PROTECTED_ERROR,
   protectPdf,
   unprotectPdf,
@@ -271,5 +272,38 @@ describe("pdfSecurity", () => {
     // The inner attempt throws unknown error
     pdfConfigMock.load.mockRejectedValueOnce(new Error("System error"));
     await expect(unprotectPdf(new Uint8Array([1]), "pass")).rejects.toThrow("System error");
+  });
+
+  describe("loadProcessablePdfJsDocument", () => {
+    const pdfDoc = { numPages: 1 };
+
+    it("hands pdf.js a fresh read of a file for each attempt instead of a copy", async () => {
+      const file = new File(["%PDF-1.7"], "locked.pdf", { type: "application/pdf" });
+      const reads = [new Uint8Array([1, 2]).buffer, new Uint8Array([3, 4]).buffer];
+      const arrayBuffer = vi.fn(() => Promise.resolve(reads.shift() as ArrayBuffer));
+      Object.defineProperty(file, "arrayBuffer", { value: arrayBuffer });
+      pdfConfigMock.getDocument
+        .mockReturnValueOnce({ promise: Promise.reject(new Error("No password given")) })
+        .mockReturnValueOnce({ promise: Promise.resolve(pdfDoc) });
+
+      const result = await loadProcessablePdfJsDocument(file);
+
+      expect(result).toEqual({ pdfDoc, restrictionOnly: true });
+      expect(arrayBuffer).toHaveBeenCalledTimes(2);
+      const [first, retry] = pdfConfigMock.getDocument.mock.calls.map(([params]) => params);
+      expect(first.data).toEqual(new Uint8Array([1, 2]));
+      expect(retry).toEqual({ data: new Uint8Array([3, 4]), password: "" });
+    });
+
+    it("gives pdf.js its own copy of bytes the caller still holds", async () => {
+      const bytes = new Uint8Array([5, 6, 7]);
+      pdfConfigMock.getDocument.mockReturnValueOnce({ promise: Promise.resolve(pdfDoc) });
+
+      await loadProcessablePdfJsDocument(bytes);
+
+      const [{ data }] = pdfConfigMock.getDocument.mock.calls[0];
+      expect(data).toEqual(bytes);
+      expect(data).not.toBe(bytes);
+    });
   });
 });

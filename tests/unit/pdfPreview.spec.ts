@@ -43,6 +43,17 @@ describe("PdfPreviewController", () => {
     pdfMocks.getDocument.mockReturnValue({ promise: Promise.resolve(pdfMocks.doc) });
   });
 
+  it("exposes the open document so other code can reuse it", async () => {
+    const controller = new PdfPreviewController({ canvas: createCanvas() });
+    expect(controller.document).toBeNull();
+
+    await controller.load(new Uint8Array([1]));
+    expect(controller.document).toBe(pdfMocks.doc);
+
+    await controller.destroy();
+    expect(controller.document).toBeNull();
+  });
+
   it("loads and renders the first page with nav state", async () => {
     const canvas = createCanvas();
     const pageIndicator = document.createElement("span");
@@ -114,6 +125,74 @@ describe("PdfPreviewController", () => {
     await flush();
     expect(pageIndicator.textContent).toBe("Page 2 of 3");
 
+    controller.prev();
+    await flush();
+    expect(pageIndicator.textContent).toBe("Page 1 of 3");
+  });
+
+  it("never starts a render while another is drawing on the canvas", async () => {
+    const canvas = createCanvas();
+    const pageIndicator = document.createElement("span");
+    const controller = new PdfPreviewController({ cacheSize: 0, canvas, pageIndicator });
+    await controller.load(new Uint8Array([1]));
+
+    let inFlight = 0;
+    let overlapped = false;
+    const finishers: Array<() => void> = [];
+    pdfMocks.render.mockClear();
+    pdfMocks.render.mockImplementation(() => {
+      inFlight += 1;
+      overlapped ||= inFlight > 1;
+      return {
+        promise: new Promise<void>((resolve) => {
+          finishers.push(() => {
+            inFlight -= 1;
+            resolve();
+          });
+        }),
+      };
+    });
+
+    try {
+      const first = controller.render(2);
+      await flush();
+      expect(pdfMocks.render).toHaveBeenCalledTimes(1);
+
+      // Two quick clicks while page 2 is still drawing.
+      const overtaken = controller.render(3);
+      const latest = controller.render(1);
+      await flush();
+      expect(pdfMocks.render).toHaveBeenCalledTimes(1);
+
+      finishers.shift()?.();
+      await first;
+      await overtaken;
+      await flush();
+      finishers.shift()?.();
+      await latest;
+
+      expect(overlapped).toBe(false);
+      // Page 3 was overtaken before it started, so only pages 2 and 1 were drawn.
+      expect(pdfMocks.render).toHaveBeenCalledTimes(2);
+      expect(pageIndicator.textContent).toBe("Page 1 of 3");
+    } finally {
+      for (const finish of finishers) finish();
+      pdfMocks.render.mockReset();
+      pdfMocks.render.mockReturnValue({ promise: Promise.resolve() });
+    }
+  });
+
+  it("counts every quick click on the page arrows", async () => {
+    const pageIndicator = document.createElement("span");
+    const controller = new PdfPreviewController({ canvas: createCanvas(), pageIndicator });
+    await controller.load(new Uint8Array([1]));
+
+    controller.next();
+    controller.next();
+    await flush();
+    expect(pageIndicator.textContent).toBe("Page 3 of 3");
+
+    controller.prev();
     controller.prev();
     await flush();
     expect(pageIndicator.textContent).toBe("Page 1 of 3");

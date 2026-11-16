@@ -1,3 +1,4 @@
+import type { PDFDocumentProxy } from "pdfjs-dist";
 import { loadProcessablePdfJsDocument } from "./pdfSecurity.ts";
 
 export type PdfPreviewTargets = {
@@ -19,16 +20,10 @@ type RenderPdfPageOptions = {
   scale: number;
 };
 
-const normalizePdfSource = async (source: PdfPreviewSource): Promise<Uint8Array> => {
-  if (source instanceof Uint8Array) return source;
-  if (source instanceof ArrayBuffer) return new Uint8Array(source);
-  const buffer = await source.arrayBuffer();
-  return new Uint8Array(buffer);
-};
-
 export const loadPdfDocument = async (source: PdfPreviewSource) => {
-  const data = await normalizePdfSource(source);
-  const { pdfDoc } = await loadProcessablePdfJsDocument(data);
+  // Files are passed through untouched: reading one into memory here as well
+  // would hold a second copy of it while pdf.js loads.
+  const { pdfDoc } = await loadProcessablePdfJsDocument(source);
   return pdfDoc;
 };
 
@@ -187,15 +182,27 @@ export class PdfThumbnailGridController {
 export class PdfPreviewController {
   private pdfDoc: any | null = null;
   private pageNum = 1;
+  /** The page most recently asked for. Arrows step from it, so quick clicks each count. */
+  private requestedPageNum = 1;
   private scale: number;
   private cacheSize: number;
   private pageCache = new Map<number, HTMLCanvasElement>();
   private renderToken = 0;
+  private renderQueue: Promise<void> = Promise.resolve();
   private loadToken = 0;
 
   constructor(private targets: PdfPreviewTargets) {
     this.scale = targets.scale ?? 0.8;
     this.cacheSize = Math.max(0, targets.cacheSize ?? 3);
+  }
+
+  /**
+   * The open pdf.js document, or null before a load and after destroy. Other
+   * code may read from it to avoid loading the same file twice, but this
+   * controller owns it and destroys it on the next load.
+   */
+  get document(): PDFDocumentProxy | null {
+    return this.pdfDoc;
   }
 
   async load(source: PdfPreviewSource) {
@@ -213,11 +220,24 @@ export class PdfPreviewController {
     await this.render(this.pageNum);
   }
 
-  async render(pageNum: number) {
-    if (!this.pdfDoc) return;
-    if (pageNum < 1 || pageNum > this.pdfDoc.numPages) return;
+  render(pageNum: number): Promise<void> {
+    if (!this.pdfDoc) return Promise.resolve();
+    if (pageNum < 1 || pageNum > this.pdfDoc.numPages) return Promise.resolve();
 
     const renderId = ++this.renderToken;
+    this.requestedPageNum = pageNum;
+    // pdf.js refuses to start a render on a canvas it is still drawing, which
+    // quick clicks on the page arrows used to trigger. Renders therefore run
+    // one at a time, and a request overtaken by a newer one is skipped.
+    const run = this.renderQueue.then(() =>
+      renderId === this.renderToken ? this.renderNow(pageNum, renderId) : undefined,
+    );
+    this.renderQueue = run.catch(() => undefined);
+    return run;
+  }
+
+  private async renderNow(pageNum: number, renderId: number) {
+    if (!this.pdfDoc) return;
     const pdfDoc = this.pdfDoc;
     const canvas = this.targets.canvas;
     const cachedCanvas = this.getCachedCanvas(pageNum);
@@ -253,11 +273,11 @@ export class PdfPreviewController {
   }
 
   next() {
-    void this.render(this.pageNum + 1);
+    void this.render(this.requestedPageNum + 1);
   }
 
   prev() {
-    void this.render(this.pageNum - 1);
+    void this.render(this.requestedPageNum - 1);
   }
 
   async destroy() {
@@ -265,6 +285,7 @@ export class PdfPreviewController {
     const pdfDoc = this.pdfDoc;
     this.pdfDoc = null;
     this.pageNum = 1;
+    this.requestedPageNum = 1;
     this.pageCache.clear();
     if (pdfDoc?.destroy) {
       try {

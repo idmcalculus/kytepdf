@@ -132,13 +132,30 @@ export async function loadProcessablePdf(source: PdfSource) {
   }
 }
 
+/**
+ * pdf.js takes ownership of the bytes it is given (it transfers them to its
+ * worker), so every load attempt needs bytes that nothing else holds. A file
+ * is read again for each attempt instead of being read once and copied, so a
+ * large file is never held in memory twice.
+ *
+ * Feeding pdf.js a file in ranges (PDFDataRangeTransport) would avoid holding
+ * it at all, but pdf.js has no way to hear that a range read failed: a file
+ * moved or changed mid-read leaves every pending call waiting forever.
+ */
+const createPdfJsByteReader = (source: PdfSource): (() => Promise<Uint8Array>) => {
+  if (source instanceof Blob) {
+    return async () => new Uint8Array(await source.arrayBuffer());
+  }
+  const bytes = source instanceof Uint8Array ? source : new Uint8Array(source);
+  return async () => bytes.slice();
+};
+
 export async function loadProcessablePdfJsDocument(source: PdfSource) {
-  const bytes = await toUint8Array(source);
-  const getPdfJsBytes = () => bytes.slice();
+  const readPdfJsBytes = createPdfJsByteReader(source);
 
   try {
     return {
-      pdfDoc: await pdfjsLib.getDocument({ data: getPdfJsBytes() }).promise,
+      pdfDoc: await pdfjsLib.getDocument({ data: await readPdfJsBytes() }).promise,
       restrictionOnly: false,
     };
   } catch (error) {
@@ -148,7 +165,7 @@ export async function loadProcessablePdfJsDocument(source: PdfSource) {
 
     try {
       return {
-        pdfDoc: await pdfjsLib.getDocument({ data: getPdfJsBytes(), password: "" }).promise,
+        pdfDoc: await pdfjsLib.getDocument({ data: await readPdfJsBytes(), password: "" }).promise,
         restrictionOnly: true,
       };
     } catch (blankPasswordError) {
