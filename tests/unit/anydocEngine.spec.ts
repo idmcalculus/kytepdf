@@ -73,7 +73,7 @@ describe("AnydocEngine caching + worker plumbing", () => {
         markdown: "| a | b |\n| --- | --- |",
         warnings: [],
         engine: "anydoc-wasm",
-        engineVersion: "0.1.8",
+        engineVersion: "0.2.4",
         processingTimeMs: 1,
         sourceName: "table.csv",
       },
@@ -98,7 +98,7 @@ describe("AnydocEngine caching + worker plumbing", () => {
         markdown: "| x |\n| --- |",
         warnings: [],
         engine: "anydoc-wasm",
-        engineVersion: "0.1.8",
+        engineVersion: "0.2.4",
         processingTimeMs: 1,
       },
     });
@@ -205,7 +205,7 @@ const markdownEnvelope = (markdown = "# Doc") => ({
   markdown,
   warnings: [],
   engine: "anydoc-wasm",
-  engineVersion: "0.1.8",
+  engineVersion: "0.2.4",
   processingTimeMs: 1,
 });
 

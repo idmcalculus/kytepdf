@@ -310,7 +310,108 @@ describe("pdfSecurity", () => {
       expect(arrayBuffer).toHaveBeenCalledTimes(2);
       const [first, retry] = pdfConfigMock.getDocument.mock.calls.map(([params]) => params);
       expect(first.data).toEqual(new Uint8Array([1, 2]));
-      expect(retry).toEqual({ data: new Uint8Array([3, 4]), password: "" });
+      expect(retry).toEqual({
+        data: new Uint8Array([3, 4]),
+        password: "",
+        wasmUrl: "/wasm/pdfjs/",
+      });
+    });
+
+    it("tells pdf.js where its image decoders are on every attempt", async () => {
+      pdfConfigMock.getDocument
+        .mockReturnValueOnce({ promise: Promise.reject(new Error("No password given")) })
+        .mockReturnValueOnce({ promise: Promise.resolve(pdfDoc) });
+
+      await loadProcessablePdfJsDocument(new Uint8Array([1]));
+
+      // Without wasmUrl pdf.js leaves JBIG2, CCITT fax and JPEG 2000 images
+      // out of the page. The trailing slash is required.
+      const attempts = pdfConfigMock.getDocument.mock.calls.map(([params]) => params);
+      expect(attempts).toHaveLength(2);
+      for (const params of attempts) expect(params.wasmUrl).toBe("/wasm/pdfjs/");
+    });
+
+    it("passes load options to pdf.js on every attempt, and none by default", async () => {
+      pdfConfigMock.getDocument
+        .mockReturnValueOnce({ promise: Promise.resolve(pdfDoc) })
+        .mockReturnValueOnce({ promise: Promise.reject(new Error("No password given")) })
+        .mockReturnValueOnce({ promise: Promise.resolve(pdfDoc) });
+
+      await loadProcessablePdfJsDocument(new Uint8Array([1]));
+      await loadProcessablePdfJsDocument(new Uint8Array([1]), { fontExtraProperties: true });
+
+      const [plain, ...editor] = pdfConfigMock.getDocument.mock.calls.map(([params]) => params);
+      expect(plain).not.toHaveProperty("fontExtraProperties");
+      expect(editor).toHaveLength(2);
+      for (const params of editor) expect(params.fontExtraProperties).toBe(true);
+    });
+
+    it("destroys the loading task that needed a password before retrying", async () => {
+      const order: string[] = [];
+      const destroy = vi.fn(async () => {
+        order.push("destroy");
+      });
+      pdfConfigMock.getDocument
+        .mockImplementationOnce(() => {
+          order.push("first attempt");
+          return { promise: Promise.reject(new Error("No password given")), destroy };
+        })
+        .mockImplementationOnce(() => {
+          order.push("blank password");
+          return { promise: Promise.resolve(pdfDoc), destroy: vi.fn() };
+        });
+
+      await expect(loadProcessablePdfJsDocument(new Uint8Array([1]))).resolves.toEqual({
+        pdfDoc,
+        restrictionOnly: true,
+      });
+
+      // Each loading task starts its own worker, which only destroy() ends.
+      expect(destroy).toHaveBeenCalledTimes(1);
+      expect(order).toEqual(["first attempt", "destroy", "blank password"]);
+    });
+
+    it("still retries, and reports the load error, when destroying a failed task fails", async () => {
+      const destroy = vi.fn().mockRejectedValue(new Error("Worker was destroyed."));
+      pdfConfigMock.getDocument
+        .mockReturnValueOnce({ promise: Promise.reject(new Error("No password given")), destroy })
+        .mockReturnValueOnce({ promise: Promise.resolve(pdfDoc), destroy: vi.fn() });
+
+      await expect(loadProcessablePdfJsDocument(new Uint8Array([1]))).resolves.toEqual({
+        pdfDoc,
+        restrictionOnly: true,
+      });
+      expect(destroy).toHaveBeenCalledTimes(1);
+
+      const brokenDestroy = vi.fn().mockRejectedValue(new Error("Worker was destroyed."));
+      pdfConfigMock.getDocument.mockReturnValueOnce({
+        promise: Promise.reject(new Error("Invalid PDF structure.")),
+        destroy: brokenDestroy,
+      });
+      await expect(loadProcessablePdfJsDocument(new Uint8Array([1]))).rejects.toThrow(
+        "Invalid PDF structure.",
+      );
+      expect(brokenDestroy).toHaveBeenCalledTimes(1);
+    });
+
+    it("destroys a retry that fails too", async () => {
+      const firstDestroy = vi.fn().mockResolvedValue(undefined);
+      const retryDestroy = vi.fn().mockResolvedValue(undefined);
+      pdfConfigMock.getDocument
+        .mockReturnValueOnce({
+          promise: Promise.reject(new Error("No password given")),
+          destroy: firstDestroy,
+        })
+        .mockReturnValueOnce({
+          promise: Promise.reject(new Error("Incorrect Password")),
+          destroy: retryDestroy,
+        });
+
+      await expect(loadProcessablePdfJsDocument(new Uint8Array([1]))).rejects.toThrow(
+        "No password given",
+      );
+      expect(firstDestroy).toHaveBeenCalledTimes(1);
+      expect(retryDestroy).toHaveBeenCalledTimes(1);
     });
 
     it("gives pdf.js its own copy of bytes the caller still holds", async () => {

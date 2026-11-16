@@ -6,6 +6,7 @@ import {
 import { type HistoryAction, HistoryManager } from "../../utils/HistoryManager.ts";
 import { type ExtractedImage, imageExtractor } from "../../utils/ImageExtractor.ts";
 import { logger } from "../../utils/logger.ts";
+import { destroyPdfDocument } from "../../utils/pdfDocument.ts";
 import { EXTRACTED_WHITEOUT_PADDING_PT, embedAllAnnotations } from "../../utils/pdfEngine.ts";
 import { loadPdf, renderPage } from "../../utils/pdfRenderer.ts";
 import { nearestEditorFont, sanitizeRichText, toPdfFontSizes } from "../../utils/richText.ts";
@@ -1210,6 +1211,7 @@ export class PdfEditor extends BaseComponent {
         // persisted before capture-side sanitizing existed.
         textEl.innerHTML = sanitizeRichText(ann.richContent);
       } else {
+        // biome-ignore lint/performance/useDomNodeTextContent: innerText turns the content's line breaks into <br>; textContent would not.
         textEl.innerText = ann.content || "";
       }
 
@@ -1283,6 +1285,7 @@ export class PdfEditor extends BaseComponent {
           // Pasted markup lands here verbatim; strip it to the allowlisted
           // formatting subset before it is persisted.
           richContent: sanitizeRichText(textEl.innerHTML),
+          // biome-ignore lint/performance/useDomNodeTextContent: innerText keeps the line breaks between a box's lines; textContent joins them.
           content: textEl.innerText,
         };
         // Formatting by execCommand (the toolbar, or Ctrl+B) is its own undo
@@ -2074,6 +2077,7 @@ export class PdfEditor extends BaseComponent {
           const textEl = el?.querySelector("[contenteditable]") as HTMLElement;
           if (textEl) {
             richContent = sanitizeRichText(textEl.innerHTML);
+            // biome-ignore lint/performance/useDomNodeTextContent: innerText keeps the line breaks between a box's lines; textContent joins them.
             content = textEl.innerText;
             const domTextAlign = this.normalizeTextAlignment(
               textEl.style.textAlign || window.getComputedStyle(textEl).textAlign,
@@ -2175,11 +2179,13 @@ export class PdfEditor extends BaseComponent {
     try {
       this.updateProgress(10, "Loading PDF...");
       const arrayBuffer = await file.arrayBuffer();
-      const pdfDoc = await loadPdf(arrayBuffer);
+      // The text block extractor tells bold and italic from each font's real
+      // name, which pdf.js sends only with fontExtraProperties.
+      const pdfDoc = await loadPdf(arrayBuffer, { fontExtraProperties: true });
       // A file opened before stays in memory, with its worker, until destroyed.
       this.releasePdfDocument();
       if (!this.isConnected) {
-        void pdfDoc?.destroy?.();
+        void destroyPdfDocument(pdfDoc).catch(() => undefined);
         return;
       }
       this.currentPdfDoc = pdfDoc;
@@ -2501,7 +2507,7 @@ export class PdfEditor extends BaseComponent {
   private releasePdfDocument() {
     const pdfDoc = this.currentPdfDoc;
     this.currentPdfDoc = null;
-    void pdfDoc?.destroy?.();
+    void destroyPdfDocument(pdfDoc).catch(() => undefined);
   }
 
   /** The editor font (one of the three the export can draw) nearest a PDF font. */

@@ -297,25 +297,40 @@ describe("pdfInspectorWorker", () => {
     it.each([
       ["a password", { password: "s3cret" }],
       ["a page filter", { pages: [2] }],
-    ])("builds the text from the Markdown when %s is given, since extractText() cannot apply it", async (_label, extra) => {
-      wasm.processPdf.mockReturnValue(
-        processResult({
-          markdown:
-            "<!-- Page 2 -->\n\n## Heading\n\n**Bold** item with `code`\n\n\n\n> see [the spec](https://x.test/s) for f(x)",
-        }),
+    ])(
+      "builds the text from the Markdown when %s is given, since extractText() cannot apply it",
+      async (_label, extra) => {
+        wasm.processPdf.mockReturnValue(
+          processResult({
+            markdown:
+              "<!-- Page 2 -->\n\n## Heading\n\n**Bold** item with `code`\n\n\n\n> see [the spec](https://x.test/s) for f(x)",
+          }),
+        );
+        const send = await startWorker();
+
+        const response = await send(request({ kind: "extract-text", ...extra }));
+
+        expect(wasm.extractText).not.toHaveBeenCalled();
+        expect(wasm.processPdf).toHaveBeenCalledWith(
+          expect.any(Uint8Array),
+          expect.objectContaining(extra),
+        );
+        // Link text and "f(x)" survive; only the syntax goes.
+        expect(response?.text).toBe("Heading\n\nBold item with code\n\nsee the spec for f(x)");
+        expect(response?.text).not.toContain("Page 2");
+      },
+    );
+
+    it("removes the <sup>/<sub> tags extractText() keeps, and nothing else", async () => {
+      // pdf-inspector 1.26's extractText() output for a page with scripts.
+      wasm.extractText.mockReturnValue(
+        "She came 1<sup>st</sup>; x<sub>max</sub> is the largest.\nCompare a < b and <tag>.",
       );
       const send = await startWorker();
 
-      const response = await send(request({ kind: "extract-text", ...extra }));
+      const response = await send(request({ kind: "extract-text" }));
 
-      expect(wasm.extractText).not.toHaveBeenCalled();
-      expect(wasm.processPdf).toHaveBeenCalledWith(
-        expect.any(Uint8Array),
-        expect.objectContaining(extra),
-      );
-      // Link text and "f(x)" survive; only the syntax goes.
-      expect(response?.text).toBe("Heading\n\nBold item with code\n\nsee the spec for f(x)");
-      expect(response?.text).not.toContain("Page 2");
+      expect(response?.text).toBe("She came 1st; xmax is the largest.\nCompare a < b and <tag>.");
     });
 
     it("falls back to the stripped Markdown when extractText() throws", async () => {

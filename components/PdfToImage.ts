@@ -1,6 +1,7 @@
 import JSZip from "jszip";
 import { describeFailure, UserFacingError } from "../utils/errorMapper.ts";
 import { logger } from "../utils/logger.ts";
+import { destroyPdfDocument } from "../utils/pdfDocument.ts";
 import { renderPdfPagesToImages } from "../utils/pdfEngine.ts";
 import {
   clearPreviewLoadingState,
@@ -235,7 +236,7 @@ export class PdfToImage extends BaseComponent {
     const doc = this.currentPdfDoc;
     this.currentPdfDoc = null;
     try {
-      void Promise.resolve(doc?.destroy?.()).catch(() => undefined);
+      void destroyPdfDocument(doc).catch(() => undefined);
     } catch {
       // A document that fails to close is dropped anyway.
     }

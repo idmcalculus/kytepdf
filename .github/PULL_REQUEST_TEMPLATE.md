@@ -11,7 +11,7 @@ Fixes # (issue)
 
 ## 🛠️ Type of Change
 
-*Please check the options that are relevant:*
+_Please check the options that are relevant:_
 
 - [ ] **Bug Fix** (non-breaking change which fixes an issue)
 - [ ] **New Feature** (non-breaking change which adds functionality)
@@ -25,7 +25,7 @@ Fixes # (issue)
 
 ## 🗂️ Affected Components
 
-*Which parts of the KytePDF ecosystem does this PR impact?*
+_Which parts of the KytePDF ecosystem does this PR impact?_
 
 - [ ] **App Frontend** (styles, index.html, `/components`, `/public`)
 - [ ] **Service Worker / Offline PWA** (`sw.ts` or cache handlers)
@@ -44,6 +44,7 @@ Include details about local, manual, or automated test configurations.
 -->
 
 ### 💻 Local Automated Checks
+
 - [ ] Biome checks pass locally (`bun run lint`)
 - [ ] TypeScript compilation passes cleanly (`bun run typecheck`)
 - [ ] App Unit/Integration tests pass (`bun run test:unit`)
@@ -51,9 +52,10 @@ Include details about local, manual, or automated test configurations.
 - [ ] Production build emits bundled JS workers (`bun run build`)
 
 ### 🖐️ Manual Verification Steps
-1. 
-2. 
-3. 
+
+1.
+2.
+3.
 
 ---
 
@@ -63,9 +65,9 @@ Include details about local, manual, or automated test configurations.
 If your changes affect any visible components or UI behaviors, please attach before/after screenshots or screen recordings (GIFs/MP4s) to show the differences.
 -->
 
-| Before Change | After Change |
-| --- | --- |
-| *Insert screenshot* | *Insert screenshot* |
+| Before Change       | After Change        |
+| ------------------- | ------------------- |
+| _Insert screenshot_ | _Insert screenshot_ |
 
 ---
 

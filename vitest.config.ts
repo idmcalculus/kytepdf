@@ -6,7 +6,6 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./tests/setup.ts"],
     coverage: {
-      all: true,
       provider: "istanbul",
       reporter: ["text", "json", "json-summary", "html", "lcov"],
       include: ["components/**/*.ts", "utils/**/*.ts", "main.ts", "sw.ts"],

@@ -1,4 +1,10 @@
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+/** The tesseract.js release that is installed, and so bundled and run. */
+const installedTesseractVersion: string = JSON.parse(
+  readFileSync("node_modules/tesseract.js/package.json", "utf8"),
+).version;
 
 const mocks = vi.hoisted(() => ({
   createWorker: vi.fn(),
@@ -311,22 +317,25 @@ describe("OcrEngine runs", () => {
   it.each([
     ["an error", new Error("bad image"), "Page 1 OCR failed: bad image"],
     ["a non-error", "decoder panic", "Page 1 OCR failed: unknown error"],
-  ])("records a page that fails with %s and carries on with the rest", async (_label, failure, warning) => {
-    mocks.rasterizePdfPagesStream.mockImplementation(streamOf([1, 2]));
-    const worker = fakeWorker();
-    worker.recognize.mockRejectedValueOnce(failure);
-    mocks.createWorker.mockResolvedValue(worker);
-    const { ocrEngine } = await import("../../utils/ocrEngine");
+  ])(
+    "records a page that fails with %s and carries on with the rest",
+    async (_label, failure, warning) => {
+      mocks.rasterizePdfPagesStream.mockImplementation(streamOf([1, 2]));
+      const worker = fakeWorker();
+      worker.recognize.mockRejectedValueOnce(failure);
+      mocks.createWorker.mockResolvedValue(worker);
+      const { ocrEngine } = await import("../../utils/ocrEngine");
 
-    const result = await ocrEngine.ocrPdfPages(new Uint8Array([1]), [1, 2]);
+      const result = await ocrEngine.ocrPdfPages(new Uint8Array([1]), [1, 2]);
 
-    expect(result.pages.map((p) => p.page)).toEqual([2]);
-    expect(result.warnings).toEqual([warning]);
-    // A bad page is not a dead worker: no restart.
-    expect(mocks.createWorker).toHaveBeenCalledTimes(1);
-    expect(worker.terminate).not.toHaveBeenCalled();
-    await ocrEngine.terminate();
-  });
+      expect(result.pages.map((p) => p.page)).toEqual([2]);
+      expect(result.warnings).toEqual([warning]);
+      // A bad page is not a dead worker: no restart.
+      expect(mocks.createWorker).toHaveBeenCalledTimes(1);
+      expect(worker.terminate).not.toHaveBeenCalled();
+      await ocrEngine.terminate();
+    },
+  );
 
   it("normalises recognition output", async () => {
     mocks.rasterizePdfPagesStream.mockImplementation(streamOf([1, 2]));
@@ -343,11 +352,13 @@ describe("OcrEngine runs", () => {
       expect.objectContaining({ page: 1, text: "Scanned words", confidence: 0.87 }),
       expect.objectContaining({ page: 2, text: "", confidence: 0 }),
     ]);
+    // The version comes from the installed package, so an upgrade can't leave it stale.
     expect(result).toMatchObject({
       engine: "tesseract.js",
-      engineVersion: "6.0.1",
+      engineVersion: installedTesseractVersion,
       language: "eng",
     });
+    expect(installedTesseractVersion).toMatch(/^7\./);
     await ocrEngine.terminate();
   });
 

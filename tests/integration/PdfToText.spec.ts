@@ -535,7 +535,7 @@ describe("PdfToText", () => {
       })),
       language: "eng",
       engine: "tesseract.js",
-      engineVersion: "6.0.1",
+      engineVersion: "7.0.0",
       warnings,
       totalProcessingTimeMs: 10,
     });
@@ -567,7 +567,7 @@ describe("PdfToText", () => {
         pagesNeedingOcr: [],
         ocrPages: [2, 3],
         ocrEngine: "tesseract.js",
-        ocrEngineVersion: "6.0.1",
+        ocrEngineVersion: "7.0.0",
         warnings: [],
       });
     });
@@ -717,37 +717,43 @@ describe("PdfToText", () => {
         "resource-limit",
         "The document is too large to analyze in this browser session. Try a smaller file or fewer pages.",
       ],
-    ] as const)("explains a %s failure without trying the legacy extractor", async (reason, message) => {
-      mocks.pdfInspectorEngine.extractMarkdown.mockRejectedValue(
-        new PdfInspectorError({ reason, message: "engine said no" }),
-      );
-      const component = await mountWithFile();
+    ] as const)(
+      "explains a %s failure without trying the legacy extractor",
+      async (reason, message) => {
+        mocks.pdfInspectorEngine.extractMarkdown.mockRejectedValue(
+          new PdfInspectorError({ reason, message: "engine said no" }),
+        );
+        const component = await mountWithFile();
 
-      await component.handleConvert();
+        await component.handleConvert();
 
-      expect(lastDialog()).toMatchObject({ type: "error", message });
-      expect(mocks.localConverter.pdfToMarkdown).not.toHaveBeenCalled();
-      expect(mocks.persistence.addJob).not.toHaveBeenCalled();
-      expect((component.querySelector("#convertBtn") as HTMLButtonElement).disabled).toBe(false);
-      expect(isHidden(component, "#progressSection")).toBe(true);
-    });
+        expect(lastDialog()).toMatchObject({ type: "error", message });
+        expect(mocks.localConverter.pdfToMarkdown).not.toHaveBeenCalled();
+        expect(mocks.persistence.addJob).not.toHaveBeenCalled();
+        expect((component.querySelector("#convertBtn") as HTMLButtonElement).disabled).toBe(false);
+        expect(isHidden(component, "#progressSection")).toBe(true);
+      },
+    );
 
     it.each([
       ["malformed", "This file is not a valid or readable PDF."],
       ["unsupported", "This PDF uses features the local analysis engine does not support."],
       ["unknown", "Extraction failed: engine said no"],
-    ] as const)("tries the legacy extractor for a %s failure, and explains it if that fails too", async (reason, message) => {
-      mocks.pdfInspectorEngine.extractMarkdown.mockRejectedValue(
-        new PdfInspectorError({ reason, message: "engine said no" }),
-      );
-      const component = await mountWithFile();
+    ] as const)(
+      "tries the legacy extractor for a %s failure, and explains it if that fails too",
+      async (reason, message) => {
+        mocks.pdfInspectorEngine.extractMarkdown.mockRejectedValue(
+          new PdfInspectorError({ reason, message: "engine said no" }),
+        );
+        const component = await mountWithFile();
 
-      await component.handleConvert();
+        await component.handleConvert();
 
-      expect(mocks.localConverter.pdfToMarkdown).toHaveBeenCalled();
-      expect(lastDialog()).toMatchObject({ type: "error", message });
-      expect(mocks.persistence.addJob).not.toHaveBeenCalled();
-    });
+        expect(mocks.localConverter.pdfToMarkdown).toHaveBeenCalled();
+        expect(lastDialog()).toMatchObject({ type: "error", message });
+        expect(mocks.persistence.addJob).not.toHaveBeenCalled();
+      },
+    );
 
     it("reads a PDF the engine cannot parse (such as a damaged xref) with the legacy extractor", async () => {
       mocks.pdfInspectorEngine.extractText.mockRejectedValue(
@@ -1012,30 +1018,33 @@ describe("PdfToText review fixes", () => {
         "No text was found in this PDF. OCR could not read any text on its pages.",
       ],
       ["a PDF with no text", { pdfType: "TextBased" }, true, "No text was found in this PDF."],
-    ] as const)("reports %s instead of offering an empty file", async (_label, overrides, ocrOn, message) => {
-      mocks.pdfInspectorEngine.extractText.mockResolvedValue({
-        // Only an image placeholder: not text the user can use.
-        envelope: makeEnvelope({
-          markdown: undefined,
-          ...(overrides as Partial<AnalysisEnvelope>),
-        }),
-        text: "[Image: Image-7098480789]",
-      });
-      mocks.ocrEngine.enrichMarkdownWithOcr.mockResolvedValue({
-        markdown: "",
-        ocr: { pages: [], warnings: [], engine: "tesseract.js", engineVersion: "6.0.1" },
-      });
-      const component = await mountWithFile("txt");
-      const toggle = component.querySelector("#ocrToggle") as HTMLInputElement;
-      toggle.checked = ocrOn;
-      toggle.dispatchEvent(new Event("change"));
+    ] as const)(
+      "reports %s instead of offering an empty file",
+      async (_label, overrides, ocrOn, message) => {
+        mocks.pdfInspectorEngine.extractText.mockResolvedValue({
+          // Only an image placeholder: not text the user can use.
+          envelope: makeEnvelope({
+            markdown: undefined,
+            ...(overrides as Partial<AnalysisEnvelope>),
+          }),
+          text: "[Image: Image-7098480789]",
+        });
+        mocks.ocrEngine.enrichMarkdownWithOcr.mockResolvedValue({
+          markdown: "",
+          ocr: { pages: [], warnings: [], engine: "tesseract.js", engineVersion: "7.0.0" },
+        });
+        const component = await mountWithFile("txt");
+        const toggle = component.querySelector("#ocrToggle") as HTMLInputElement;
+        toggle.checked = ocrOn;
+        toggle.dispatchEvent(new Event("change"));
 
-      await component.handleConvert();
+        await component.handleConvert();
 
-      expect(lastDialog()).toMatchObject({ type: "error", title: "No text found", message });
-      expect(isHidden(component, "#successMessage")).toBe(true);
-      expect(mocks.persistence.addJob).not.toHaveBeenCalled();
-    });
+        expect(lastDialog()).toMatchObject({ type: "error", title: "No text found", message });
+        expect(isHidden(component, "#successMessage")).toBe(true);
+        expect(mocks.persistence.addJob).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe("changes during a run", () => {

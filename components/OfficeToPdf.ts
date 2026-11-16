@@ -250,6 +250,9 @@ export class OfficeToPdf extends BaseComponent {
         return "This document uses a format or feature the converter does not support.";
       case "resourceLimit":
         return "This document is too large or complex to convert in the browser. Try a smaller file.";
+      case "needsOcr":
+        // The converter reads the bytes, so a PDF saved with an Office name lands here.
+        return "This file is really a PDF with scanned pages, which hold no text to convert. Open it in the PDF to Text tool, which reads scanned pages with OCR.";
       case "engine-unavailable":
         return "The document converter could not load. Check your connection, reload the page and try again.";
       default:

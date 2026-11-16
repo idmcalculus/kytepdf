@@ -132,7 +132,7 @@
   justify-content: center;
 
   p {
-    margin-bottom: $spacing-lg !important;
+    margin-bottom: $spacing-lg;
     font-weight: $font-weight-semibold;
   }
 
@@ -153,7 +153,9 @@
     align-items: center;
     justify-content: center;
     color: $text-muted;
-    transition: color $transition-base, transform $transition-base;
+    transition:
+      color $transition-base,
+      transform $transition-base;
 
     &:hover {
       color: $color-primary;
@@ -179,7 +181,7 @@
   justify-content: center;
 
   p {
-    margin: 0 !important;
+    margin: 0;
     padding: 0;
     font-size: $font-size-lg;
     color: $text-muted;
@@ -205,10 +207,11 @@
   border-radius: $radius-xl;
 }
 
-.support-text {
+// Scoped to .about-support so it outranks .kyte-modal p without !important.
+.about-support .support-text {
   font-size: $font-size-md;
   color: $text-muted;
-  margin-bottom: $spacing-md !important;
+  margin-bottom: $spacing-md;
 }
 
 account-modal {
@@ -242,7 +245,9 @@ account-modal.is-open {
   background: rgba(2, 6, 23, 0.96);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: $radius-2xl;
-  box-shadow: $shadow-xl, 0 0 40px rgba(6, 182, 212, 0.12);
+  box-shadow:
+    $shadow-xl,
+    0 0 40px rgba(6, 182, 212, 0.12);
   padding: $spacing-lg;
 }
 
@@ -279,7 +284,10 @@ account-modal.is-open {
   border: 1px solid $border-color;
   border-radius: $radius-md;
   background: rgba(255, 255, 255, 0.04);
-  transition: color $transition-base, border-color $transition-base, background $transition-base;
+  transition:
+    color $transition-base,
+    border-color $transition-base,
+    background $transition-base;
 
   &:hover {
     color: $text-primary;
@@ -310,7 +318,9 @@ account-modal.is-open {
   border-radius: $radius-md;
   font-size: $font-size-xl;
   font-weight: $font-weight-semibold;
-  transition: color $transition-base, background $transition-base;
+  transition:
+    color $transition-base,
+    background $transition-base;
 
   &.active {
     color: $text-primary;

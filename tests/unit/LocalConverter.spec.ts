@@ -438,26 +438,25 @@ describe("LocalConverter", () => {
       expect(mocks.aoaToSheet).toHaveBeenCalledWith([["Name", "Qty"]]);
     });
 
-    it.each([
-      "Scanned",
-      "Mixed",
-      "ImageBased",
-    ] as const)("keeps the envelope's (OCR) text for a %s PDF with no tables", async (pdfType) => {
-      const result = await new LocalConverter().pdfToExcelFromEnvelope(new Uint8Array([1]), {
-        ...baseEnvelope,
-        pdfType,
-        confidence: 0.9,
-        markdown: "<!-- Page 1 -->\n\n## Line A\n\n- Line **B**\n\n<!-- Page 2 -->\n\n> Line C",
-      });
+    it.each(["Scanned", "Mixed", "ImageBased"] as const)(
+      "keeps the envelope's (OCR) text for a %s PDF with no tables",
+      async (pdfType) => {
+        const result = await new LocalConverter().pdfToExcelFromEnvelope(new Uint8Array([1]), {
+          ...baseEnvelope,
+          pdfType,
+          confidence: 0.9,
+          markdown: "<!-- Page 1 -->\n\n## Line A\n\n- Line **B**\n\n<!-- Page 2 -->\n\n> Line C",
+        });
 
-      expect(result.success).toBe(true);
-      // pdf.js cannot see text that only OCR found, so it must not be used.
-      expect(mocks.loadProcessable).not.toHaveBeenCalled();
-      expect(sheets()).toEqual([["Sheet1", [["Line A"], ["Line B"], ["Line C"]]]]);
-      expect(result.warnings).toEqual([
-        "No tables were found; the text was written one line per row.",
-      ]);
-    });
+        expect(result.success).toBe(true);
+        // pdf.js cannot see text that only OCR found, so it must not be used.
+        expect(mocks.loadProcessable).not.toHaveBeenCalled();
+        expect(sheets()).toEqual([["Sheet1", [["Line A"], ["Line B"], ["Line C"]]]]);
+        expect(result.warnings).toEqual([
+          "No tables were found; the text was written one line per row.",
+        ]);
+      },
+    );
 
     it("uses the legacy xlsx when the envelope Markdown has no text at all", async () => {
       setupPdf([[textItem("Name", 10, 700)]]);
@@ -517,6 +516,69 @@ describe("LocalConverter", () => {
         "<b>Only bold</b>",
         "<b>bold </b><b><i>and italic</i></b>",
       ]);
+    });
+
+    /** The options of each run in the n-th block handed to the last docx Document. */
+    const runsOf = (block: number) => {
+      const options = (Document as unknown as Mock).mock.calls.at(-1)?.[0];
+      return options.sections[0].children[block].options.children.map((run: any) => run.text);
+    };
+
+    it("turns pdf-inspector's inline tags into superscript, subscript, struck and underlined runs", async () => {
+      // As pdf-inspector 1.26 writes them; the tags themselves never reach the document.
+      await wordBlocksFor([
+        "E = mc<sup>2</sup> and x<sub>max</sub>: <s>100 dollars</s> is now <u>50</u>.",
+        "**Yibo Yan<sup>1</sup>, Jiahao Huo** and <u>word<s><sup>2</sup></s></u>",
+      ]);
+
+      expect(runsOf(0)).toEqual([
+        { text: "E = mc" },
+        { text: "2", superScript: true },
+        { text: " and x" },
+        { text: "max", subScript: true },
+        { text: ": " },
+        { text: "100 dollars", strike: true },
+        { text: " is now " },
+        { text: "50", underline: {} },
+        { text: "." },
+      ]);
+      expect(runsOf(1)).toEqual([
+        { text: "Yibo Yan", bold: true },
+        { text: "1", bold: true, superScript: true },
+        { text: ", Jiahao Huo", bold: true },
+        { text: " and " },
+        { text: "word", underline: {} },
+        { text: "2", strike: true, underline: {}, superScript: true },
+      ]);
+    });
+
+    it("turns <br> into a line break in paragraphs and table cells", async () => {
+      await wordBlocksFor(["First<br>second<br/>third", "|Notes|", "|---|", "|a<br />b|"]);
+
+      expect(runsOf(0)).toEqual([
+        { text: "First" },
+        { text: "second", break: 1 },
+        { text: "third", break: 1 },
+      ]);
+      const table = (Document as unknown as Mock).mock.calls.at(-1)?.[0].sections[0].children[1];
+      const cell = table.options.rows[1].options.children[0].options.children[0];
+      expect(cell.options.children.map((run: any) => run.text)).toEqual([
+        { text: "a" },
+        { text: "b", break: 1 },
+      ]);
+    });
+
+    it("leaves text that only looks like a tag alone", async () => {
+      await expect(
+        wordBlocksFor([
+          "Compare a < b and <tag>; a lone <s> stays, and so do <S> and <C>.",
+          "Code `x<sup>2</sup>` and \\<u>escaped\\</u> stay literal.",
+        ]),
+      ).resolves.toEqual([
+        "Compare a < b and <tag>; a lone <s> stays, and so do <S> and <C>.",
+        "Code x<sup>2</sup> and <u>escaped</u> stay literal.",
+      ]);
+      expect(runsOf(1)).toEqual([{ text: "Code x<sup>2</sup> and <u>escaped</u> stay literal." }]);
     });
 
     it("keeps link and image text, code and escaped characters, and leaves non-emphasis alone", async () => {
@@ -674,29 +736,35 @@ describe("LocalConverter", () => {
       ["ImageBased", 0.99, false, "poor"],
       ["Unknown", 0.9, false, "good"],
       ["TextBased", 0.95, true, "fair"],
-    ] as const)("rates a %s Word export at confidence %s (encoding issues: %s) as %s", async (pdfType, confidence, hasEncodingIssues, expected) => {
-      const result = await new LocalConverter().pdfToWordFromEnvelope(new Uint8Array([1]), {
-        ...baseEnvelope,
-        pdfType,
-        confidence,
-        hasEncodingIssues,
-      });
-      expect(result.quality).toBe(expected);
-    });
+    ] as const)(
+      "rates a %s Word export at confidence %s (encoding issues: %s) as %s",
+      async (pdfType, confidence, hasEncodingIssues, expected) => {
+        const result = await new LocalConverter().pdfToWordFromEnvelope(new Uint8Array([1]), {
+          ...baseEnvelope,
+          pdfType,
+          confidence,
+          hasEncodingIssues,
+        });
+        expect(result.quality).toBe(expected);
+      },
+    );
 
     it.each([
       ["TextBased", 0.6, "good"],
       ["TextBased", 0.59, "fair"],
       ["Scanned", 0.9, "fair"],
       ["ImageBased", 0.9, "poor"],
-    ] as const)("rates a %s Excel export at confidence %s as %s", async (pdfType, confidence, expected) => {
-      const result = await new LocalConverter().pdfToExcelFromEnvelope(new Uint8Array([1]), {
-        ...tableEnvelope,
-        pdfType,
-        confidence,
-      });
-      expect(result.quality).toBe(expected);
-    });
+    ] as const)(
+      "rates a %s Excel export at confidence %s as %s",
+      async (pdfType, confidence, expected) => {
+        const result = await new LocalConverter().pdfToExcelFromEnvelope(new Uint8Array([1]), {
+          ...tableEnvelope,
+          pdfType,
+          confidence,
+        });
+        expect(result.quality).toBe(expected);
+      },
+    );
 
     /** [sheet name, rows] for every worksheet added to the workbook. */
     const sheets = () =>
@@ -750,6 +818,29 @@ describe("LocalConverter", () => {
           ],
         ],
         ["Text", [["Orders"], ["Totals follow."], ["| not a row"]]],
+      ]);
+    });
+
+    it("writes the text of inline tags, not the tags, to cells and text rows", async () => {
+      await new LocalConverter().pdfToExcelFromEnvelope(new Uint8Array([1]), {
+        ...tableEnvelope,
+        markdown: [
+          "Prices<sup>1</sup> as of <s>May</s> June",
+          "|Item|Price|",
+          "|---|---|",
+          "|CO<sub>2</sub> kit|<s>12</s> 10<br>on sale|",
+        ].join("\n"),
+      });
+
+      expect(sheets()).toEqual([
+        [
+          "Table 1",
+          [
+            ["Item", "Price"],
+            ["CO2 kit", "12 10\non sale"],
+          ],
+        ],
+        ["Text", [["Prices1 as of May June"]]],
       ]);
     });
 

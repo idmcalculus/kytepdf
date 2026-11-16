@@ -60,7 +60,7 @@ function createFakePdf(pages: FakePage[]) {
       pageProxies.push(page);
       return page;
     }),
-    destroy: vi.fn().mockResolvedValue(undefined),
+    loadingTask: { destroy: vi.fn().mockResolvedValue(undefined) },
   };
   return { pdf, renders, pageProxies };
 }
@@ -349,18 +349,18 @@ describe("compressPdf", () => {
     await compressPdf(file, 30, vi.fn());
 
     expect(mocks.loadProcessablePdfJsDocument).toHaveBeenCalledWith(file);
-    expect(pdf.destroy).toHaveBeenCalledTimes(1);
+    expect(pdf.loadingTask.destroy).toHaveBeenCalledTimes(1);
   });
 
   it("releases its own document even when compression fails", async () => {
     const { pdf } = createFakePdf([{}]);
     mocks.loadProcessablePdfJsDocument.mockResolvedValue({ pdfDoc: pdf, restrictionOnly: false });
     mocks.createPdf.mockRejectedValue(new Error("pdf-lib failed"));
-    pdf.destroy.mockRejectedValueOnce(new Error("worker already gone"));
+    pdf.loadingTask.destroy.mockRejectedValueOnce(new Error("worker already gone"));
 
     await expect(compressPdf(pdfFile(100 * KB), 30, vi.fn())).rejects.toThrow("pdf-lib failed");
 
-    expect(pdf.destroy).toHaveBeenCalledTimes(1);
+    expect(pdf.loadingTask.destroy).toHaveBeenCalledTimes(1);
     expect(mocks.logger.warn).toHaveBeenCalled();
   });
 
@@ -370,7 +370,7 @@ describe("compressPdf", () => {
     await compressPdf(pdfFile(100 * KB), 30, vi.fn(), { document: pdf as any });
 
     expect(mocks.loadProcessablePdfJsDocument).not.toHaveBeenCalled();
-    expect(pdf.destroy).not.toHaveBeenCalled();
+    expect(pdf.loadingTask.destroy).not.toHaveBeenCalled();
   });
 
   it("refuses a document without pages", async () => {

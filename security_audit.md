@@ -8,13 +8,13 @@
 
 ## 1. Vulnerability Summary
 
-| Severity | Count |
-|----------|-------|
-| **Critical** | 3 |
-| **High** | 6 |
-| **Medium** | 8 |
-| **Low** | 5 |
-| **Total** | **22** |
+| Severity     | Count  |
+| ------------ | ------ |
+| **Critical** | 3      |
+| **High**     | 6      |
+| **Medium**   | 8      |
+| **Low**      | 5      |
+| **Total**    | **22** |
 
 ---
 
@@ -214,6 +214,7 @@
 - **Description:** The Netlify configuration sets `Cache-Control` headers but does not set a `Content-Security-Policy` header. The page loads scripts from `unpkg.com` and fonts from `fonts.googleapis.com`. Without CSP, any XSS vulnerability can load arbitrary external scripts.
 - **Impact:** No defense-in-depth against XSS; script injection attacks are unrestricted.
 - **Recommended fix:** Add a strict CSP header:
+
   ```
   Content-Security-Policy: default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' <gateway-url>
   ```
@@ -237,6 +238,7 @@
 - **Description:** The Netlify config does not set `Strict-Transport-Security`, `X-Frame-Options`, `X-Content-Type-Options`, or `Referrer-Policy` headers for the frontend. While the cloud-gateway sets some of these via Hono's `secureHeaders()`, the frontend has none.
 - **Impact:** Clickjacking attacks; MIME-type sniffing; protocol downgrade attacks.
 - **Recommended fix:** Add to `netlify.toml`:
+
   ```toml
   [[headers]]
     for = "/*"
@@ -345,32 +347,32 @@ An attacker bypasses consent via sessionStorage manipulation, causing documents 
 
 ### Architecture
 
-| Area | Recommendation |
-|------|---------------|
-| **API Authentication** | Replace shared API key with per-session tokens via a BFF proxy. Never embed secrets in client-side bundles. |
-| **TLS Everywhere** | Add an ALB with ACM certificate. Enforce HTTPS. Set HSTS. |
+| Area                    | Recommendation                                                                                                                      |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **API Authentication**  | Replace shared API key with per-session tokens via a BFF proxy. Never embed secrets in client-side bundles.                         |
+| **TLS Everywhere**      | Add an ALB with ACM certificate. Enforce HTTPS. Set HSTS.                                                                           |
 | **Container Hardening** | Run as non-root. Use read-only filesystem. Drop all Linux capabilities except those needed. Use `--security-opt=no-new-privileges`. |
-| **Rate Limiting** | Implement per-IP and per-key sliding-window rate limiting on the gateway. Cap concurrent LibreOffice processes. |
-| **CSP** | Deploy a strict Content-Security-Policy on the frontend. Eliminate inline scripts. |
+| **Rate Limiting**       | Implement per-IP and per-key sliding-window rate limiting on the gateway. Cap concurrent LibreOffice processes.                     |
+| **CSP**                 | Deploy a strict Content-Security-Policy on the frontend. Eliminate inline scripts.                                                  |
 
 ### Code Patterns
 
-| Pattern | Action |
-|---------|--------|
-| **HTML Injection** | Replace all `innerHTML` usage with DOM APIs (`textContent`, `createElement`) for user-controlled data. Create a centralized template sanitizer. |
-| **Secret Management** | Use AWS Secrets Manager or Parameter Store for API keys. Inject at runtime, not build time. |
-| **Dependency Pinning** | Pin all CDN scripts with SRI hashes. Better: bundle everything via Vite. |
-| **Fail Closed** | Require explicit configuration for security-critical settings. Never default to permissive (empty API key, `CORS *`). |
-| **Logging Hygiene** | Never log PII. Implement a PII-scrubbing layer in the logger. |
+| Pattern                | Action                                                                                                                                          |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **HTML Injection**     | Replace all `innerHTML` usage with DOM APIs (`textContent`, `createElement`) for user-controlled data. Create a centralized template sanitizer. |
+| **Secret Management**  | Use AWS Secrets Manager or Parameter Store for API keys. Inject at runtime, not build time.                                                     |
+| **Dependency Pinning** | Pin all CDN scripts with SRI hashes. Better: bundle everything via Vite.                                                                        |
+| **Fail Closed**        | Require explicit configuration for security-critical settings. Never default to permissive (empty API key, `CORS *`).                           |
+| **Logging Hygiene**    | Never log PII. Implement a PII-scrubbing layer in the logger.                                                                                   |
 
 ### Operational
 
-| Area | Recommendation |
-|------|---------------|
-| **Image Scanning** | Add Trivy or Grype scanning in CI for the Docker image. |
+| Area                    | Recommendation                                                                                                       |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Image Scanning**      | Add Trivy or Grype scanning in CI for the Docker image.                                                              |
 | **Dependency Auditing** | Add `bun audit` / `npm audit` to the CI pipeline. The `xlsx` package (SheetJS) is known to have had vulnerabilities. |
-| **WAF** | Deploy AWS WAF in front of the ALB with rules for request size, rate limiting, and known attack patterns. |
-| **Monitoring** | Add alerting for unusual conversion volumes, failed auth attempts, and LibreOffice process crashes. |
+| **WAF**                 | Deploy AWS WAF in front of the ALB with rules for request size, rate limiting, and known attack patterns.            |
+| **Monitoring**          | Add alerting for unusual conversion volumes, failed auth attempts, and LibreOffice process crashes.                  |
 
 ---
 
@@ -378,13 +380,13 @@ An attacker bypasses consent via sessionStorage manipulation, causing documents 
 
 ### Attacker Profiles
 
-| Profile | Entry Points | Target Assets |
-|---------|-------------|---------------|
-| **Anonymous Web User** | Frontend UI, browser DevTools | Stored PDFs in IndexedDB, API key in JS bundle |
-| **Malicious Website Operator** | Cross-origin requests to gateway | Free conversion API abuse, document exfiltration |
-| **Supply Chain Attacker** | npm package compromise, CDN poisoning | Full client-side control, all user documents |
-| **Network Observer** | Unencrypted HTTP to gateway | API keys, uploaded documents in transit |
-| **Insider / Co-tenant** | Shared container host, `/tmp` access | Temp files, symlink attacks, environment variables |
+| Profile                        | Entry Points                          | Target Assets                                      |
+| ------------------------------ | ------------------------------------- | -------------------------------------------------- |
+| **Anonymous Web User**         | Frontend UI, browser DevTools         | Stored PDFs in IndexedDB, API key in JS bundle     |
+| **Malicious Website Operator** | Cross-origin requests to gateway      | Free conversion API abuse, document exfiltration   |
+| **Supply Chain Attacker**      | npm package compromise, CDN poisoning | Full client-side control, all user documents       |
+| **Network Observer**           | Unencrypted HTTP to gateway           | API keys, uploaded documents in transit            |
+| **Insider / Co-tenant**        | Shared container host, `/tmp` access  | Temp files, symlink attacks, environment variables |
 
 ### Trust Boundaries
 

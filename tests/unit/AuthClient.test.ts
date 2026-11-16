@@ -333,18 +333,19 @@ describe("AuthClient", () => {
         case: "reports failure",
         response: () => jsonResponse({ success: false, error: "INTERNAL_ERROR" }, 500),
       },
-    ])("still sends the request, without a token, when the CSRF endpoint $case", async ({
-      response,
-    }) => {
-      fetchMock()
-        .mockResolvedValueOnce(response())
-        .mockResolvedValueOnce(jsonResponse({ success: true, data: { requested: true } }));
+    ])(
+      "still sends the request, without a token, when the CSRF endpoint $case",
+      async ({ response }) => {
+        fetchMock()
+          .mockResolvedValueOnce(response())
+          .mockResolvedValueOnce(jsonResponse({ success: true, data: { requested: true } }));
 
-      await expect(client.requestPasswordReset("a@example.com")).resolves.toEqual({
-        requested: true,
-      });
-      expect(requestTo("/auth/request-password-reset").headers.has("x-csrf-token")).toBe(false);
-    });
+        await expect(client.requestPasswordReset("a@example.com")).resolves.toEqual({
+          requested: true,
+        });
+        expect(requestTo("/auth/request-password-reset").headers.has("x-csrf-token")).toBe(false);
+      },
+    );
   });
 
   describe("configuration", () => {
@@ -370,16 +371,16 @@ describe("AuthClient", () => {
       expect(client.isAvailable).toBe(true);
     });
 
-    it.each([
-      "google",
-      "github",
-    ] as const)("sends the browser to the %s sign-in start page", (provider) => {
-      const location = { href: "http://localhost/" };
-      vi.stubGlobal("location", location);
+    it.each(["google", "github"] as const)(
+      "sends the browser to the %s sign-in start page",
+      (provider) => {
+        const location = { href: "http://localhost/" };
+        vi.stubGlobal("location", location);
 
-      client.openOAuth(provider);
+        client.openOAuth(provider);
 
-      expect(location.href).toBe(`${base}/auth/oauth/${provider}`);
-    });
+        expect(location.href).toBe(`${base}/auth/oauth/${provider}`);
+      },
+    );
   });
 });

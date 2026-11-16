@@ -14,7 +14,7 @@ const pdfMocks = vi.hoisted(() => {
   const render = vi.fn().mockReturnValue({ promise: Promise.resolve() });
   const getViewport = vi.fn().mockReturnValue({ width: 200, height: 100 });
   const getPage = vi.fn().mockResolvedValue({ getViewport, render });
-  const doc = { numPages: 3, getPage, destroy: vi.fn() };
+  const doc = { numPages: 3, getPage, loadingTask: { destroy: vi.fn() } };
   const getDocument = vi.fn().mockReturnValue({ promise: Promise.resolve(doc) });
   return { doc, getDocument, getPage, getViewport, render };
 });
@@ -22,6 +22,9 @@ const pdfMocks = vi.hoisted(() => {
 vi.mock("../../utils/pdfConfig", () => ({
   pdfjsLib: { getDocument: pdfMocks.getDocument },
 }));
+
+/** Where pdf.js fetches its image decoders from; see utils/config.ts. */
+const WASM_URL = "/wasm/pdfjs/";
 
 const createCanvas = () => {
   const canvas = document.createElement("canvas");
@@ -74,7 +77,7 @@ describe("PdfPreviewController", () => {
     const source = new Uint8Array([1, 2, 3]);
     await controller.load(source);
 
-    expect(pdfMocks.getDocument).toHaveBeenCalledWith({ data: source });
+    expect(pdfMocks.getDocument).toHaveBeenCalledWith({ data: source, wasmUrl: WASM_URL });
     expect(pdfMocks.getPage).toHaveBeenCalledWith(1);
     expect(pdfMocks.getViewport).toHaveBeenCalledWith({ scale: 0.5 });
     expect(pageIndicator.textContent).toBe("Page 1 of 3");
@@ -224,7 +227,7 @@ describe("PdfPreviewController", () => {
     expect(pdfMocks.getPage).toHaveBeenCalledWith(1);
     expect(pdfMocks.getPage).toHaveBeenCalledWith(2);
 
-    pdfMocks.doc.destroy.mockImplementationOnce(() => {
+    pdfMocks.doc.loadingTask.destroy.mockImplementationOnce(() => {
       throw new Error("destroy failed");
     });
     await expect(controller.destroy()).resolves.toBeUndefined();
@@ -234,8 +237,8 @@ describe("PdfPreviewController", () => {
 
   it("destroys stale documents when overlapping loads resolve out of order", async () => {
     const canvas = createCanvas();
-    const staleDoc = { ...pdfMocks.doc, destroy: vi.fn() };
-    const freshDoc = { ...pdfMocks.doc, destroy: vi.fn() };
+    const staleDoc = { ...pdfMocks.doc, loadingTask: { destroy: vi.fn() } };
+    const freshDoc = { ...pdfMocks.doc, loadingTask: { destroy: vi.fn() } };
     let resolveStale: (doc: typeof staleDoc) => void = () => {};
     pdfMocks.getDocument
       .mockReturnValueOnce({
@@ -251,12 +254,12 @@ describe("PdfPreviewController", () => {
     resolveStale(staleDoc);
     await Promise.all([firstLoad, secondLoad]);
 
-    expect(staleDoc.destroy).toHaveBeenCalled();
-    expect(freshDoc.destroy).not.toHaveBeenCalled();
+    expect(staleDoc.loadingTask.destroy).toHaveBeenCalled();
+    expect(freshDoc.loadingTask.destroy).not.toHaveBeenCalled();
   });
 
   it("frees a document that finishes opening after destroy instead of keeping it", async () => {
-    const lateDoc = { ...pdfMocks.doc, destroy: vi.fn() };
+    const lateDoc = { ...pdfMocks.doc, loadingTask: { destroy: vi.fn() } };
     let finishOpening: (doc: typeof lateDoc) => void = () => {};
     pdfMocks.getDocument.mockReturnValueOnce({
       promise: new Promise((resolve) => {
@@ -271,7 +274,7 @@ describe("PdfPreviewController", () => {
     finishOpening(lateDoc);
     await loading;
 
-    expect(lateDoc.destroy).toHaveBeenCalled();
+    expect(lateDoc.loadingTask.destroy).toHaveBeenCalled();
     expect(controller.document).toBeNull();
     expect(pdfMocks.render).not.toHaveBeenCalled();
   });
@@ -287,14 +290,17 @@ describe("pdfPreview helpers", () => {
     const data = new Uint8Array([4, 5, 6]);
     const doc = await loadPdfDocument(data);
 
-    expect(pdfMocks.getDocument).toHaveBeenCalledWith({ data });
+    expect(pdfMocks.getDocument).toHaveBeenCalledWith({ data, wasmUrl: WASM_URL });
     expect(doc).toBe(pdfMocks.doc);
   });
 
   it("loads a document from ArrayBuffer and File sources", async () => {
     const buffer = new ArrayBuffer(4);
     await loadPdfDocument(buffer);
-    expect(pdfMocks.getDocument).toHaveBeenLastCalledWith({ data: new Uint8Array(buffer) });
+    expect(pdfMocks.getDocument).toHaveBeenLastCalledWith({
+      data: new Uint8Array(buffer),
+      wasmUrl: WASM_URL,
+    });
 
     const file = new File([new Uint8Array([7, 8])], "file.pdf", {
       type: "application/pdf",
@@ -305,6 +311,7 @@ describe("pdfPreview helpers", () => {
     await loadPdfDocument(file);
     expect(pdfMocks.getDocument).toHaveBeenLastCalledWith({
       data: new Uint8Array([7, 8]),
+      wasmUrl: WASM_URL,
     });
   });
 

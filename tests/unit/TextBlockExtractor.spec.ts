@@ -907,36 +907,39 @@ describe("TextBlockExtractor", () => {
       [90, [0, 12, -12, 0], 800 / 600, [170, 50]],
       [180, [-12, 0, 0, -12], 2, [350, 170]],
       [270, [0, -12, 12, 0], 800 / 600, [430, 350]],
-    ])("places text where pdf.js shows it on a page turned %i°", async (rotation, matrix, scale, start) => {
-      const result = await extractor.extractPage(
-        makePdf([
-          {
-            rotation,
-            viewBox: [50, 30, 450, 630],
-            items: [
-              {
-                str: "Turned",
-                fontName: "Helvetica",
-                width: 36,
-                transform: [...matrix, 100, 200],
-              },
-            ],
-          },
-        ]),
-        0,
-      );
+    ])(
+      "places text where pdf.js shows it on a page turned %i°",
+      async (rotation, matrix, scale, start) => {
+        const result = await extractor.extractPage(
+          makePdf([
+            {
+              rotation,
+              viewBox: [50, 30, 450, 630],
+              items: [
+                {
+                  str: "Turned",
+                  fontName: "Helvetica",
+                  width: 36,
+                  transform: [...matrix, 100, 200],
+                },
+              ],
+            },
+          ]),
+          0,
+        );
 
-      const [block] = result.blocks;
-      expect(result.scale).toBeCloseTo(scale, 10);
-      expect(result.pageWidth).toBeCloseTo(800, 10);
-      expect(block.content).toBe("Turned");
-      expect(block.fontSize).toBeCloseTo(12 * scale, 10);
-      const [span] = block.lines[0].spans;
-      expect(span.x).toBeCloseTo(start[0] * scale, 10);
-      // The text's top is one text height above the baseline.
-      expect(span.y).toBeCloseTo((start[1] - 12) * scale, 10);
-      expect(result.angledTextCount).toBe(0);
-    });
+        const [block] = result.blocks;
+        expect(result.scale).toBeCloseTo(scale, 10);
+        expect(result.pageWidth).toBeCloseTo(800, 10);
+        expect(block.content).toBe("Turned");
+        expect(block.fontSize).toBeCloseTo(12 * scale, 10);
+        const [span] = block.lines[0].spans;
+        expect(span.x).toBeCloseTo(start[0] * scale, 10);
+        // The text's top is one text height above the baseline.
+        expect(span.y).toBeCloseTo((start[1] - 12) * scale, 10);
+        expect(result.angledTextCount).toBe(0);
+      },
+    );
 
     it("leaves out text that does not read left to right on the page as shown", async () => {
       const result = await extractor.extractPage(

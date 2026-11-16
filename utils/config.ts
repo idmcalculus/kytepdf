@@ -12,6 +12,12 @@ interface LoggingConfig {
 
 interface PdfConfig {
   workerSrc: string;
+  /**
+   * Folder holding pdf.js's image decoders (JBIG2 and CCITT fax, JPEG 2000)
+   * and colour management, copied there by scripts/sync-pdf-inspector-wasm.ts.
+   * pdf.js skips such images without it. It must end in a slash.
+   */
+  wasmUrl: string;
 }
 
 interface AppMetadata {
@@ -85,6 +91,7 @@ export const config: KyteConfig = {
   // PDF Configuration
   pdf: {
     workerSrc: "/pdf.worker.min.js",
+    wasmUrl: "/wasm/pdfjs/",
   },
 
   // Auth service (remote account only; document processing is local)

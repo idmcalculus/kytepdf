@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AnydocWorkerRequest, AnydocWorkerResponse } from "../../utils/anydocTypes";
 
@@ -34,6 +35,11 @@ const okFetch = () =>
     status: 200,
     arrayBuffer: () => Promise.resolve(new Uint8Array([0, 97, 115, 109]).buffer),
   });
+
+/** The anydoc-wasm release that is installed, and so bundled and run. */
+const installedAnydocVersion: string = JSON.parse(
+  readFileSync("node_modules/@firecrawl/anydoc-wasm/package.json", "utf8"),
+).version;
 
 /** anydoc throws an Error with a `code` naming what went wrong. */
 const anydocError = (code: string, message: string) => Object.assign(new Error(message), { code });
@@ -155,7 +161,8 @@ describe("anydocWorker", () => {
           markdown: "| a | b |\n| --- | --- |\n| 1 | 2 |",
           warnings: [],
           engine: "anydoc-wasm",
-          engineVersion: "0.1.8",
+          // Read from the installed package, so an upgrade can't leave it stale.
+          engineVersion: installedAnydocVersion,
           sourceName: "table.csv",
         },
       });
@@ -202,24 +209,27 @@ describe("anydocWorker", () => {
     it.each([
       ["conversion", "toMarkdownBytes"],
       ["format sniffing", "formatFromBytes"],
-    ] as const)("asks for a fresh worker when the WASM instance traps during %s", async (_label, fn) => {
-      wasm[fn].mockImplementation(() => {
-        throw new WebAssembly.RuntimeError("unreachable");
-      });
-      const send = await startWorker();
+    ] as const)(
+      "asks for a fresh worker when the WASM instance traps during %s",
+      async (_label, fn) => {
+        wasm[fn].mockImplementation(() => {
+          throw new WebAssembly.RuntimeError("unreachable");
+        });
+        const send = await startWorker();
 
-      const response = await send(request({ id: 61, format: "docx" }));
+        const response = await send(request({ id: 61, format: "docx" }));
 
-      expect(response).toEqual({
-        id: 61,
-        ok: false,
-        fatal: true,
-        failure: {
-          reason: "resourceLimit",
-          message: "The document is too large to process in this browser.",
-        },
-      });
-    });
+        expect(response).toEqual({
+          id: 61,
+          ok: false,
+          fatal: true,
+          failure: {
+            reason: "resourceLimit",
+            message: "The document is too large to process in this browser.",
+          },
+        });
+      },
+    );
 
     it.each([
       ["returns nothing", () => undefined],
@@ -269,24 +279,41 @@ describe("anydocWorker", () => {
   });
 
   describe("conversion failures", () => {
-    it.each([
-      "unsupported",
-      "malformed",
-      "resourceLimit",
-      "missingPart",
-      "encrypted",
-    ])("passes anydoc's %s code and message through", async (code) => {
+    it.each(["unsupported", "malformed", "resourceLimit", "missingPart", "encrypted"])(
+      "passes anydoc's %s code and message through",
+      async (code) => {
+        wasm.toMarkdownBytes.mockImplementation(() => {
+          throw anydocError(code, `anydoc says ${code}`);
+        });
+        const send = await startWorker();
+
+        const response = await send(request({ id: 31, format: "docx" }));
+
+        expect(response).toEqual({
+          id: 31,
+          ok: false,
+          failure: { reason: code, message: `anydoc says ${code}` },
+        });
+      },
+    );
+
+    it("passes needsOcr through for a PDF with scanned pages", async () => {
+      // anydoc 0.2's NeedsOcrError: an Error with the scanned pages on it.
       wasm.toMarkdownBytes.mockImplementation(() => {
-        throw anydocError(code, `anydoc says ${code}`);
+        throw Object.assign(new Error("pages 2-3 of 3 need OCR"), {
+          code: "needsOcr",
+          pages: [2, 3],
+          pageCount: 3,
+        });
       });
       const send = await startWorker();
 
-      const response = await send(request({ id: 31, format: "docx" }));
+      const response = await send(request({ id: 32, format: "docx" }));
 
       expect(response).toEqual({
-        id: 31,
+        id: 32,
         ok: false,
-        failure: { reason: code, message: `anydoc says ${code}` },
+        failure: { reason: "needsOcr", message: "pages 2-3 of 3 need OCR" },
       });
     });
 

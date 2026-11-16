@@ -587,92 +587,91 @@ describe("pdfCreator", () => {
     { position: "left" as const, pageSlot: "right", referenceSlot: "center" },
     { position: "center" as const, pageSlot: "right", referenceSlot: "left" },
     { position: "right" as const, pageSlot: "left", referenceSlot: "center" },
-  ])("places invoice footer items correctly with the logo at $position", async ({
-    position,
-    pageSlot,
-    referenceSlot,
-  }) => {
-    const draft = createDefaultCreatorDraft();
-    draft.template = "invoice";
-    draft.logoDataUrl = PNG_DATA_URL;
-    draft.invoice.companyReference = "REF-123";
-    draft.invoice.footerLogoPosition = position;
+  ])(
+    "places invoice footer items correctly with the logo at $position",
+    async ({ position, pageSlot, referenceSlot }) => {
+      const draft = createDefaultCreatorDraft();
+      draft.template = "invoice";
+      draft.logoDataUrl = PNG_DATA_URL;
+      draft.invoice.companyReference = "REF-123";
+      draft.invoice.footerLogoPosition = position;
 
-    await createPdfFromDraft(draft);
+      await createPdfFromDraft(draft);
 
-    const page = pdfCreatorMock.pages[0];
-    const footerLogoCall = page.drawImage.mock.calls.find(
-      ([, options]: [unknown, { y: number }]) => options.y < 50,
-    );
-    const referenceCall = page.drawText.mock.calls.find(
-      ([text]: [string]) => text === "Ref: REF-123",
-    );
-    const pageNumberCall = page.drawText.mock.calls.find(([text]: [string]) =>
-      text.startsWith("Page "),
-    );
-    const logoOptions = footerLogoCall[1] as { x: number; width: number };
-    const referenceOptions = referenceCall[1] as { x: number; size: number };
-    const pageNumberOptions = pageNumberCall[1] as { x: number };
+      const page = pdfCreatorMock.pages[0];
+      const footerLogoCall = page.drawImage.mock.calls.find(
+        ([, options]: [unknown, { y: number }]) => options.y < 50,
+      );
+      const referenceCall = page.drawText.mock.calls.find(
+        ([text]: [string]) => text === "Ref: REF-123",
+      );
+      const pageNumberCall = page.drawText.mock.calls.find(([text]: [string]) =>
+        text.startsWith("Page "),
+      );
+      const logoOptions = footerLogoCall[1] as { x: number; width: number };
+      const referenceOptions = referenceCall[1] as { x: number; size: number };
+      const pageNumberOptions = pageNumberCall[1] as { x: number };
 
-    if (position === "left") expect(logoOptions.x).toBe(56);
-    if (position === "center") {
-      expect(logoOptions.x + logoOptions.width / 2).toBeCloseTo(306, 5);
-    }
-    if (position === "right") {
-      expect(logoOptions.x + logoOptions.width).toBeCloseTo(556, 5);
-    }
+      if (position === "left") expect(logoOptions.x).toBe(56);
+      if (position === "center") {
+        expect(logoOptions.x + logoOptions.width / 2).toBeCloseTo(306, 5);
+      }
+      if (position === "right") {
+        expect(logoOptions.x + logoOptions.width).toBeCloseTo(556, 5);
+      }
 
-    if (referenceSlot === "left") {
-      expect(referenceOptions.x).toBe(56);
-    } else {
-      const referenceWidth = "Ref: REF-123".length * referenceOptions.size * 0.52;
-      expect(referenceOptions.x + referenceWidth / 2).toBeCloseTo(306, 5);
-    }
+      if (referenceSlot === "left") {
+        expect(referenceOptions.x).toBe(56);
+      } else {
+        const referenceWidth = "Ref: REF-123".length * referenceOptions.size * 0.52;
+        expect(referenceOptions.x + referenceWidth / 2).toBeCloseTo(306, 5);
+      }
 
-    if (pageSlot === "left") expect(pageNumberOptions.x).toBe(56);
-    if (pageSlot === "right") expect(pageNumberOptions.x).toBeGreaterThan(306);
-  });
+      if (pageSlot === "left") expect(pageNumberOptions.x).toBe(56);
+      if (pageSlot === "right") expect(pageNumberOptions.x).toBeGreaterThan(306);
+    },
+  );
 
   it.each([
     { position: "none" as const, referenceSlot: "left" },
     { position: "left" as const, referenceSlot: "center" },
     { position: "center" as const, referenceSlot: "left" },
     { position: "right" as const, referenceSlot: "center" },
-  ])("places the payslip copyright note below the footer reference at $position", async ({
-    position,
-    referenceSlot,
-  }) => {
-    const draft = createDefaultCreatorDraft();
-    draft.template = "payslip";
-    draft.logoDataUrl = PNG_DATA_URL;
-    draft.payslip.companyReference = "PAYROLL-REF";
-    draft.payslip.copyrightNote = "© 2026 Northstar Ltd. All rights reserved.";
-    draft.payslip.footerLogoPosition = position;
+  ])(
+    "places the payslip copyright note below the footer reference at $position",
+    async ({ position, referenceSlot }) => {
+      const draft = createDefaultCreatorDraft();
+      draft.template = "payslip";
+      draft.logoDataUrl = PNG_DATA_URL;
+      draft.payslip.companyReference = "PAYROLL-REF";
+      draft.payslip.copyrightNote = "© 2026 Northstar Ltd. All rights reserved.";
+      draft.payslip.footerLogoPosition = position;
 
-    await createPdfFromDraft(draft);
+      await createPdfFromDraft(draft);
 
-    const page = pdfCreatorMock.pages[0];
-    const referenceCall = page.drawText.mock.calls.find(
-      ([text]: [string]) => text === "Ref: PAYROLL-REF",
-    );
-    const copyrightCall = page.drawText.mock.calls.find(
-      ([text]: [string]) => text === "© 2026 Northstar Ltd. All rights reserved.",
-    );
-    const referenceOptions = referenceCall[1] as { x: number; y: number; size: number };
-    const copyrightOptions = copyrightCall[1] as { x: number; y: number; size: number };
+      const page = pdfCreatorMock.pages[0];
+      const referenceCall = page.drawText.mock.calls.find(
+        ([text]: [string]) => text === "Ref: PAYROLL-REF",
+      );
+      const copyrightCall = page.drawText.mock.calls.find(
+        ([text]: [string]) => text === "© 2026 Northstar Ltd. All rights reserved.",
+      );
+      const referenceOptions = referenceCall[1] as { x: number; y: number; size: number };
+      const copyrightOptions = copyrightCall[1] as { x: number; y: number; size: number };
 
-    expect(copyrightOptions.y).toBeLessThan(referenceOptions.y);
-    if (referenceSlot === "left") {
-      expect(referenceOptions.x).toBe(56);
-      expect(copyrightOptions.x).toBe(56);
-    } else {
-      const referenceWidth = "Ref: PAYROLL-REF".length * referenceOptions.size * 0.52;
-      const copyrightWidth =
-        "© 2026 Northstar Ltd. All rights reserved.".length * copyrightOptions.size * 0.52;
-      expect(referenceOptions.x + referenceWidth / 2).toBeCloseTo(306, 5);
-      expect(copyrightOptions.x + copyrightWidth / 2).toBeCloseTo(306, 5);
-    }
-  });
+      expect(copyrightOptions.y).toBeLessThan(referenceOptions.y);
+      if (referenceSlot === "left") {
+        expect(referenceOptions.x).toBe(56);
+        expect(copyrightOptions.x).toBe(56);
+      } else {
+        const referenceWidth = "Ref: PAYROLL-REF".length * referenceOptions.size * 0.52;
+        const copyrightWidth =
+          "© 2026 Northstar Ltd. All rights reserved.".length * copyrightOptions.size * 0.52;
+        expect(referenceOptions.x + referenceWidth / 2).toBeCloseTo(306, 5);
+        expect(copyrightOptions.x + copyrightWidth / 2).toBeCloseTo(306, 5);
+      }
+    },
+  );
 
   it("falls back to a standard italic font if the signature font cannot load", async () => {
     vi.stubGlobal(

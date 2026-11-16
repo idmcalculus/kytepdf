@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { markdownToPlainText } from "../../utils/markdownText";
+import { markdownToPlainText, stripInlineTags } from "../../utils/markdownText";
 
 describe("markdownToPlainText", () => {
   it("drops headings, emphasis and quote markers but keeps the words", () => {
@@ -149,5 +149,77 @@ describe("markdownToPlainText keeps content that only looks like syntax", () => 
     const nonchars = [0xfdd0, 0xfde2, 0xfdee, 0xfdef].map((cp) => String.fromCharCode(cp));
 
     expect(markdownToPlainText(`a${nonchars.join("")}b *c*`)).toBe("ab c");
+  });
+});
+
+describe("markdownToPlainText and pdf-inspector's inline tags", () => {
+  it("keeps the text of <sup>, <sub>, <s> and <u> runs", () => {
+    // pdf-inspector 1.26's Markdown for a page with a superscript, a
+    // subscript, a struck-through and an underlined run.
+    const md =
+      "She came 1<sup>st</sup> and 2<sup>nd</sup>. The value x<sub>max</sub> is the largest. " +
+      "Price was <s>100 dollars</s> but is now 50. This word is <u>underlined</u> here.";
+
+    expect(markdownToPlainText(md)).toBe(
+      "She came 1st and 2nd. The value xmax is the largest. " +
+        "Price was 100 dollars but is now 50. This word is underlined here.",
+    );
+  });
+
+  it("unwraps nested runs and runs inside or around emphasis", () => {
+    const md = [
+      "**Yibo Yan<sup>1,2</sup>, Jiahao Huo**",
+      "<u>word<s><sup>1</sup></s></u> <sup>2</sup>",
+      "about 3 <sup>1</sup>/<sub>3</sub> bits",
+      "*<sub>t</sub>* and x<sub>*i*</sub>",
+      "# Results<sup>a</sup>",
+    ].join("\n");
+
+    expect(markdownToPlainText(md)).toBe(
+      "Yibo Yan1,2, Jiahao Huo\nword1 2\nabout 3 1/3 bits\nt and xi\nResultsa",
+    );
+  });
+
+  it("turns <br> into a line break, or a space inside a table row", () => {
+    const md = [
+      "First<br>second<br/>third<br />fourth",
+      "",
+      "|Notes|Owner|",
+      "|---|---|",
+      "|a<br>b|Ada|",
+    ].join("\n");
+
+    expect(markdownToPlainText(md)).toBe("First\nsecond\nthird\nfourth\n\nNotes\tOwner\na b\tAda");
+  });
+
+  it("leaves text that only looks like a tag alone", () => {
+    const md = [
+      "Compare a < b and <tag> and x > y.",
+      "A lone <s> or </u> stays, and so do <S> and <C>.",
+      "Code: `x<sup>2</sup>` and \\<s>escaped\\</s>.",
+      "<s>no pair",
+      "across lines</s>",
+    ].join("\n");
+
+    expect(markdownToPlainText(md)).toBe(
+      [
+        "Compare a < b and <tag> and x > y.",
+        "A lone <s> or </u> stays, and so do <S> and <C>.",
+        "Code: x<sup>2</sup> and <s>escaped</s>.",
+        "<s>no pair",
+        "across lines</s>",
+      ].join("\n"),
+    );
+  });
+});
+
+describe("stripInlineTags", () => {
+  it("removes only the engine's tags from plain text, leaving Markdown characters alone", () => {
+    // extractText() output: plain text, but with the same <sup>/<sub> tags.
+    expect(stripInlineTags("E = mc<sup>2</sup> and H<sub>2</sub>O cost 2 * 3 for _x_ <b>")).toBe(
+      "E = mc2 and H2O cost 2 * 3 for _x_ <b>",
+    );
+    expect(stripInlineTags("line one<br>line two")).toBe("line one\nline two");
+    expect(stripInlineTags("")).toBe("");
   });
 });

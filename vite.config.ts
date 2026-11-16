@@ -15,7 +15,7 @@ import { runtimeAssetVersion } from "./scripts/runtimeAssetVersion.ts";
  * silently shipping an app whose engines 404 at runtime.
  */
 function dropDuplicateWasmAssets(): Plugin {
-  const publicWasmDir = resolve(__dirname, "public", "wasm");
+  const publicWasmDir = resolve(import.meta.dirname, "public", "wasm");
   return {
     name: "kytepdf:drop-duplicate-wasm-assets",
     apply: "build",
@@ -49,18 +49,46 @@ function dropDuplicateWasmAssets(): Plugin {
  * e2e spec checks that the preview's header matches netlify.toml.
  */
 function productionCspHeaders(): Record<string, string> {
-  const netlifyToml = resolve(__dirname, "netlify.toml");
+  const netlifyToml = resolve(import.meta.dirname, "netlify.toml");
   if (!existsSync(netlifyToml)) return {};
   const match = readFileSync(netlifyToml, "utf8").match(/Content-Security-Policy\s*=\s*"([^"]+)"/);
   return match ? { "Content-Security-Policy": match[1] } : {};
 }
+
+/** Matches a module inside node_modules/<path>, on any OS. */
+const vendor = (path: string) => new RegExp(`[\\\\/]node_modules[\\\\/]${path}`);
+
+/**
+ * Splits the heavy vendor libraries into their own cacheable chunks, so users
+ * only re-download the part that changed. Each group names its own packages
+ * and has a priority: Rolldown otherwise pulls a group's dependencies into it
+ * (pako landed in vendor-fontkit, and the page then preloaded that 756 kB chunk
+ * although only typed signatures need it).
+ */
+const VENDOR_CHUNKS = [
+  { name: "vendor-pdfjs", test: vendor("pdfjs-dist[\\\\/]"), priority: 90 },
+  {
+    name: "vendor-pdflib",
+    test: vendor("(pdf-lib-with-encrypt|pako|@pdf-lib[\\\\/](?!fontkit[\\\\/]))"),
+    priority: 80,
+  },
+  // Loaded on demand only when a document includes a typed signature.
+  { name: "vendor-fontkit", test: vendor("@pdf-lib[\\\\/]fontkit[\\\\/]"), priority: 70 },
+  { name: "vendor-docx", test: vendor("docx[\\\\/]"), priority: 60 },
+  { name: "vendor-xlsx", test: vendor("xlsx[\\\\/]"), priority: 50 },
+  { name: "vendor-zip", test: vendor("jszip[\\\\/]"), priority: 40 },
+  { name: "vendor-ui", test: vendor("lucide[\\\\/]"), priority: 30 },
+  { name: "vendor-misc", test: vendor(""), priority: 0 },
+];
 
 export default defineConfig({
   plugins: [dropDuplicateWasmAssets()],
   define: {
     // See scripts/runtimeAssetVersion.ts: ties the service worker's cache name
     // to the WASM/OCR files, so upgrades never serve stale binaries.
-    __KYTE_ASSET_VERSION__: JSON.stringify(runtimeAssetVersion(resolve(__dirname, "public"))),
+    __KYTE_ASSET_VERSION__: JSON.stringify(
+      runtimeAssetVersion(resolve(import.meta.dirname, "public")),
+    ),
   },
   preview: {
     headers: productionCspHeaders(),
@@ -68,65 +96,23 @@ export default defineConfig({
   css: {
     preprocessorOptions: {
       scss: {
-        loadPaths: [resolve(__dirname, "styles")],
+        loadPaths: [resolve(import.meta.dirname, "styles")],
       },
     },
   },
   build: {
     // Keep chunks named and in assets/ for better cache control
     chunkSizeWarningLimit: 600,
-    rollupOptions: {
+    rolldownOptions: {
       input: {
-        main: resolve(__dirname, "index.html"),
-        sw: resolve(__dirname, "sw.ts"),
+        main: resolve(import.meta.dirname, "index.html"),
+        sw: resolve(import.meta.dirname, "sw.ts"),
       },
       output: {
         entryFileNames: (chunkInfo) =>
           chunkInfo.name === "sw" ? "sw.js" : "assets/[name]-[hash].js",
-        /**
-         * Manual chunk strategy — splits the four heavy vendor libraries
-         * into their own cacheable chunks so users only re-download the
-         * part that changed:
-         *
-         *   vendor-pdfjs      ~2.5 MB (pdfjs-dist + worker)
-         *   vendor-pdflib     ~1.1 MB (pdf-lib-with-encrypt + pako + fonts)
-         *   vendor-xlsx       ~0.9 MB (xlsx / SheetJS)
-         *   vendor-zip        ~0.1 MB (jszip)
-         *   vendor-misc       everything else from node_modules
-         */
-        manualChunks(id) {
-          if (!id.includes("node_modules")) return undefined;
-
-          // PDF.js — PDF rendering engine (largest dep)
-          if (id.includes("/pdfjs-dist/")) return "vendor-pdfjs";
-
-          // Loaded on demand only when an invoice includes a text signature.
-          if (id.includes("/@pdf-lib/fontkit/")) return "vendor-fontkit";
-
-          // pdf-lib + its deps (pako compression, standard fonts)
-          if (
-            id.includes("/pdf-lib-with-encrypt/") ||
-            id.includes("/@pdf-lib/") ||
-            id.includes("/pako/")
-          ) {
-            return "vendor-pdflib";
-          }
-
-          // docx — only used for DOCX generation
-          if (id.includes("/docx/")) return "vendor-docx";
-
-          // SheetJS / xlsx — only used by Office conversion tools
-          if (id.includes("/xlsx/")) return "vendor-xlsx";
-
-          // JSZip — only used for batch ZIP downloads
-          if (id.includes("/jszip/")) return "vendor-zip";
-
-          // Lucide icons
-          if (id.includes("/lucide/")) return "vendor-ui";
-
-          // Everything else from node_modules → single shared vendor chunk
-          return "vendor-misc";
-        },
+        // Rolldown replaces the deprecated manualChunks with codeSplitting groups.
+        codeSplitting: { groups: VENDOR_CHUNKS },
       },
     },
   },

@@ -62,8 +62,8 @@ describe("PdfMerge", () => {
 
   it("should handle file selection", async () => {
     const files = [
-      new File(["f1"], "f1.pdf", { type: "application/pdf" }),
-      new File(["f2"], "f2.pdf", { type: "application/pdf" }),
+      new File(["%PDF-1.7\nf1"], "f1.pdf", { type: "application/pdf" }),
+      new File(["%PDF-1.7\nf2"], "f2.pdf", { type: "application/pdf" }),
     ];
     await component.handleFiles(files as unknown as FileList);
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -84,7 +84,7 @@ describe("PdfMerge", () => {
   });
 
   it("should disable merge button with less than 2 files", async () => {
-    const files = [new File(["f1"], "f1.pdf", { type: "application/pdf" })];
+    const files = [new File(["%PDF-1.7\nf1"], "f1.pdf", { type: "application/pdf" })];
     await component.handleFiles(files as unknown as FileList);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -94,8 +94,8 @@ describe("PdfMerge", () => {
 
   it("should enable merge button with 2+ files", async () => {
     const files = [
-      new File(["f1"], "f1.pdf", { type: "application/pdf" }),
-      new File(["f2"], "f2.pdf", { type: "application/pdf" }),
+      new File(["%PDF-1.7\nf1"], "f1.pdf", { type: "application/pdf" }),
+      new File(["%PDF-1.7\nf2"], "f2.pdf", { type: "application/pdf" }),
     ];
     await component.handleFiles(files as unknown as FileList);
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -106,8 +106,8 @@ describe("PdfMerge", () => {
 
   it("should move files up/down in list", async () => {
     const files = [
-      new File(["f1"], "first.pdf", { type: "application/pdf" }),
-      new File(["f2"], "second.pdf", { type: "application/pdf" }),
+      new File(["%PDF-1.7\nf1"], "first.pdf", { type: "application/pdf" }),
+      new File(["%PDF-1.7\nf2"], "second.pdf", { type: "application/pdf" }),
     ];
     await component.handleFiles(files as unknown as FileList);
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -125,9 +125,9 @@ describe("PdfMerge", () => {
 
   it("should wire merge, resume, move, and remove buttons", async () => {
     const files = [
-      new File(["f1"], "first.pdf", { type: "application/pdf" }),
-      new File(["f2"], "second.pdf", { type: "application/pdf" }),
-      new File(["f3"], "third.pdf", { type: "application/pdf" }),
+      new File(["%PDF-1.7\nf1"], "first.pdf", { type: "application/pdf" }),
+      new File(["%PDF-1.7\nf2"], "second.pdf", { type: "application/pdf" }),
+      new File(["%PDF-1.7\nf3"], "third.pdf", { type: "application/pdf" }),
     ];
     await loadFiles(...files);
 
@@ -150,8 +150,8 @@ describe("PdfMerge", () => {
 
   it("should remove files from list", async () => {
     const files = [
-      new File(["f1"], "f1.pdf", { type: "application/pdf" }),
-      new File(["f2"], "f2.pdf", { type: "application/pdf" }),
+      new File(["%PDF-1.7\nf1"], "f1.pdf", { type: "application/pdf" }),
+      new File(["%PDF-1.7\nf2"], "f2.pdf", { type: "application/pdf" }),
     ];
     await component.handleFiles(files as unknown as FileList);
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -164,9 +164,9 @@ describe("PdfMerge", () => {
 
   it("should swap files", async () => {
     const files = [
-      new File(["f1"], "a.pdf", { type: "application/pdf" }),
-      new File(["f2"], "b.pdf", { type: "application/pdf" }),
-      new File(["f3"], "c.pdf", { type: "application/pdf" }),
+      new File(["%PDF-1.7\nf1"], "a.pdf", { type: "application/pdf" }),
+      new File(["%PDF-1.7\nf2"], "b.pdf", { type: "application/pdf" }),
+      new File(["%PDF-1.7\nf3"], "c.pdf", { type: "application/pdf" }),
     ];
     await component.handleFiles(files as unknown as FileList);
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -184,9 +184,9 @@ describe("PdfMerge", () => {
 
   it("should support drag-and-drop and touch reordering", async () => {
     const files = [
-      new File(["f1"], "a.pdf", { type: "application/pdf" }),
-      new File(["f2"], "b.pdf", { type: "application/pdf" }),
-      new File(["f3"], "c.pdf", { type: "application/pdf" }),
+      new File(["%PDF-1.7\nf1"], "a.pdf", { type: "application/pdf" }),
+      new File(["%PDF-1.7\nf2"], "b.pdf", { type: "application/pdf" }),
+      new File(["%PDF-1.7\nf3"], "c.pdf", { type: "application/pdf" }),
     ];
     await loadFiles(...files);
 
@@ -253,7 +253,7 @@ describe("PdfMerge", () => {
 
     it("should save session when files are added", async () => {
       const { persistence } = await import("../../utils/persistence");
-      const files = [new File(["f1"], "f1.pdf", { type: "application/pdf" })];
+      const files = [new File(["%PDF-1.7\nf1"], "f1.pdf", { type: "application/pdf" })];
       await component.handleFiles(files as unknown as FileList);
       await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -262,7 +262,7 @@ describe("PdfMerge", () => {
 
     it("should call persistence.delete when all files removed", async () => {
       const { persistence } = await import("../../utils/persistence");
-      const files = [new File(["f1"], "f1.pdf", { type: "application/pdf" })];
+      const files = [new File(["%PDF-1.7\nf1"], "f1.pdf", { type: "application/pdf" })];
       await component.handleFiles(files as unknown as FileList);
       await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -274,7 +274,7 @@ describe("PdfMerge", () => {
 
     it("should restore session when files are present", async () => {
       const { persistence } = await import("../../utils/persistence");
-      const mockFiles = [new File(["test"], "restored.pdf", { type: "application/pdf" })];
+      const mockFiles = [new File(["%PDF-1.7\ntest"], "restored.pdf", { type: "application/pdf" })];
       (persistence.get as any).mockResolvedValueOnce(mockFiles);
 
       await component.restoreSession();
@@ -286,7 +286,7 @@ describe("PdfMerge", () => {
 
     it("should show, ignore, and tolerate session restore failures", async () => {
       const { persistence } = await import("../../utils/persistence");
-      const mockFiles = [new File(["test"], "restored.pdf", { type: "application/pdf" })];
+      const mockFiles = [new File(["%PDF-1.7\ntest"], "restored.pdf", { type: "application/pdf" })];
 
       (persistence.get as any).mockResolvedValueOnce(mockFiles);
       await component.checkExistingSession();
@@ -310,8 +310,8 @@ describe("PdfMerge", () => {
     it("should call PDFDocument methods when merging", async () => {
       const { PDFDocument } = await import("../../utils/pdfConfig");
       const files = [
-        new File(["f1"], "f1.pdf", { type: "application/pdf" }),
-        new File(["f2"], "f2.pdf", { type: "application/pdf" }),
+        new File(["%PDF-1.7\nf1"], "f1.pdf", { type: "application/pdf" }),
+        new File(["%PDF-1.7\nf2"], "f2.pdf", { type: "application/pdf" }),
       ];
       await component.handleFiles(files as unknown as FileList);
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -326,8 +326,8 @@ describe("PdfMerge", () => {
     it("should record job after successful merge", async () => {
       const { persistence } = await import("../../utils/persistence");
       const files = [
-        new File(["f1"], "f1.pdf", { type: "application/pdf" }),
-        new File(["f2"], "f2.pdf", { type: "application/pdf" }),
+        new File(["%PDF-1.7\nf1"], "f1.pdf", { type: "application/pdf" }),
+        new File(["%PDF-1.7\nf2"], "f2.pdf", { type: "application/pdf" }),
       ];
       await component.handleFiles(files as unknown as FileList);
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -340,8 +340,8 @@ describe("PdfMerge", () => {
 
     it("should show success message after merge", async () => {
       const files = [
-        new File(["f1"], "f1.pdf", { type: "application/pdf" }),
-        new File(["f2"], "f2.pdf", { type: "application/pdf" }),
+        new File(["%PDF-1.7\nf1"], "f1.pdf", { type: "application/pdf" }),
+        new File(["%PDF-1.7\nf2"], "f2.pdf", { type: "application/pdf" }),
       ];
       await component.handleFiles(files as unknown as FileList);
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -358,8 +358,8 @@ describe("PdfMerge", () => {
       expect(PDFDocument.create).not.toHaveBeenCalled();
 
       const files = [
-        new File(["f1"], "f1.pdf", { type: "application/pdf" }),
-        new File(["f2"], "f2.pdf", { type: "application/pdf" }),
+        new File(["%PDF-1.7\nf1"], "f1.pdf", { type: "application/pdf" }),
+        new File(["%PDF-1.7\nf2"], "f2.pdf", { type: "application/pdf" }),
       ];
       await loadFiles(...files);
       (PDFDocument.create as any).mockRejectedValueOnce(new Error("merge failed"));
@@ -376,8 +376,8 @@ describe("PdfMerge", () => {
   describe("file list UI", () => {
     it("should display file names in list", async () => {
       const files = [
-        new File(["f1"], "document1.pdf", { type: "application/pdf" }),
-        new File(["f2"], "document2.pdf", { type: "application/pdf" }),
+        new File(["%PDF-1.7\nf1"], "document1.pdf", { type: "application/pdf" }),
+        new File(["%PDF-1.7\nf2"], "document2.pdf", { type: "application/pdf" }),
       ];
       await component.handleFiles(files as unknown as FileList);
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -390,8 +390,8 @@ describe("PdfMerge", () => {
 
     it("should display file list items", async () => {
       const files = [
-        new File(["f1"], "f1.pdf", { type: "application/pdf" }),
-        new File(["f2"], "f2.pdf", { type: "application/pdf" }),
+        new File(["%PDF-1.7\nf1"], "f1.pdf", { type: "application/pdf" }),
+        new File(["%PDF-1.7\nf2"], "f2.pdf", { type: "application/pdf" }),
       ];
       await component.handleFiles(files as unknown as FileList);
       await new Promise((resolve) => setTimeout(resolve, 0));

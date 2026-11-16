@@ -683,6 +683,10 @@ describe("buildPdfFromSources: converted documents", () => {
       '"a.docx" is too large or complex to convert in the browser. Try a smaller file.',
     ],
     [
+      "needsOcr",
+      '"a.docx" is really a PDF with scanned pages, which hold no text to convert. Rename it to end in .pdf to add its pages as they are, or open it in the PDF to Text tool, which reads scanned pages with OCR.',
+    ],
+    [
       "malformed",
       'Kyte could not read "a.docx". It may be damaged or in a format Kyte can\'t open. Open it, save a fresh copy and try again.',
     ],

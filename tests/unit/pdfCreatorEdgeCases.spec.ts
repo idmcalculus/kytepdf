@@ -406,21 +406,20 @@ describe("pdfCreator edge cases", () => {
     it.each([
       { details: "", link: "https://pay.example.com/1", expectLinkLabel: true },
       { details: "Sort code 12-34-56", link: "", expectLinkLabel: false },
-    ])("renders payment details=$details link=$link", async ({
-      details,
-      link,
-      expectLinkLabel,
-    }) => {
-      const draft = draftFor("invoice");
-      draft.invoice.paymentDetails = details;
-      draft.invoice.paymentLink = link;
+    ])(
+      "renders payment details=$details link=$link",
+      async ({ details, link, expectLinkLabel }) => {
+        const draft = draftFor("invoice");
+        draft.invoice.paymentDetails = details;
+        draft.invoice.paymentLink = link;
 
-      await createPdfFromDraft(draft);
+        await createPdfFromDraft(draft);
 
-      expect(texts()).toContain("Payment Details");
-      expect(texts().includes("Payment Link")).toBe(expectLinkLabel);
-      expect(texts()).toContain(details || link);
-    });
+        expect(texts()).toContain("Payment Details");
+        expect(texts().includes("Payment Link")).toBe(expectLinkLabel);
+        expect(texts()).toContain(details || link);
+      },
+    );
 
     it("fills blank payslip details with placeholders", async () => {
       const draft = draftFor("payslip");
@@ -767,32 +766,30 @@ describe("pdfCreator edge cases", () => {
       expect(centre.y).toBeCloseTo(LETTER_HEIGHT / 2, 5);
     });
 
-    it.each([
-      { source: "text" as const },
-      { source: "company-logo" as const },
-    ])("keeps tiled $source watermarks on the same grid when they are rotated", async ({
-      source,
-    }) => {
-      const centresAt = async (rotation: number) => {
-        const draft = draftFor("payslip");
-        draft.logoDataUrl = PNG_DATA_URL;
-        draft.payslip.watermark = {
-          ...draft.payslip.watermark,
-          source,
-          style: "tiled",
-          text: "COPY",
-          rotation,
+    it.each([{ source: "text" as const }, { source: "company-logo" as const }])(
+      "keeps tiled $source watermarks on the same grid when they are rotated",
+      async ({ source }) => {
+        const centresAt = async (rotation: number) => {
+          const draft = draftFor("payslip");
+          draft.logoDataUrl = PNG_DATA_URL;
+          draft.payslip.watermark = {
+            ...draft.payslip.watermark,
+            source,
+            style: "tiled",
+            text: "COPY",
+            rotation,
+          };
+          await createPdfFromDraft(draft);
+          return rounded(source === "text" ? textCentres("COPY") : imageCentres());
         };
-        await createPdfFromDraft(draft);
-        return rounded(source === "text" ? textCentres("COPY") : imageCentres());
-      };
 
-      const upright = await centresAt(0);
-      const turned = await centresAt(45);
+        const upright = await centresAt(0);
+        const turned = await centresAt(45);
 
-      expect(upright.length).toBeGreaterThan(4);
-      expect(turned).toEqual(upright);
-    });
+        expect(upright.length).toBeGreaterThan(4);
+        expect(turned).toEqual(upright);
+      },
+    );
   });
 
   describe("grayscale watermark images", () => {
@@ -1202,34 +1199,35 @@ describe("pdfCreator edge cases", () => {
       );
     });
 
-    it.each([
-      0, 0.01, 35, -35, 90,
-    ])("keeps a long text watermark turned %s° inside the page", async (rotation) => {
-      const text = "STRICTLY CONFIDENTIAL - EMPLOYEE COPY";
-      const draft = draftFor("payslip");
-      draft.payslip.watermark = { ...draft.payslip.watermark, source: "text", text, rotation };
+    it.each([0, 0.01, 35, -35, 90])(
+      "keeps a long text watermark turned %s° inside the page",
+      async (rotation) => {
+        const text = "STRICTLY CONFIDENTIAL - EMPLOYEE COPY";
+        const draft = draftFor("payslip");
+        draft.payslip.watermark = { ...draft.payslip.watermark, source: "text", text, rotation };
 
-      await createPdfFromDraft(draft);
+        await createPdfFromDraft(draft);
 
-      const call = findText(text)!;
-      const width = text.length * call.size * 0.52;
-      const radians = (call.rotate!.angle * Math.PI) / 180;
-      const corners = [
-        [0, 0],
-        [width, 0],
-        [0, call.size],
-        [width, call.size],
-      ].map(([dx, dy]) => [
-        call.x + dx * Math.cos(radians) - dy * Math.sin(radians),
-        call.y + dx * Math.sin(radians) + dy * Math.cos(radians),
-      ]);
-      for (const [x, y] of corners) {
-        expect(x).toBeGreaterThanOrEqual(-0.001);
-        expect(x).toBeLessThanOrEqual(612.001);
-        expect(y).toBeGreaterThanOrEqual(-0.001);
-        expect(y).toBeLessThanOrEqual(LETTER_HEIGHT + 0.001);
-      }
-    });
+        const call = findText(text)!;
+        const width = text.length * call.size * 0.52;
+        const radians = (call.rotate!.angle * Math.PI) / 180;
+        const corners = [
+          [0, 0],
+          [width, 0],
+          [0, call.size],
+          [width, call.size],
+        ].map(([dx, dy]) => [
+          call.x + dx * Math.cos(radians) - dy * Math.sin(radians),
+          call.y + dx * Math.sin(radians) + dy * Math.cos(radians),
+        ]);
+        for (const [x, y] of corners) {
+          expect(x).toBeGreaterThanOrEqual(-0.001);
+          expect(x).toBeLessThanOrEqual(612.001);
+          expect(y).toBeGreaterThanOrEqual(-0.001);
+          expect(y).toBeLessThanOrEqual(LETTER_HEIGHT + 0.001);
+        }
+      },
+    );
 
     it("splits a line item taller than a page across pages without losing lines", async () => {
       const lines = Array.from({ length: 70 }, (_, index) => `Detail ${index + 1}`);

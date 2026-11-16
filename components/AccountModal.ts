@@ -1,5 +1,6 @@
 import { authClient } from "../utils/AuthClient.ts";
 import { type AuthState, type AuthStatus, authStore, type User } from "../utils/AuthStore.ts";
+import { GITHUB_ICON_SVG, GOOGLE_ICON_SVG } from "../utils/brandIcons.ts";
 import { config } from "../utils/config.ts";
 import { BaseComponent } from "./BaseComponent.ts";
 
@@ -560,8 +561,8 @@ export class AccountModal extends BaseComponent {
         <span></span>
       </div>
       <div class="oauth-actions">
-        ${config.auth.oauthProviders.includes("google") ? `<button id="btnGoogle" type="button" class="btn btn-secondary"><i data-lucide="chrome"></i> Google</button>` : ""}
-        ${config.auth.oauthProviders.includes("github") ? `<button id="btnGithub" type="button" class="btn btn-secondary"><i data-lucide="github"></i> GitHub</button>` : ""}
+        ${config.auth.oauthProviders.includes("google") ? `<button id="btnGoogle" type="button" class="btn btn-secondary">${GOOGLE_ICON_SVG} Google</button>` : ""}
+        ${config.auth.oauthProviders.includes("github") ? `<button id="btnGithub" type="button" class="btn btn-secondary">${GITHUB_ICON_SVG} GitHub</button>` : ""}
       </div>
       `
           : ""

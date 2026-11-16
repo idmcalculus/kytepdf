@@ -113,7 +113,7 @@ describe("PdfSecurity", () => {
   });
 
   it("enables protect action when passwords match", async () => {
-    const file = new File(["test"], "secure.pdf", { type: "application/pdf" });
+    const file = new File(["%PDF-1.7\ntest"], "secure.pdf", { type: "application/pdf" });
     await component.handleFiles([file] as unknown as FileList);
 
     const openPassword = component.querySelector("#openPassword") as HTMLInputElement;
@@ -129,7 +129,7 @@ describe("PdfSecurity", () => {
   });
 
   it("protects a PDF and records the job", async () => {
-    const file = new File(["test"], "secure.pdf", { type: "application/pdf" });
+    const file = new File(["%PDF-1.7\ntest"], "secure.pdf", { type: "application/pdf" });
     await component.handleFiles([file] as unknown as FileList);
 
     const openPassword = component.querySelector("#openPassword") as HTMLInputElement;
@@ -153,7 +153,7 @@ describe("PdfSecurity", () => {
     unlockRadio.checked = true;
     unlockRadio.dispatchEvent(new Event("change"));
 
-    const file = new File(["test"], "locked.pdf", { type: "application/pdf" });
+    const file = new File(["%PDF-1.7\ntest"], "locked.pdf", { type: "application/pdf" });
     await component.handleFiles([file] as unknown as FileList);
 
     const password = component.querySelector("#currentPassword") as HTMLInputElement;
@@ -175,7 +175,7 @@ describe("PdfSecurity", () => {
     unlockRadio.checked = true;
     unlockRadio.dispatchEvent(new Event("change"));
 
-    const file = new File(["test"], "restricted.pdf", { type: "application/pdf" });
+    const file = new File(["%PDF-1.7\ntest"], "restricted.pdf", { type: "application/pdf" });
     await component.handleFiles([file] as unknown as FileList);
 
     expect(component.querySelector("#currentPasswordGroup")?.classList.contains("hidden")).toBe(
@@ -198,8 +198,8 @@ describe("PdfSecurity", () => {
     unlockRadio.checked = true;
     unlockRadio.dispatchEvent(new Event("change"));
 
-    const fileA = new File(["a"], "locked-a.pdf", { type: "application/pdf" });
-    const fileB = new File(["b"], "locked-b.pdf", { type: "application/pdf" });
+    const fileA = new File(["%PDF-1.7\na"], "locked-a.pdf", { type: "application/pdf" });
+    const fileB = new File(["%PDF-1.7\nb"], "locked-b.pdf", { type: "application/pdf" });
     await component.handleFiles([fileA, fileB] as unknown as FileList);
 
     const password = component.querySelector("#currentPassword") as HTMLInputElement;
@@ -230,8 +230,8 @@ describe("PdfSecurity", () => {
   });
 
   it("shows batch download options only when more than one file is actively selected", async () => {
-    const fileA = new File(["a"], "locked-a.pdf", { type: "application/pdf" });
-    const fileB = new File(["b"], "locked-b.pdf", { type: "application/pdf" });
+    const fileA = new File(["%PDF-1.7\na"], "locked-a.pdf", { type: "application/pdf" });
+    const fileB = new File(["%PDF-1.7\nb"], "locked-b.pdf", { type: "application/pdf" });
     await component.handleFiles([fileA, fileB] as unknown as FileList);
 
     expect(component.querySelector("#downloadModeGroup")?.classList.contains("hidden")).toBe(false);
@@ -250,8 +250,8 @@ describe("PdfSecurity", () => {
       .spyOn(HTMLAnchorElement.prototype, "click")
       .mockImplementation(() => undefined);
 
-    const fileA = new File(["a"], "locked-a.pdf", { type: "application/pdf" });
-    const fileB = new File(["b"], "locked-b.pdf", { type: "application/pdf" });
+    const fileA = new File(["%PDF-1.7\na"], "locked-a.pdf", { type: "application/pdf" });
+    const fileB = new File(["%PDF-1.7\nb"], "locked-b.pdf", { type: "application/pdf" });
     await component.handleFiles([fileA, fileB] as unknown as FileList);
 
     const individualMode = component.querySelector(
@@ -288,8 +288,8 @@ describe("PdfSecurity", () => {
   });
 
   it("uses the left pane selection state as the active batch", async () => {
-    const fileA = new File(["a"], "locked-a.pdf", { type: "application/pdf" });
-    const fileB = new File(["b"], "locked-b.pdf", { type: "application/pdf" });
+    const fileA = new File(["%PDF-1.7\na"], "locked-a.pdf", { type: "application/pdf" });
+    const fileB = new File(["%PDF-1.7\nb"], "locked-b.pdf", { type: "application/pdf" });
     await component.handleFiles([fileA, fileB] as unknown as FileList);
 
     expect(component.querySelector("#fileInfo")?.classList.contains("hidden")).toBe(false);
@@ -334,8 +334,8 @@ describe("PdfSecurity", () => {
     unlockRadio.checked = true;
     unlockRadio.dispatchEvent(new Event("change"));
 
-    const fileA = new File(["a"], "restricted.pdf", { type: "application/pdf" });
-    const fileB = new File(["b"], "locked.pdf", { type: "application/pdf" });
+    const fileA = new File(["%PDF-1.7\na"], "restricted.pdf", { type: "application/pdf" });
+    const fileB = new File(["%PDF-1.7\nb"], "locked.pdf", { type: "application/pdf" });
     await component.handleFiles([fileA, fileB] as unknown as FileList);
 
     const passwordGroup = component.querySelector("#currentPasswordGroup") as HTMLElement;
@@ -357,8 +357,8 @@ describe("PdfSecurity", () => {
     (component.querySelector("#addMoreBtn") as HTMLButtonElement).click();
     expect(fileInputClick).toHaveBeenCalled();
 
-    const fileA = new File(["a"], "a.pdf", { type: "application/pdf" });
-    const fileB = new File(["b"], "b.pdf", { type: "application/pdf" });
+    const fileA = new File(["%PDF-1.7\na"], "a.pdf", { type: "application/pdf" });
+    const fileB = new File(["%PDF-1.7\nb"], "b.pdf", { type: "application/pdf" });
     await component.handleFiles(asFileList(fileA, fileB));
 
     (component.querySelector("#clearSelectionBtn") as HTMLButtonElement).click();
@@ -381,7 +381,7 @@ describe("PdfSecurity", () => {
   });
 
   it("clears selected files only after confirmation", async () => {
-    const file = new File(["a"], "a.pdf", { type: "application/pdf" });
+    const file = new File(["%PDF-1.7\na"], "a.pdf", { type: "application/pdf" });
     await component.handleFiles(asFileList(file));
 
     (document.getElementById("globalDialog") as any).show = vi.fn().mockResolvedValueOnce(false);
@@ -397,7 +397,7 @@ describe("PdfSecurity", () => {
   });
 
   it("covers validation summaries for owner password and unprotected unlock batches", async () => {
-    const fileA = new File(["a"], "a.pdf", { type: "application/pdf" });
+    const fileA = new File(["%PDF-1.7\na"], "a.pdf", { type: "application/pdf" });
     await component.handleFiles(asFileList(fileA));
     setProtectPasswords("secret123", "secret123", "secret123");
     expect(component.querySelector("#actionSummary")?.textContent).toContain(
@@ -424,7 +424,7 @@ describe("PdfSecurity", () => {
       "does not currently have a password",
     );
 
-    const fileB = new File(["b"], "b.pdf", { type: "application/pdf" });
+    const fileB = new File(["%PDF-1.7\nb"], "b.pdf", { type: "application/pdf" });
     await (component as any).applySelectedFiles([fileA, fileB], false);
     (component as any).unlockStates = ["password-required", "unprotected"];
     (component.querySelector("#currentPassword") as HTMLInputElement).value = "secret123";
@@ -434,8 +434,8 @@ describe("PdfSecurity", () => {
   });
 
   it("exposes pure state helpers for selection metadata and saved files", async () => {
-    const fileA = new File(["a"], "a.pdf", { type: "application/pdf" });
-    const fileB = new File(["b"], "b.pdf", { type: "application/pdf" });
+    const fileA = new File(["%PDF-1.7\na"], "a.pdf", { type: "application/pdf" });
+    const fileB = new File(["%PDF-1.7\nb"], "b.pdf", { type: "application/pdf" });
     await component.handleFiles(asFileList(fileA, fileB));
 
     expect((component as any).normalizeSavedFiles(null)).toEqual([]);
@@ -450,7 +450,7 @@ describe("PdfSecurity", () => {
   });
 
   it("handles saved-session restore states and persistence failures", async () => {
-    const saved = new File(["saved"], "saved.pdf", { type: "application/pdf" });
+    const saved = new File(["%PDF-1.7\nsaved"], "saved.pdf", { type: "application/pdf" });
 
     (persistence.get as any).mockResolvedValue(saved);
     await (component as any).checkExistingSession();
@@ -474,7 +474,7 @@ describe("PdfSecurity", () => {
 
   it("does not execute HTML/JS embedded in a resumed filename (stored XSS regression)", async () => {
     const maliciousName = "<img src=x onerror=window.__resumeXss=1>.pdf";
-    const saved = new File(["saved"], maliciousName, { type: "application/pdf" });
+    const saved = new File(["%PDF-1.7\nsaved"], maliciousName, { type: "application/pdf" });
     (persistence.get as any).mockResolvedValue(saved);
     (window as any).__resumeXss = undefined;
 
@@ -500,7 +500,7 @@ describe("PdfSecurity", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     (getPdfSecurityState as any).mockRejectedValueOnce(new Error("inspection failed"));
-    const file = new File(["locked"], "locked.pdf", { type: "application/pdf" });
+    const file = new File(["%PDF-1.7\nlocked"], "locked.pdf", { type: "application/pdf" });
     await component.handleFiles(asFileList(file));
     // An inspection that throws means the file could not be read, not that it needs a password.
     expect((component as any).unlockStates[0]).toBe("invalid");
@@ -512,7 +512,7 @@ describe("PdfSecurity", () => {
   });
 
   it("reports batch failure variants without successful output", async () => {
-    const locked = new File(["locked"], "locked.pdf", { type: "application/pdf" });
+    const locked = new File(["%PDF-1.7\nlocked"], "locked.pdf", { type: "application/pdf" });
 
     await (component as any).showBatchResults(
       "unprotect",
@@ -634,8 +634,8 @@ describe("PdfSecurity", () => {
       .mockResolvedValueOnce("password-required");
     (unprotectPdf as any).mockRejectedValueOnce(new Error("bad password"));
 
-    const fileA = new File(["a"], "open.pdf", { type: "application/pdf" });
-    const fileB = new File(["b"], "locked.pdf", { type: "application/pdf" });
+    const fileA = new File(["%PDF-1.7\na"], "open.pdf", { type: "application/pdf" });
+    const fileB = new File(["%PDF-1.7\nb"], "locked.pdf", { type: "application/pdf" });
     await component.handleFiles(asFileList(fileA, fileB));
     (component as any).unlockStates = ["unprotected", "password-required"];
     const currentPassword = component.querySelector("#currentPassword") as HTMLInputElement;
@@ -652,7 +652,7 @@ describe("PdfSecurity", () => {
   });
 
   it("handles top-level security action errors", async () => {
-    const file = new File(["a"], "a.pdf", { type: "application/pdf" });
+    const file = new File(["%PDF-1.7\na"], "a.pdf", { type: "application/pdf" });
     await component.handleFiles(asFileList(file));
     setProtectPasswords();
 
@@ -674,7 +674,8 @@ describe("PdfSecurity", () => {
   });
 
   describe("unlock states, copy and outcomes", () => {
-    const pdf = (name: string, body = "x") => new File([body], name, { type: "application/pdf" });
+    const pdf = (name: string, body = "x") =>
+      new File([`%PDF-1.7\n${body}`], name, { type: "application/pdf" });
     const text = (selector: string) => component.querySelector(selector)?.textContent?.trim();
     const dialogShow = () => (document.getElementById("globalDialog") as any).show;
     const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -914,7 +915,8 @@ describe("PdfSecurity", () => {
         "3 of 4 selected • 2 PDFs need the shared password • 1 PDF is restriction-only • Separate downloads",
       );
       expect(text("#fileListTitle")).toBe("Selected PDFs (3 of 4)");
-      expect(text("#fileSize")).toBe("3 Bytes selected of 4 Bytes total");
+      // Each fixture is a 9-byte "%PDF-1.7\n" header plus one byte.
+      expect(text("#fileSize")).toBe("30 Bytes selected of 40 Bytes total");
 
       enterCurrentPassword("pw");
       expect(text("#actionSummary")).toBe(
@@ -1164,7 +1166,7 @@ describe("PdfSecurity", () => {
   });
 
   describe("protect mode copy and outcomes", () => {
-    const pdf = (name: string) => new File(["x"], name, { type: "application/pdf" });
+    const pdf = (name: string) => new File(["%PDF-1.7\nx"], name, { type: "application/pdf" });
     const text = (selector: string) => component.querySelector(selector)?.textContent?.trim();
 
     it.each([

@@ -2305,66 +2305,62 @@ describe("PdfCreator", () => {
         noun: "section",
         fields: { "cv-section-title": "Section Title", "cv-section-body": "Content" },
       },
-    ])("labels every $buttons field and names its buttons", async ({
-      template,
-      buttons,
-      noun,
-      fields,
-    }) => {
-      const component = await mountCreator();
-      await switchTemplate(component, template);
+    ])(
+      "labels every $buttons field and names its buttons",
+      async ({ template, buttons, noun, fields }) => {
+        const component = await mountCreator();
+        await switchTemplate(component, template);
 
-      let rowId = "";
-      for (const [className, label] of Object.entries(fields)) {
-        const control = query<HTMLElement>(component, `.${className}`);
-        expect(control.id).toBeTruthy();
-        expect(component.querySelector(`label[for="${control.id}"]`)?.textContent).toBe(label);
-        rowId = control.dataset.id as string;
-      }
-      const rowButtons = component.querySelectorAll(`.action-btn[data-id="${rowId}"]`);
-      expect(Array.from(rowButtons, (button) => button.className.split(" ")[1])).toEqual([
-        `${buttons}-move-up`,
-        `${buttons}-move-down`,
-        `${buttons}-remove`,
-      ]);
-      expect(Array.from(rowButtons, (button) => button.getAttribute("aria-label"))).toEqual([
-        `Move ${noun} 1 up`,
-        `Move ${noun} 1 down`,
-        `Remove ${noun} 1`,
-      ]);
-    });
+        let rowId = "";
+        for (const [className, label] of Object.entries(fields)) {
+          const control = query<HTMLElement>(component, `.${className}`);
+          expect(control.id).toBeTruthy();
+          expect(component.querySelector(`label[for="${control.id}"]`)?.textContent).toBe(label);
+          rowId = control.dataset.id as string;
+        }
+        const rowButtons = component.querySelectorAll(`.action-btn[data-id="${rowId}"]`);
+        expect(Array.from(rowButtons, (button) => button.className.split(" ")[1])).toEqual([
+          `${buttons}-move-up`,
+          `${buttons}-move-down`,
+          `${buttons}-remove`,
+        ]);
+        expect(Array.from(rowButtons, (button) => button.getAttribute("aria-label"))).toEqual([
+          `Move ${noun} 1 up`,
+          `Move ${noun} 1 down`,
+          `Remove ${noun} 1`,
+        ]);
+      },
+    );
 
     it.each([
       { template: "invoice", fields: "invoice-item", noun: "item", rate: "Unit Price" },
       { template: "payslip", fields: "payslip-item", noun: "earning", rate: "Rate" },
       { template: "payslip", fields: "payslip-deduction", noun: "deduction", rate: "Rate" },
-    ])("labels every $noun field and names its icon buttons", async ({
-      template,
-      fields,
-      noun,
-      rate,
-    }) => {
-      const component = await mountCreator();
-      await switchTemplate(component, template);
+    ])(
+      "labels every $noun field and names its icon buttons",
+      async ({ template, fields, noun, rate }) => {
+        const component = await mountCreator();
+        await switchTemplate(component, template);
 
-      for (const [part, label] of [
-        ["description", "Description"],
-        ["quantity", "Quantity"],
-        ["rate", rate],
-      ]) {
-        const control = component.querySelectorAll<HTMLElement>(`.${fields}-${part}`)[1];
-        expect(control.id).toBeTruthy();
-        expect(component.querySelector(`label[for="${control.id}"]`)?.textContent).toBe(label);
-      }
-      const buttons = component.querySelectorAll(
-        `[data-id="${component.querySelectorAll<HTMLElement>(`.${fields}-rate`)[1].dataset.id}"].action-btn`,
-      );
-      expect(Array.from(buttons, (button) => button.getAttribute("aria-label"))).toEqual([
-        `Move ${noun} 2 up`,
-        `Move ${noun} 2 down`,
-        `Remove ${noun} 2`,
-      ]);
-    });
+        for (const [part, label] of [
+          ["description", "Description"],
+          ["quantity", "Quantity"],
+          ["rate", rate],
+        ]) {
+          const control = component.querySelectorAll<HTMLElement>(`.${fields}-${part}`)[1];
+          expect(control.id).toBeTruthy();
+          expect(component.querySelector(`label[for="${control.id}"]`)?.textContent).toBe(label);
+        }
+        const buttons = component.querySelectorAll(
+          `[data-id="${component.querySelectorAll<HTMLElement>(`.${fields}-rate`)[1].dataset.id}"].action-btn`,
+        );
+        expect(Array.from(buttons, (button) => button.getAttribute("aria-label"))).toEqual([
+          `Move ${noun} 2 up`,
+          `Move ${noun} 2 down`,
+          `Remove ${noun} 2`,
+        ]);
+      },
+    );
   });
 
   describe("after the tool is closed", () => {

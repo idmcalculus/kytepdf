@@ -35,6 +35,15 @@ describe("pdfRenderer", () => {
     const pdfData = new Uint8Array([1, 2, 3]);
     const pdf = await loadPdf(pdfData);
     expect(pdf).toBe(mockPdfProxy);
+    expect(securityMocks.loadProcessablePdfJsDocument).toHaveBeenCalledWith(pdfData, {});
+  });
+
+  it("passes pdf.js load options through", async () => {
+    const pdfData = new Uint8Array([1, 2, 3]);
+    await loadPdf(pdfData, { fontExtraProperties: true });
+    expect(securityMocks.loadProcessablePdfJsDocument).toHaveBeenCalledWith(pdfData, {
+      fontExtraProperties: true,
+    });
   });
 
   it("should render a page to canvas", async () => {

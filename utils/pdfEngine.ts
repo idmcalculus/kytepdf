@@ -3,6 +3,7 @@ import { adjustYForTextBaseline } from "./coordinates.ts";
 import { logger } from "./logger.ts";
 import { toWinAnsi } from "./markdownPdf.ts";
 import { degrees, PDFDocument, rgb, StandardFonts } from "./pdfConfig.ts";
+import { destroyPdfDocument } from "./pdfDocument.ts";
 import { loadProcessablePdf, loadProcessablePdfJsDocument } from "./pdfSecurity.ts";
 import { nearestEditorFont } from "./richText.ts";
 import { yieldToMain } from "./taskScheduler.ts";
@@ -1337,7 +1338,7 @@ export async function renderPdfPagesToImages(
       // The document and its worker hold the parsed file; free them on
       // success and on error alike.
       try {
-        await pdf.destroy?.();
+        await destroyPdfDocument(pdf);
       } catch (destroyErr) {
         logger.warn("Failed to release the PDF after rendering it", destroyErr);
       }

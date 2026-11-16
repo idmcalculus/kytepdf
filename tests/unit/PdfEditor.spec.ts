@@ -44,7 +44,8 @@ vi.mock("../../utils/taskScheduler", () => ({
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-const pdfFile = () => new File(["dummy content"], "test.pdf", { type: "application/pdf" });
+const pdfFile = () =>
+  new File(["%PDF-1.7\ndummy content"], "test.pdf", { type: "application/pdf" });
 
 const asFileList = (file: File) =>
   ({
@@ -101,7 +102,9 @@ describe("PdfEditor", () => {
 
     await editor.handleFiles(asFileList(file));
 
-    expect(loadPdf).toHaveBeenCalled();
+    // pdf.js 6.4+ sends a font's real name, which the text block extractor
+    // reads bold and italic from, only with fontExtraProperties.
+    expect(loadPdf).toHaveBeenCalledWith(expect.any(ArrayBuffer), { fontExtraProperties: true });
     // Since handleFiles is async void, we might need to wait, but the mock is resolved immediately.
     // However, the component method is async.
     await flush();
@@ -792,52 +795,50 @@ describe("PdfEditor", () => {
     expect(editor.querySelector(".line-height-guide")).toBeTruthy();
   });
 
-  it.each([
-    "left",
-    "center",
-    "right",
-    "justify",
-  ] as const)("should capture %s text box alignment from the edited DOM when saving", async (textAlign) => {
-    await loadEditor();
-    const manager = (editor as any).annotationManager;
-    const id = manager.addAnnotation(
-      {
-        type: "textblock",
-        pageIndex: 0,
-        x: 80,
-        y: 80,
-        width: 200,
-        height: 60,
-        content: "Aligned text",
-        richContent: "Aligned text",
-        style: { fontSize: 12, color: "#000000", lineHeight: 1.4 },
-      },
-      { recordHistory: false },
-    );
-    (editor as any).renderAnnotation(id);
-    await flush();
+  it.each(["left", "center", "right", "justify"] as const)(
+    "should capture %s text box alignment from the edited DOM when saving",
+    async (textAlign) => {
+      await loadEditor();
+      const manager = (editor as any).annotationManager;
+      const id = manager.addAnnotation(
+        {
+          type: "textblock",
+          pageIndex: 0,
+          x: 80,
+          y: 80,
+          width: 200,
+          height: 60,
+          content: "Aligned text",
+          richContent: "Aligned text",
+          style: { fontSize: 12, color: "#000000", lineHeight: 1.4 },
+        },
+        { recordHistory: false },
+      );
+      (editor as any).renderAnnotation(id);
+      await flush();
 
-    const textEl = editor.querySelector(
-      `.annotation[data-id="${id}"] [contenteditable]`,
-    ) as HTMLElement;
-    textEl.style.textAlign = textAlign;
-    (editor as any).savePdf = vi.fn().mockResolvedValue(true);
-    (editor as any).recordJob = vi.fn().mockResolvedValue(undefined);
+      const textEl = editor.querySelector(
+        `.annotation[data-id="${id}"] [contenteditable]`,
+      ) as HTMLElement;
+      textEl.style.textAlign = textAlign;
+      (editor as any).savePdf = vi.fn().mockResolvedValue(true);
+      (editor as any).recordJob = vi.fn().mockResolvedValue(undefined);
 
-    await editor.handleSave();
+      await editor.handleSave();
 
-    expect(embedAllAnnotations).toHaveBeenCalledWith(
-      expect.any(Uint8Array),
-      expect.arrayContaining([
-        expect.objectContaining({
-          id,
-          style: expect.objectContaining({ textAlign }),
-        }),
-      ]),
-      [],
-      expect.anything(),
-    );
-  });
+      expect(embedAllAnnotations).toHaveBeenCalledWith(
+        expect.any(Uint8Array),
+        expect.arrayContaining([
+          expect.objectContaining({
+            id,
+            style: expect.objectContaining({ textAlign }),
+          }),
+        ]),
+        [],
+        expect.anything(),
+      );
+    },
+  );
 
   it("should save embedded annotations and report cancellation or failures", async () => {
     const file = await loadEditor();
@@ -994,8 +995,11 @@ describe("PdfEditor", () => {
       style: { color: "#ffffff", strokeWidth: 1, opacity: 1 },
       ...overrides,
     });
-    const SERIF_CSS = EDITOR_FONTS[1].css;
-    const MONOSPACE_CSS = EDITOR_FONTS[2].css;
+    // jsdom 31 writes font-family without quotes ("Times New Roman" becomes
+    // Times New Roman); browsers keep them. Compare with quotes removed.
+    const family = (value: string) => value.replace(/"/g, "");
+    const SERIF_CSS = family(EDITOR_FONTS[1].css);
+    const MONOSPACE_CSS = family(EDITOR_FONTS[2].css);
     const block = (overrides: Partial<TextBlock> = {}): TextBlock => ({
       pageIndex: 0,
       lines: [],
@@ -1044,6 +1048,7 @@ describe("PdfEditor", () => {
 
     afterAll(() => {
       delete (HTMLElement.prototype as any).isContentEditable;
+      // biome-ignore lint/performance/useDomNodeTextContent: removes this suite's own innerText stand-in.
       delete (HTMLElement.prototype as any).innerText;
     });
 
@@ -1689,28 +1694,36 @@ describe("PdfEditor", () => {
         ["sw", -30, 20, { width: 150, height: 70, x: -20, y: 10 }],
         ["n", 30, -20, { width: 120, height: 70, x: 10, y: -10 }],
         ["w", -30, 20, { width: 150, height: 50, x: -20, y: 10 }],
-      ] as const)("resizes a text block from its %s handle as one undo step", async (dir, dx, dy, expected) => {
-        const id = await addRenderedAnnotation(textBlock());
-        const el = annEl(id);
-        // The 120-wide block's box is drawn 6px wider for its padding.
-        sizeEl(el, 126, 50);
-        const handle = el.querySelector(
-          `.textblock-resize-handle[data-dir="${dir}"]`,
-        ) as HTMLElement;
+      ] as const)(
+        "resizes a text block from its %s handle as one undo step",
+        async (dir, dx, dy, expected) => {
+          const id = await addRenderedAnnotation(textBlock());
+          const el = annEl(id);
+          // The 120-wide block's box is drawn 6px wider for its padding.
+          sizeEl(el, 126, 50);
+          const handle = el.querySelector(
+            `.textblock-resize-handle[data-dir="${dir}"]`,
+          ) as HTMLElement;
 
-        mouse(handle, "mousedown", 100, 100);
-        mouse(document, "mousemove", 100 + dx, 100 + dy);
-        mouse(document, "mouseup", 100 + dx, 100 + dy);
+          mouse(handle, "mousedown", 100, 100);
+          mouse(document, "mousemove", 100 + dx, 100 + dy);
+          mouse(document, "mouseup", 100 + dx, 100 + dy);
 
-        // The stored width is the block's own, without the box's padding.
-        expect(manager().getAnnotation(id)).toMatchObject(expected);
-        expect(el.style.width).toBe(`${expected.width + 6}px`);
-        expect(el.style.left).toBe(`${expected.x}px`);
-        expect(textOf(id).style.minHeight).toBe(`${expected.height}px`);
+          // The stored width is the block's own, without the box's padding.
+          expect(manager().getAnnotation(id)).toMatchObject(expected);
+          expect(el.style.width).toBe(`${expected.width + 6}px`);
+          expect(el.style.left).toBe(`${expected.x}px`);
+          expect(textOf(id).style.minHeight).toBe(`${expected.height}px`);
 
-        button("#undoBtn").click();
-        expect(manager().getAnnotation(id)).toMatchObject({ x: 10, y: 10, width: 120, height: 50 });
-      });
+          button("#undoBtn").click();
+          expect(manager().getAnnotation(id)).toMatchObject({
+            x: 10,
+            y: 10,
+            width: 120,
+            height: 50,
+          });
+        },
+      );
 
       it("keeps the far edges in place when a text block is shrunk past its minimum size", async () => {
         const id = await addRenderedAnnotation(textBlock());
@@ -1758,25 +1771,28 @@ describe("PdfEditor", () => {
         ["right edge to left edge", 72, 70, 100],
         ["right edge to centre", 112, 110, 140],
         ["right edge to right edge", 152, 150, 180],
-      ] as const)("snaps a dragged box %s and shows one guide", async (_label, dropX, snappedX, guideX) => {
-        await loadEditor();
-        addAndRender(rect({ x: 100, y: 10 }));
-        addAndRender(rect({ x: 100, y: 80 })); // same edges: only one guide per line
-        addAndRender({ type: "text", pageIndex: 0, x: 700, y: 10, content: "far away" });
-        manager().addAnnotation(rect({ x: 101 }), { recordHistory: false }); // not on screen
-        const dragged = addAndRender(rect({ x: 400, y: 300, width: 30 }));
-        const el = annEl(dragged);
-        sizeEl(el, 30, 40);
+      ] as const)(
+        "snaps a dragged box %s and shows one guide",
+        async (_label, dropX, snappedX, guideX) => {
+          await loadEditor();
+          addAndRender(rect({ x: 100, y: 10 }));
+          addAndRender(rect({ x: 100, y: 80 })); // same edges: only one guide per line
+          addAndRender({ type: "text", pageIndex: 0, x: 700, y: 10, content: "far away" });
+          manager().addAnnotation(rect({ x: 101 }), { recordHistory: false }); // not on screen
+          const dragged = addAndRender(rect({ x: 400, y: 300, width: 30 }));
+          const el = annEl(dragged);
+          sizeEl(el, 30, 40);
 
-        mouse(el, "mousedown", 400, 300);
-        mouse(document, "mousemove", dropX, 300);
-        const guides = Array.from(pageEl().querySelectorAll<HTMLElement>(".alignment-guide"));
-        expect(guides.map((g) => g.style.left)).toEqual([`${guideX}px`]);
+          mouse(el, "mousedown", 400, 300);
+          mouse(document, "mousemove", dropX, 300);
+          const guides = Array.from(pageEl().querySelectorAll<HTMLElement>(".alignment-guide"));
+          expect(guides.map((g) => g.style.left)).toEqual([`${guideX}px`]);
 
-        mouse(document, "mouseup", dropX, 300);
-        expect(manager().getAnnotation(dragged).x).toBe(snappedX);
-        expect(pageEl().querySelector(".alignment-guide")).toBeNull();
-      });
+          mouse(document, "mouseup", dropX, 300);
+          expect(manager().getAnnotation(dragged).x).toBe(snappedX);
+          expect(pageEl().querySelector(".alignment-guide")).toBeNull();
+        },
+      );
     });
 
     describe("formatting toolbar", () => {
@@ -1919,7 +1935,9 @@ describe("PdfEditor", () => {
         ["start", "left"],
         ["end", "right"],
         ["inherit", "center"],
-        ["", "center"],
+        // With no alignment of its own the box shows its inherited alignment
+        // ("start"), and saving keeps what the box shows.
+        ["", "left"],
       ])("saves a text box aligned '%s' in the page as %s", async (domAlign, expected) => {
         const id = await addRenderedAnnotation(
           textBlock({ style: { fontSize: 12, textAlign: "center" } }),
@@ -2548,7 +2566,7 @@ describe("PdfEditor", () => {
         const shown = textOf(id).style;
         expect([
           shown.fontSize,
-          shown.fontFamily,
+          family(shown.fontFamily),
           shown.textAlign,
           shown.fontWeight,
           shown.fontStyle,
@@ -2653,13 +2671,13 @@ describe("PdfEditor", () => {
 
         setInputValue("#fontFamilySelect", "Times-Roman", "change");
         expect(toolbarSelect(".fmt-font-select").value).toBe("Times-Roman");
-        expect(textOf(id).style.fontFamily).toBe(SERIF_CSS);
+        expect(family(textOf(id).style.fontFamily)).toBe(SERIF_CSS);
         setInputValue("#fontSizeInput", "28");
         expect(toolbarSelect(".fmt-size-select").value).toBe("28");
 
         pickInToolbar(".fmt-font-select", "Courier");
 
-        expect(textOf(id).style.fontFamily).toBe(MONOSPACE_CSS);
+        expect(family(textOf(id).style.fontFamily)).toBe(MONOSPACE_CSS);
         expect(manager().getAnnotation(id).style).toMatchObject({ font: "Courier", fontSize: 28 });
         expect((editor.querySelector("#fontFamilySelect") as HTMLSelectElement).value).toBe(
           "Courier",
@@ -2674,7 +2692,7 @@ describe("PdfEditor", () => {
       it("shows a stored font the PDF cannot draw as the family it will be drawn with", async () => {
         const id = await addRenderedAnnotation(textBlock({ style: { font: "Georgia" } }));
 
-        expect(textOf(id).style.fontFamily).toBe(SERIF_CSS);
+        expect(family(textOf(id).style.fontFamily)).toBe(SERIF_CSS);
         focusText(id);
         expect((editor.querySelector("#fontFamilySelect") as HTMLSelectElement).value).toBe(
           "Times-Roman",
@@ -2976,7 +2994,7 @@ describe("PdfEditor", () => {
       const docWith = (destroy: ReturnType<typeof vi.fn>) =>
         ({
           numPages: 2,
-          destroy,
+          loadingTask: { destroy },
           getPage: vi.fn().mockResolvedValue({
             getViewport: vi.fn().mockReturnValue({ width: 100, height: 100 }),
             getTextContent: vi.fn().mockResolvedValue({ items: [] }),

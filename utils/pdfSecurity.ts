@@ -1,3 +1,4 @@
+import { config } from "./config.ts";
 import { PDFDocument, pdfjsLib } from "./pdfConfig.ts";
 
 type PdfSource = File | Uint8Array | ArrayBuffer;
@@ -173,12 +174,51 @@ const createPdfJsByteReader = (source: PdfSource): (() => Promise<Uint8Array>) =
   return async () => bytes.slice();
 };
 
-export async function loadProcessablePdfJsDocument(source: PdfSource) {
+/** pdf.js options for one load. Only the editor needs more than the defaults. */
+export interface PdfJsLoadOptions {
+  /**
+   * Keep each font's name (and metrics) on the main thread. Since pdf.js 6.4
+   * the name arrives only with this set, and the editor reads bold and italic
+   * from it: pdf.js sets its own bold and italic flags only for fonts the PDF
+   * does not embed. It costs memory, so other tools leave it off.
+   */
+  fontExtraProperties?: boolean;
+}
+
+type PdfJsDocumentParams = NonNullable<Parameters<typeof pdfjsLib.getDocument>[0]>;
+
+/**
+ * Starts one pdf.js load. A load that fails still holds the worker pdf.js
+ * started for it, which only `destroy()` frees, so a failed load is destroyed
+ * before its error is passed on. An error from destroying it would only hide
+ * the error that matters.
+ */
+const openPdfJsDocument = async (params: PdfJsDocumentParams) => {
+  const loadingTask = pdfjsLib.getDocument(params);
+  try {
+    return await loadingTask.promise;
+  } catch (error) {
+    try {
+      await loadingTask.destroy();
+    } catch {
+      // See above: the load error is the one to report.
+    }
+    throw error;
+  }
+};
+
+export async function loadProcessablePdfJsDocument(
+  source: PdfSource,
+  options: PdfJsLoadOptions = {},
+) {
   const readPdfJsBytes = createPdfJsByteReader(source);
+  // pdf.js decodes JBIG2, CCITT fax and JPEG 2000 images with WebAssembly it
+  // fetches from here; without it, it leaves those images out of the page.
+  const params = { ...options, wasmUrl: config.pdf.wasmUrl };
 
   try {
     return {
-      pdfDoc: await pdfjsLib.getDocument({ data: await readPdfJsBytes() }).promise,
+      pdfDoc: await openPdfJsDocument({ ...params, data: await readPdfJsBytes() }),
       restrictionOnly: false,
     };
   } catch (error) {
@@ -188,7 +228,7 @@ export async function loadProcessablePdfJsDocument(source: PdfSource) {
 
     try {
       return {
-        pdfDoc: await pdfjsLib.getDocument({ data: await readPdfJsBytes(), password: "" }).promise,
+        pdfDoc: await openPdfJsDocument({ ...params, data: await readPdfJsBytes(), password: "" }),
         restrictionOnly: true,
       };
     } catch (blankPasswordError) {

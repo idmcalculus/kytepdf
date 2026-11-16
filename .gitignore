@@ -41,6 +41,7 @@ conductor/**/.*
 
 # Copied from node_modules by `bun run sync:wasm`, which dev and build run.
 # The English OCR language pack is not in node_modules, so it stays tracked.
+public/pdf.worker.min.js
 public/wasm/
 public/tesseract/*
 !public/tesseract/lang-data/

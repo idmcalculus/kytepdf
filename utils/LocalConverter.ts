@@ -40,7 +40,14 @@ type LineGroup = {
 
 type DocxBlock = InstanceType<typeof Paragraph> | InstanceType<typeof Table>;
 
-type RunStyle = { bold?: boolean; italics?: boolean; strike?: boolean };
+type RunStyle = {
+  bold?: boolean;
+  italics?: boolean;
+  strike?: boolean;
+  underline?: boolean;
+  superScript?: boolean;
+  subScript?: boolean;
+};
 
 type InlineSpan = { text: string; style: RunStyle };
 
@@ -62,9 +69,22 @@ const ESCAPED_RE = /\\([\\`*_{}[\]()#+\-.!|>~<])/g;
 const LITERAL_RE = /\uE000(\d+)\uE001/g;
 /**
  * Emphasis (*, **, ***, _, __, ___) and ~~strike~~ that opens and closes at a
- * word edge, so "snake_case", "2*3*4" and "2 * 3" stay plain text.
+ * word edge, so "snake_case", "2*3*4" and "2 * 3" stay plain text; or one of
+ * the inline tags pdf-inspector writes, opened and closed on one line:
+ * <sup>, <sub>, <s> (struck through) and <u> (underlined). Other text that
+ * looks like a tag, such as "<tag>" or "a < b", stays as written.
  */
-const EMPHASIS_RE = /(?<![\w*~])(\*{1,3}|_{1,3}|~~)(?=\S)(.+?)(?<=\S)\1(?![\w*~])/g;
+const STYLED_RE =
+  /(?<![\w*~])(\*{1,3}|_{1,3}|~~)(?=\S)(.+?)(?<=\S)\1(?![\w*~])|<(sup|sub|s|u)>(.*?)<\/\3>/g;
+/** The run style each inline tag sets. */
+const TAG_STYLES: Record<string, RunStyle> = {
+  sup: { superScript: true },
+  sub: { subScript: true },
+  s: { strike: true },
+  u: { underline: true },
+};
+/** A `<br>` line break, also written `<br/>` or `<br />`. */
+const LINE_BREAK_RE = /<br ?\/?>/g;
 const HEADING_LEVELS = [
   HeadingLevel.HEADING_1,
   HeadingLevel.HEADING_2,
@@ -344,18 +364,27 @@ export class LocalConverter {
     });
   }
 
-  /** Turns inline Markdown into docx runs with bold, italic and strike set. */
+  /**
+   * Turns inline Markdown into docx runs with bold, italic, strike,
+   * underline, superscript and subscript set; a line break starts a new run.
+   */
   private parseRuns(text: string, style: RunStyle = {}): InstanceType<typeof TextRun>[] {
     const spans = this.inlineSpans(text, style);
     if (spans.length === 0) spans.push({ text: "", style });
-    return spans.map(
-      (span) =>
-        new TextRun({
-          text: span.text,
-          ...(span.style.bold ? { bold: true } : {}),
-          ...(span.style.italics ? { italics: true } : {}),
-          ...(span.style.strike ? { strike: true } : {}),
-        }),
+    return spans.flatMap(({ text, style }) =>
+      text.split("\n").map(
+        (line, index) =>
+          new TextRun({
+            text: line,
+            ...(index > 0 ? { break: 1 } : {}),
+            ...(style.bold ? { bold: true } : {}),
+            ...(style.italics ? { italics: true } : {}),
+            ...(style.strike ? { strike: true } : {}),
+            ...(style.underline ? { underline: {} } : {}),
+            ...(style.superScript ? { superScript: true } : {}),
+            ...(style.subScript ? { subScript: true } : {}),
+          }),
+      ),
     );
   }
 
@@ -369,7 +398,8 @@ export class LocalConverter {
   /**
    * Splits inline Markdown into styled spans. Code spans and backslash
    * escapes are set aside first so their characters are never read as
-   * emphasis; links and images keep only their visible text.
+   * emphasis or tags; links and images keep only their visible text, and a
+   * `<br>` becomes a "\n" in the span's text.
    */
   private inlineSpans(text: string, style: RunStyle = {}): InlineSpan[] {
     const literals: string[] = [];
@@ -378,29 +408,35 @@ export class LocalConverter {
       .replace(/`([^`]+)`/g, (_match, code: string) => setAside(code))
       .replace(ESCAPED_RE, (_match, char: string) => setAside(char))
       .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
-      .replace(/<((?:https?:\/\/|mailto:)[^>\s]+)>/g, "$1");
-    return this.emphasisSpans(prepared, style).map((span) => ({
+      .replace(/<((?:https?:\/\/|mailto:)[^>\s]+)>/g, "$1")
+      .replace(LINE_BREAK_RE, "\n");
+    return this.styledSpans(prepared, style).map((span) => ({
       text: span.text.replace(LITERAL_RE, (_match, index: string) => literals[Number(index)]),
       style: span.style,
     }));
   }
 
-  private emphasisSpans(text: string, style: RunStyle): InlineSpan[] {
+  /**
+   * Styles emphasis and inline tags, and whatever they wrap, so either can
+   * sit inside the other: "**Yan<sup>1</sup>**", "<u>*word*</u>".
+   */
+  private styledSpans(text: string, style: RunStyle): InlineSpan[] {
     const spans: InlineSpan[] = [];
     let last = 0;
-    for (const match of text.matchAll(EMPHASIS_RE)) {
+    for (const match of text.matchAll(STYLED_RE)) {
       const start = match.index ?? 0;
       if (start > last) spans.push({ text: text.slice(last, start), style });
-      const marks = match[1];
-      const inner: RunStyle =
-        marks === "~~"
+      const [, marks, emphasized, tag, tagged] = match;
+      const inner: RunStyle = tag
+        ? { ...style, ...TAG_STYLES[tag] }
+        : marks === "~~"
           ? { ...style, strike: true }
           : {
               ...style,
               bold: style.bold || marks.length >= 2,
               italics: style.italics || marks.length !== 2,
             };
-      spans.push(...this.emphasisSpans(match[2], inner));
+      spans.push(...this.styledSpans(tag ? tagged : emphasized, inner));
       last = start + match[0].length;
     }
     if (last < text.length) spans.push({ text: text.slice(last), style });

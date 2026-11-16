@@ -11,6 +11,7 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 import { UserFacingError } from "./errorMapper.ts";
 import { logger } from "./logger.ts";
 import { PDFDocument, pdfjsLib } from "./pdfConfig.ts";
+import { destroyPdfDocument } from "./pdfDocument.ts";
 import { loadProcessablePdfJsDocument } from "./pdfSecurity.ts";
 import { yieldToMain } from "./taskScheduler.ts";
 
@@ -186,7 +187,7 @@ export async function compressPdf(
     return best;
   } finally {
     if (ownsDocument) {
-      await pdf.destroy().catch((error: unknown) => {
+      await destroyPdfDocument(pdf).catch((error: unknown) => {
         logger.warn("Failed to release the compression document", error);
       });
     }

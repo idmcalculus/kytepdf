@@ -40,7 +40,9 @@
     border: 1px solid $border-color;
     background: rgba(255, 255, 255, 0.08);
     cursor: pointer;
-    transition: background $transition-base, border-color $transition-base;
+    transition:
+      background $transition-base,
+      border-color $transition-base;
 
     &::after {
       content: "";
@@ -51,7 +53,9 @@
       height: 14px;
       border-radius: 50%;
       background: $text-muted;
-      transition: transform $transition-base, background $transition-base;
+      transition:
+        transform $transition-base,
+        background $transition-base;
     }
 
     &:checked {
@@ -97,7 +101,9 @@
   color: $color-primary;
   text-align: center;
   cursor: pointer;
-  transition: border-color $transition-base, background $transition-base;
+  transition:
+    border-color $transition-base,
+    background $transition-base;
 
   &:hover,
   &.drag-over {

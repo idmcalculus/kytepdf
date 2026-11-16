@@ -169,8 +169,8 @@
 }
 
 .privacy-note {
-  margin-top: $spacing-lg !important;
-  font-size: $font-size-xs !important;
+  margin-top: $spacing-lg;
+  font-size: $font-size-xs;
   opacity: 0.6;
 }
 
@@ -639,7 +639,6 @@
   width: min(420px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);
   pointer-events: auto;
-  cursor: -webkit-grab;
   cursor: grab;
   user-select: none;
 
@@ -655,12 +654,6 @@
     max-height: calc(100vh - 250px);
   }
 
-  &.is-dragging,
-  &.is-dragging * {
-    cursor: -webkit-grabbing;
-    cursor: grabbing;
-  }
-
   * {
     cursor: inherit;
   }
@@ -668,6 +661,11 @@
   button,
   button * {
     cursor: pointer;
+  }
+
+  &.is-dragging,
+  &.is-dragging * {
+    cursor: grabbing;
   }
 }
 

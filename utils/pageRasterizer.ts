@@ -1,3 +1,4 @@
+import { destroyPdfDocument } from "./pdfDocument.ts";
 import { loadProcessablePdfJsDocument } from "./pdfSecurity.ts";
 
 export interface RasterizedPage {
@@ -73,7 +74,7 @@ export async function* rasterizePdfPagesStream(
     }
   } finally {
     // Runs on early return/throw too, so an aborted OCR run still frees the doc.
-    await pdfDoc.destroy?.();
+    await destroyPdfDocument(pdfDoc);
   }
 }
 

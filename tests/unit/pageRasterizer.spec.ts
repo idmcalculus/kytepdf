@@ -90,7 +90,7 @@ function installFakePdf(pages: FakePageSpec[], options: { noDestroy?: boolean } 
       return page;
     }),
   };
-  if (!options.noDestroy) pdfDoc.destroy = vi.fn().mockResolvedValue(undefined);
+  if (!options.noDestroy) pdfDoc.loadingTask = { destroy: vi.fn().mockResolvedValue(undefined) };
   mocks.loadProcessablePdfJsDocument.mockResolvedValue({ pdfDoc });
   return { pdfDoc, renders, pageProxies };
 }
@@ -129,7 +129,7 @@ describe("rasterizePdfPagesStream", () => {
     expect(pages.map((p) => p.page)).toEqual([1, 3]);
     expect(pdfDoc.getPage.mock.calls.map(([n]: [number]) => n)).toEqual([1, 3]);
     expect(canvases).toHaveLength(2);
-    expect(pdfDoc.destroy).toHaveBeenCalledTimes(1);
+    expect(pdfDoc.loadingTask.destroy).toHaveBeenCalledTimes(1);
   });
 
   it("returns the PNG bytes and pixel size of each rendered page", async () => {
@@ -242,7 +242,7 @@ describe("rasterizePdfPagesStream", () => {
 
     expect(seen).toEqual([1, 2]);
     expect(pdfDoc.getPage).toHaveBeenCalledTimes(2);
-    expect(pdfDoc.destroy).toHaveBeenCalledTimes(1);
+    expect(pdfDoc.loadingTask.destroy).toHaveBeenCalledTimes(1);
   });
 
   it("throws a clear error when the canvas has no 2D context, and destroys the document", async () => {
@@ -253,7 +253,7 @@ describe("rasterizePdfPagesStream", () => {
       "Canvas 2D context unavailable for OCR rasterization.",
     );
     expect(renders).toHaveLength(0);
-    expect(pdfDoc.destroy).toHaveBeenCalledTimes(1);
+    expect(pdfDoc.loadingTask.destroy).toHaveBeenCalledTimes(1);
   });
 
   it("rejects when PNG encoding fails, after freeing the canvas, page and document", async () => {
@@ -266,7 +266,7 @@ describe("rasterizePdfPagesStream", () => {
     expect(canvases[0].width).toBe(0);
     expect(canvases[0].height).toBe(0);
     expect(pageProxies[0].cleanup).toHaveBeenCalledTimes(1);
-    expect(pdfDoc.destroy).toHaveBeenCalledTimes(1);
+    expect(pdfDoc.loadingTask.destroy).toHaveBeenCalledTimes(1);
   });
 
   it("frees resources when pdf.js fails to render a page, and stops there", async () => {
@@ -283,7 +283,7 @@ describe("rasterizePdfPagesStream", () => {
     expect(canvases[0].width).toBe(0);
     expect(pageProxies[0].cleanup).toHaveBeenCalledTimes(1);
     expect(pdfDoc.getPage).toHaveBeenCalledTimes(1);
-    expect(pdfDoc.destroy).toHaveBeenCalledTimes(1);
+    expect(pdfDoc.loadingTask.destroy).toHaveBeenCalledTimes(1);
   });
 
   it("works with documents and pages that have no cleanup or destroy hooks", async () => {

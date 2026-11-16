@@ -55,14 +55,6 @@ Object.defineProperty(globalThis, "sessionStorage", {
   configurable: true,
 });
 
-// Polyfill File/Blob.arrayBuffer for jsdom
-if (typeof File !== "undefined" && !File.prototype.arrayBuffer) {
-  File.prototype.arrayBuffer = () => Promise.resolve(new ArrayBuffer(0));
-}
-if (typeof Blob !== "undefined" && !Blob.prototype.arrayBuffer) {
-  Blob.prototype.arrayBuffer = () => Promise.resolve(new ArrayBuffer(0));
-}
-
 // Polyfill for DOMMatrix (needed by pdfjs-dist in jsdom)
 if (typeof window !== "undefined" && !window.DOMMatrix) {
   (window as any).DOMMatrix = class DOMMatrix {

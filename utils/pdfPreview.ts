@@ -1,4 +1,5 @@
 import type { PDFDocumentProxy } from "pdfjs-dist";
+import { destroyPdfDocument } from "./pdfDocument.ts";
 import { loadProcessablePdfJsDocument } from "./pdfSecurity.ts";
 
 export type PdfPreviewTargets = {
@@ -211,7 +212,7 @@ export class PdfPreviewController {
 
     const pdfDoc = await loadPdfDocument(source);
     if (loadId !== this.loadToken) {
-      await pdfDoc.destroy?.();
+      await destroyPdfDocument(pdfDoc);
       return;
     }
 
@@ -297,12 +298,10 @@ export class PdfPreviewController {
     this.pageNum = 1;
     this.requestedPageNum = 1;
     this.pageCache.clear();
-    if (pdfDoc?.destroy) {
-      try {
-        await pdfDoc.destroy();
-      } catch {
-        // Ignore cleanup failures; preview will reinitialize on next load.
-      }
+    try {
+      await destroyPdfDocument(pdfDoc);
+    } catch {
+      // Ignore cleanup failures; preview will reinitialize on next load.
     }
   }
 

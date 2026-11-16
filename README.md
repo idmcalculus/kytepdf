@@ -30,17 +30,20 @@ You'll need [Bun](https://bun.sh/) installed on your machine.
 ### Installation
 
 1. Clone the repository:
+
    ```bash
    git clone https://github.com/your-username/kytepdf.git
    cd kytepdf
    ```
 
 2. Install dependencies:
+
    ```bash
    bun install
    ```
 
 3. Start development server:
+
    ```bash
    bun run dev
    ```

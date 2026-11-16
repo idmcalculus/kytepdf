@@ -200,15 +200,22 @@ describe("BaseComponent", () => {
       ).toBe(true);
     });
 
-    it("should reject files with invalid PDF header in browser environments", async () => {
-      // Note: In JSDOM, File.slice().text() may not accurately reflect file content.
-      // This test verifies the validation path exists; full verification requires a real browser.
+    it("rejects a file that claims to be a PDF but lacks the %PDF- header", async () => {
+      // jsdom 28+ implements Blob.text(), so the header check runs here as in browsers.
+      const dialogElement = document.getElementById("globalDialog") as any;
       const file = new File(["not-a-pdf"], "fake.pdf", { type: "application/pdf" });
-      const result = await component.validateFile(file);
-      // In JSDOM the slice/text may not work identically to browsers,
-      // so the catch block allows it through. This is by design — the validation
-      // degrades gracefully in environments without full File API support.
-      expect(typeof result).toBe("boolean");
+
+      expect(await component.validateFile(file)).toBe(false);
+      expect(dialogElement.show).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: "The file does not appear to be a valid PDF (invalid file header).",
+        }),
+      );
+      expect(
+        await component.validateFile(
+          new File(["%PDF-1.7\n"], "real.pdf", { type: "application/pdf" }),
+        ),
+      ).toBe(true);
     });
   });
 

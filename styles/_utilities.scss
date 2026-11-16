@@ -4,6 +4,7 @@
 
 // Display utilities
 .hidden {
+  // biome-ignore lint/complexity/noImportantStyles: a hiding utility must beat every component's own display rule.
   display: none !important;
 }
 

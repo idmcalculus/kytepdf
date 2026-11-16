@@ -436,27 +436,27 @@ describe("PdfToOffice with pdf-inspector analysis", () => {
     expect(lastJob().metadata.warnings).toContain(warning);
   });
 
-  it.each([
-    ["encrypted"],
-    ["password-required"],
-  ] as const)("points to the Unlock PDF tool when the PDF is %s", async (reason) => {
-    mocks.pdfInspectorEngine.analyze.mockRejectedValue(
-      new PdfInspectorError({ reason, message: "locked" }),
-    );
-    const component = await mountWithFile();
+  it.each([["encrypted"], ["password-required"]] as const)(
+    "points to the Unlock PDF tool when the PDF is %s",
+    async (reason) => {
+      mocks.pdfInspectorEngine.analyze.mockRejectedValue(
+        new PdfInspectorError({ reason, message: "locked" }),
+      );
+      const component = await mountWithFile();
 
-    await component.handleConvert();
+      await component.handleConvert();
 
-    // The tool has no password field, so the message must not ask for one.
-    expect(lastDialog()).toMatchObject({
-      type: "error",
-      message:
-        "Conversion failed. This PDF is password-protected. Remove the password with the Unlock PDF tool, then try again.",
-    });
-    expect(mocks.localConverter.pdfToWord).not.toHaveBeenCalled();
-    expect(mocks.localConverter.pdfToWordFromEnvelope).not.toHaveBeenCalled();
-    expect(mocks.persistence.addJob).not.toHaveBeenCalled();
-  });
+      // The tool has no password field, so the message must not ask for one.
+      expect(lastDialog()).toMatchObject({
+        type: "error",
+        message:
+          "Conversion failed. This PDF is password-protected. Remove the password with the Unlock PDF tool, then try again.",
+      });
+      expect(mocks.localConverter.pdfToWord).not.toHaveBeenCalled();
+      expect(mocks.localConverter.pdfToWordFromEnvelope).not.toHaveBeenCalled();
+      expect(mocks.persistence.addJob).not.toHaveBeenCalled();
+    },
+  );
 
   it("falls back to the legacy export when the WASM engine cannot load", async () => {
     mocks.pdfInspectorEngine.analyze.mockRejectedValue(
@@ -505,20 +505,23 @@ describe("PdfToOffice with pdf-inspector analysis", () => {
         "This document is mixed — local export will not include text from pages 2, 3 until OCR is performed.",
         "Needs OCR on pages 2, 3",
       ],
-    ])("warns that %s pages will be missing when OCR is off", async (pdfType, pages, warning, diagnosis) => {
-      mocks.pdfInspectorEngine.analyze.mockResolvedValue(
-        envelope({ pdfType, pagesNeedingOcr: pages }),
-      );
-      const component = await mountWithFile();
-      turnOcrOff(component);
+    ])(
+      "warns that %s pages will be missing when OCR is off",
+      async (pdfType, pages, warning, diagnosis) => {
+        mocks.pdfInspectorEngine.analyze.mockResolvedValue(
+          envelope({ pdfType, pagesNeedingOcr: pages }),
+        );
+        const component = await mountWithFile();
+        turnOcrOff(component);
 
-      await component.handleConvert();
+        await component.handleConvert();
 
-      expect(mocks.ocrEngine.enrichMarkdownWithOcr).not.toHaveBeenCalled();
-      expect(lastJob().metadata.warnings).toContain(warning);
-      expect(lastDialog().message).toContain(diagnosis);
-      expect(lastJob().metadata.ocr).toBe(false);
-    });
+        expect(mocks.ocrEngine.enrichMarkdownWithOcr).not.toHaveBeenCalled();
+        expect(lastJob().metadata.warnings).toContain(warning);
+        expect(lastDialog().message).toContain(diagnosis);
+        expect(lastJob().metadata.ocr).toBe(false);
+      },
+    );
 
     it("names no pages when a scanned PDF reports none", async () => {
       mocks.pdfInspectorEngine.analyze.mockResolvedValue(

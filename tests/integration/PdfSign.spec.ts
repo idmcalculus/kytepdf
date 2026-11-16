@@ -58,7 +58,7 @@ describe("PdfSign", () => {
     }) as unknown as FileList;
 
   const loadPdfForSigning = async () => {
-    const file = new File(["test"], "test.pdf", { type: "application/pdf" });
+    const file = new File(["%PDF-1.7\ntest"], "test.pdf", { type: "application/pdf" });
     await component.handleFiles(asFileList(file));
     await new Promise((resolve) => setTimeout(resolve, 100));
     return file;
@@ -233,7 +233,7 @@ describe("PdfSign", () => {
 
   describe("file handling", () => {
     it("should load PDF file and show sign layout", async () => {
-      const file = new File(["test"], "test.pdf", { type: "application/pdf" });
+      const file = new File(["%PDF-1.7\ntest"], "test.pdf", { type: "application/pdf" });
       await component.handleFiles([file] as unknown as FileList);
       await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -242,7 +242,7 @@ describe("PdfSign", () => {
     });
 
     it("should update page indicator when file loads", async () => {
-      const file = new File(["test"], "test.pdf", { type: "application/pdf" });
+      const file = new File(["%PDF-1.7\ntest"], "test.pdf", { type: "application/pdf" });
       await component.handleFiles([file] as unknown as FileList);
       await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -260,7 +260,7 @@ describe("PdfSign", () => {
 
   describe("page navigation after file load", () => {
     it("should navigate to next page", async () => {
-      const file = new File(["test"], "test.pdf", { type: "application/pdf" });
+      const file = new File(["%PDF-1.7\ntest"], "test.pdf", { type: "application/pdf" });
       await component.handleFiles([file] as unknown as FileList);
       await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -272,7 +272,7 @@ describe("PdfSign", () => {
     });
 
     it("should navigate to previous page", async () => {
-      const file = new File(["test"], "test.pdf", { type: "application/pdf" });
+      const file = new File(["%PDF-1.7\ntest"], "test.pdf", { type: "application/pdf" });
       await component.handleFiles([file] as unknown as FileList);
       await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -346,7 +346,7 @@ describe("PdfSign", () => {
   describe("startFinalize", () => {
     it("should call PDFDocument.load when finalizing", async () => {
       const { PDFDocument } = await import("../../utils/pdfConfig");
-      const file = new File(["test"], "test.pdf", { type: "application/pdf" });
+      const file = new File(["%PDF-1.7\ntest"], "test.pdf", { type: "application/pdf" });
       await component.handleFiles([file] as unknown as FileList);
       await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -413,7 +413,7 @@ describe("PdfSign", () => {
       finalizeBtn.disabled = false;
 
       await component.handleFiles(
-        asFileList(new File(["other"], "other.pdf", { type: "application/pdf" })),
+        asFileList(new File(["%PDF-1.7\nother"], "other.pdf", { type: "application/pdf" })),
       );
 
       expect((component as any).sigPlacement).toBeNull();
@@ -446,7 +446,7 @@ describe("PdfSign", () => {
     it("names the signed copy after the source even when it ends in .PDF", async () => {
       const { persistence } = await import("../../utils/persistence");
       await component.handleFiles(
-        asFileList(new File(["pdf"], "Scan.PDF", { type: "application/pdf" })),
+        asFileList(new File(["%PDF-1.7\npdf"], "Scan.PDF", { type: "application/pdf" })),
       );
       (component as any).signatureImage = "data:image/png;base64,abc";
       (component as any).sigPlacement = { page: 1, x: 0.1, y: 0.2, w: 0.3, h: 0.1 };
@@ -736,7 +736,7 @@ describe("PdfSign", () => {
   describe("session and error handling", () => {
     it("should show and restore a saved signing session", async () => {
       const { persistence } = await import("../../utils/persistence");
-      const saved = new File(["saved"], "saved.pdf", { type: "application/pdf" });
+      const saved = new File(["%PDF-1.7\nsaved"], "saved.pdf", { type: "application/pdf" });
       (persistence.get as any).mockResolvedValueOnce(saved);
 
       await component.checkExistingSession();
@@ -754,7 +754,7 @@ describe("PdfSign", () => {
     it("does not execute HTML/JS embedded in a resumed filename (stored XSS regression)", async () => {
       const { persistence } = await import("../../utils/persistence");
       const maliciousName = "<img src=x onerror=window.__resumeXss=1>.pdf";
-      const saved = new File(["saved"], maliciousName, { type: "application/pdf" });
+      const saved = new File(["%PDF-1.7\nsaved"], maliciousName, { type: "application/pdf" });
       (persistence.get as any).mockResolvedValueOnce(saved);
       (window as any).__resumeXss = undefined;
 
@@ -778,7 +778,9 @@ describe("PdfSign", () => {
       (persistence.get as any).mockRejectedValueOnce(new Error("restore failed"));
       await expect(component.restoreSession()).resolves.toBeUndefined();
 
-      (component as any).selectedFile = new File(["pdf"], "state.pdf", { type: "application/pdf" });
+      (component as any).selectedFile = new File(["%PDF-1.7\npdf"], "state.pdf", {
+        type: "application/pdf",
+      });
       (persistence.set as any).mockRejectedValueOnce(new Error("save failed"));
       await expect(component.saveSession()).resolves.toBeUndefined();
     });
@@ -806,7 +808,7 @@ describe("PdfSign", () => {
         promise: Promise.reject(new Error("preview failed")),
       });
       await component.handleFiles(
-        asFileList(new File(["pdf"], "broken.pdf", { type: "application/pdf" })),
+        asFileList(new File(["%PDF-1.7\npdf"], "broken.pdf", { type: "application/pdf" })),
       );
 
       expect((document.getElementById("globalDialog") as any).show).toHaveBeenCalledWith(

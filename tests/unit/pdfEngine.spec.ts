@@ -1556,7 +1556,7 @@ describe("pdfEngine", () => {
           }),
         };
         const pdf = {
-          destroy: vi.fn().mockResolvedValue(undefined),
+          loadingTask: { destroy: vi.fn().mockResolvedValue(undefined) },
           getPage: vi.fn().mockResolvedValue(page),
           numPages: 2,
         };
@@ -1576,18 +1576,18 @@ describe("pdfEngine", () => {
       const ok = makePdf();
       await renderPdfPagesToImages(new Uint8Array([1]), { format: "png" });
       expect(ok.page.cleanup).toHaveBeenCalledTimes(2);
-      expect(ok.pdf.destroy).toHaveBeenCalledTimes(1);
+      expect(ok.pdf.loadingTask.destroy).toHaveBeenCalledTimes(1);
 
       const failing = makePdf(new Error("render failed"));
       await expect(renderPdfPagesToImages(new Uint8Array([1]), { format: "png" })).rejects.toThrow(
         "render failed",
       );
       expect(failing.page.cleanup).toHaveBeenCalledTimes(1);
-      expect(failing.pdf.destroy).toHaveBeenCalledTimes(1);
+      expect(failing.pdf.loadingTask.destroy).toHaveBeenCalledTimes(1);
 
       // A failure to free the document is logged, not thrown over the result.
       const stubborn = makePdf();
-      stubborn.pdf.destroy.mockRejectedValueOnce(new Error("worker gone"));
+      stubborn.pdf.loadingTask.destroy.mockRejectedValueOnce(new Error("worker gone"));
       await expect(
         renderPdfPagesToImages(new Uint8Array([1]), { format: "png" }),
       ).resolves.toHaveLength(2);
@@ -1835,24 +1835,24 @@ describe("pdfEngine", () => {
       expect(texts.find((t) => t.text === "next")?.y).toBeCloseTo(370 - 1.125 - 48 - 1 - 8, 5);
     });
 
-    it.each([
-      "textblock",
-      "text",
-    ])("leaves the stored space before the first line of a %s", async (type) => {
-      const { texts } = await exportOn([
-        {
-          type,
-          x: 20,
-          y: 30,
-          width: 200,
-          content: "Spaced",
-          style: { fontSize: 10, paragraphSpacing: 12 },
-        },
-      ]);
+    it.each(["textblock", "text"])(
+      "leaves the stored space before the first line of a %s",
+      async (type) => {
+        const { texts } = await exportOn([
+          {
+            type,
+            x: 20,
+            y: 30,
+            width: 200,
+            content: "Spaced",
+            style: { fontSize: 10, paragraphSpacing: 12 },
+          },
+        ]);
 
-      // Inset (1.125pt), spacing (12pt), half-leading (0.2 x 10) and 0.8 x 10.
-      expect(texts[0].y).toBeCloseTo(400 - 30 - 1.125 - 12 - 2 - 8, 5);
-    });
+        // Inset (1.125pt), spacing (12pt), half-leading (0.2 x 10) and 0.8 x 10.
+        expect(texts[0].y).toBeCloseTo(400 - 30 - 1.125 - 12 - 2 - 8, 5);
+      },
+    );
 
     it.each([
       ["Palatino", "Times-Roman"],
@@ -1966,81 +1966,83 @@ describe("pdfEngine", () => {
       const crop = { x: 50, y: 30, width: 400, height: 600 };
       const viewBox = [50, 30, 450, 630];
 
-      it.each([
-        0, 90, 180, 270,
-      ])("puts annotations where the editor showed them on a page turned %i°", async (rotation) => {
-        const m = viewportTransform(viewBox, rotation);
-        const mapped = (points: number[][]) => bounds(points.map(([x, y]) => toPdfPoint(m, x, y)));
+      it.each([0, 90, 180, 270])(
+        "puts annotations where the editor showed them on a page turned %i°",
+        async (rotation) => {
+          const m = viewportTransform(viewBox, rotation);
+          const mapped = (points: number[][]) =>
+            bounds(points.map(([x, y]) => toPdfPoint(m, x, y)));
 
-        const { page, texts } = await exportOn(
-          [
-            { type: "rectangle", x: 10, y: 20, width: 100, height: 50 },
-            { type: "text", x: 30, y: 40, content: "Hi", style: { fontSize: 10 } },
-            {
-              type: "freehand",
-              x: 5,
-              y: 6,
-              points: [
-                { x: 0, y: 0 },
-                { x: 30, y: 40 },
-              ],
-            },
-            {
-              type: "image",
-              x: 200,
-              y: 150,
-              width: 60,
-              height: 30,
-              content: "data:image/png;base64,x",
-            },
-          ],
-          { rotation, crop, media },
-          [{ pageIndex: 0, x: 15, y: 25, width: 20, height: 10 }],
-        );
+          const { page, texts } = await exportOn(
+            [
+              { type: "rectangle", x: 10, y: 20, width: 100, height: 50 },
+              { type: "text", x: 30, y: 40, content: "Hi", style: { fontSize: 10 } },
+              {
+                type: "freehand",
+                x: 5,
+                y: 6,
+                points: [
+                  { x: 0, y: 0 },
+                  { x: 30, y: 40 },
+                ],
+              },
+              {
+                type: "image",
+                x: 200,
+                y: 150,
+                width: 60,
+                height: 30,
+                content: "data:image/png;base64,x",
+              },
+            ],
+            { rotation, crop, media },
+            [{ pageIndex: 0, x: 15, y: 25, width: 20, height: 10 }],
+          );
 
-        const [whiteOut, rectangle] = page.drawRectangle.mock.calls.map(([o]: any[]) => o);
-        // The white-out covers the source region plus 1pt on every side.
-        expectBounds(
-          bounds(corners(whiteOut)),
-          mapped([
-            [14, 24],
-            [36, 36],
-          ]),
-        );
-        expectBounds(
-          bounds(corners(rectangle)),
-          mapped([
-            [10, 20],
-            [110, 70],
-          ]),
-        );
-        expectBounds(
-          bounds(corners(page.drawImage.mock.calls[0][1])),
-          mapped([
-            [200, 150],
-            [260, 180],
-          ]),
-        );
+          const [whiteOut, rectangle] = page.drawRectangle.mock.calls.map(([o]: any[]) => o);
+          // The white-out covers the source region plus 1pt on every side.
+          expectBounds(
+            bounds(corners(whiteOut)),
+            mapped([
+              [14, 24],
+              [36, 36],
+            ]),
+          );
+          expectBounds(
+            bounds(corners(rectangle)),
+            mapped([
+              [10, 20],
+              [110, 70],
+            ]),
+          );
+          expectBounds(
+            bounds(corners(page.drawImage.mock.calls[0][1])),
+            mapped([
+              [200, 150],
+              [260, 180],
+            ]),
+          );
 
-        // Text starts at its baseline and runs along the page as shown. The
-        // baseline is below the 3 editor px inset (the shown page is 800 editor
-        // px wide), the half-leading (0.2 x 10) and 0.8 x 10.
-        // It also starts 5 editor px in from the box's left edge.
-        const shownWidth = rotation % 180 === 0 ? 400 : 600;
-        const editorPx = shownWidth / 800;
-        const start = toPdfPoint(m, 30 + 5 * editorPx, 40 + 3 * editorPx + 2 + 8);
-        expect(texts[0].x).toBeCloseTo(start.x, 5);
-        expect(texts[0].y).toBeCloseTo(start.y, 5);
-        expect(texts[0].rotate).toEqual({ value: rotation });
+          // Text starts at its baseline and runs along the page as shown. The
+          // baseline is below the 3 editor px inset (the shown page is 800 editor
+          // px wide), the half-leading (0.2 x 10) and 0.8 x 10.
+          // It also starts 5 editor px in from the box's left edge.
+          const shownWidth = rotation % 180 === 0 ? 400 : 600;
+          const editorPx = shownWidth / 800;
+          const start = toPdfPoint(m, 30 + 5 * editorPx, 40 + 3 * editorPx + 2 + 8);
+          expect(texts[0].x).toBeCloseTo(start.x, 5);
+          expect(texts[0].y).toBeCloseTo(start.y, 5);
+          expect(texts[0].rotate).toEqual({ value: rotation });
 
-        const line = page.drawLine.mock.calls[0][0];
-        const from = toPdfPoint(m, 5, 6);
-        const to = toPdfPoint(m, 35, 46);
-        expect(line.start.x).toBeCloseTo(from.x, 5);
-        expect(line.start.y).toBeCloseTo(from.y, 5);
-        expect(line.end.x).toBeCloseTo(to.x, 5);
-        expect(line.end.y).toBeCloseTo(to.y, 5);
-      });
+          const line = page.drawLine.mock.calls[0][0];
+          const from = toPdfPoint(m, 5, 6);
+          const to = toPdfPoint(m, 35, 46);
+          expect(line.start.x).toBeCloseTo(from.x, 5);
+          expect(line.start.y).toBeCloseTo(from.y, 5);
+          expect(line.end.x).toBeCloseTo(to.x, 5);
+          expect(line.end.y).toBeCloseTo(to.y, 5);
+        },
+      );
 
       it.each([
         [90, 600],

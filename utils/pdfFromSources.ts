@@ -417,6 +417,11 @@ function conversionError(error: unknown, name: string): UserFacingError {
         return new UserFacingError(
           `"${name}" is too large or complex to convert in the browser. Try a smaller file.`,
         );
+      case "needsOcr":
+        // The converter reads the bytes, so only a PDF saved with an Office name lands here.
+        return new UserFacingError(
+          `"${name}" is really a PDF with scanned pages, which hold no text to convert. Rename it to end in .pdf to add its pages as they are, or open it in the PDF to Text tool, which reads scanned pages with OCR.`,
+        );
       default:
         return new UserFacingError(
           `Kyte could not read "${name}". It may be damaged or in a format Kyte can't open. Open it, save a fresh copy and try again.`,

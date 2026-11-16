@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   bootstrapKytePdf: vi.fn(),
   createIcons: vi.fn(),
-  icons: { FileUp: ["svg", {}], Lock: ["svg", {}] },
+  appIcons: { FileUp: ["svg", {}], Lock: ["svg", {}] },
 }));
 
 // main.ts only wires things together, so every module it pulls in is stubbed.
@@ -26,7 +26,9 @@ vi.mock("../../components/AboutModal.ts", () => ({}));
 vi.mock("../../components/EmailCollectionModal.ts", () => ({}));
 vi.mock("../../components/AccountModal.ts", () => ({}));
 vi.mock("../../components/KyteFooter.ts", () => ({}));
-vi.mock("lucide", () => ({ createIcons: mocks.createIcons, icons: mocks.icons }));
+// The full set is a trap: main.ts must hand createIcons() only the app's own icons.
+vi.mock("lucide", () => ({ createIcons: mocks.createIcons, icons: { All: ["svg", {}] } }));
+vi.mock("../../utils/appIcons.ts", () => ({ APP_ICONS: mocks.appIcons }));
 vi.mock("../../utils/appBootstrap.ts", () => ({ bootstrapKytePdf: mocks.bootstrapKytePdf }));
 
 const loadMain = async () => {
@@ -53,17 +55,17 @@ describe("main entry point", () => {
     expect(mocks.bootstrapKytePdf).toHaveBeenLastCalledWith({ prod: true });
   });
 
-  it("exposes a lucide helper that always passes the bundled icon set", async () => {
+  it("exposes a lucide helper that always passes the app's own icon set", async () => {
     await loadMain();
     const { lucide } = window as any;
 
     lucide.createIcons();
-    expect(mocks.createIcons).toHaveBeenLastCalledWith({ icons: mocks.icons });
+    expect(mocks.createIcons).toHaveBeenLastCalledWith({ icons: mocks.appIcons });
 
     const root = document.createElement("div");
     lucide.createIcons({ root, attrs: { "stroke-width": 1.5 } });
     expect(mocks.createIcons).toHaveBeenLastCalledWith({
-      icons: mocks.icons,
+      icons: mocks.appIcons,
       root,
       attrs: { "stroke-width": 1.5 },
     });

@@ -1,9 +1,9 @@
 import { logger } from "./logger.ts";
-import { loadProcessablePdfJsDocument } from "./pdfSecurity.ts";
+import { loadProcessablePdfJsDocument, type PdfJsLoadOptions } from "./pdfSecurity.ts";
 
-export async function loadPdf(data: ArrayBuffer | Uint8Array) {
+export async function loadPdf(data: ArrayBuffer | Uint8Array, options: PdfJsLoadOptions = {}) {
   try {
-    const { pdfDoc } = await loadProcessablePdfJsDocument(data);
+    const { pdfDoc } = await loadProcessablePdfJsDocument(data, options);
     return pdfDoc;
   } catch (error) {
     logger.error("Failed to load PDF document", error);

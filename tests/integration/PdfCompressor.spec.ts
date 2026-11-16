@@ -4,6 +4,12 @@ import { UserFacingError } from "../../utils/errorMapper";
 import { compressPdf } from "../../utils/pdfCompression";
 import { persistence } from "../../utils/persistence";
 
+/** Writes a %PDF- header into a fixture's bytes so it passes the PDF header check. */
+const withPdfHeader = (bytes: Uint8Array) => {
+  bytes.set(new TextEncoder().encode("%PDF-1.7").subarray(0, bytes.length));
+  return bytes;
+};
+
 const previewMocks = vi.hoisted(() => ({
   destroy: vi.fn().mockResolvedValue(undefined),
   getPdfPreviewErrorMessage: vi.fn(() => "Preview failed"),
@@ -60,7 +66,7 @@ vi.mock("../../utils/pdfPreview.ts", () => ({
 const asFileList = (files: File[]) => files as unknown as FileList;
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 const pdfFile = (name = "test.pdf", size = 12) =>
-  new File([new Uint8Array(size)], name, { type: "application/pdf" });
+  new File([withPdfHeader(new Uint8Array(size))], name, { type: "application/pdf" });
 /** A small PDF that reports `size` bytes, so size limits can be tested without allocating them. */
 const pdfFileReportingSize = (name: string, size: number) => {
   const file = new File(["%PDF-1.7"], name, { type: "application/pdf" });
@@ -101,7 +107,7 @@ describe("PdfCompressor", () => {
   });
 
   it("should handle file selection", async () => {
-    const file = new File(["test content"], "test.pdf", { type: "application/pdf" });
+    const file = new File(["%PDF-1.7\ntest content"], "test.pdf", { type: "application/pdf" });
     await component.handleFiles(asFileList([file]));
 
     expect(component.querySelector("#fileName")?.textContent).toBe("test.pdf");
@@ -110,7 +116,9 @@ describe("PdfCompressor", () => {
   });
 
   it("should update target size when preset is changed", async () => {
-    const file = new File([new ArrayBuffer(100 * 1024)], "test.pdf", { type: "application/pdf" });
+    const file = new File([withPdfHeader(new Uint8Array(100 * 1024))], "test.pdf", {
+      type: "application/pdf",
+    });
     await component.handleFiles(asFileList([file]));
 
     const extremeBtn = component.querySelector('.preset-btn[data-ratio="0.1"]') as HTMLElement;
@@ -123,7 +131,7 @@ describe("PdfCompressor", () => {
   });
 
   it("should start compression and show success", async () => {
-    const file = new File([new Uint8Array(100 * 1024)], "test.pdf", {
+    const file = new File([withPdfHeader(new Uint8Array(100 * 1024))], "test.pdf", {
       type: "application/pdf",
     });
     await component.handleFiles(asFileList([file]));
@@ -214,7 +222,9 @@ describe("PdfCompressor", () => {
     });
 
     it("should mark clicked preset as active", async () => {
-      const file = new File([new ArrayBuffer(100 * 1024)], "test.pdf", { type: "application/pdf" });
+      const file = new File([withPdfHeader(new Uint8Array(100 * 1024))], "test.pdf", {
+        type: "application/pdf",
+      });
       await component.handleFiles(asFileList([file]));
 
       const lightBtn = component.querySelector('.preset-btn[data-ratio="0.7"]') as HTMLElement;
@@ -224,7 +234,9 @@ describe("PdfCompressor", () => {
     });
 
     it("should update target size based on preset ratio", async () => {
-      const file = new File([new ArrayBuffer(200 * 1024)], "big.pdf", { type: "application/pdf" });
+      const file = new File([withPdfHeader(new Uint8Array(200 * 1024))], "big.pdf", {
+        type: "application/pdf",
+      });
       await component.handleFiles(asFileList([file]));
 
       // Use an existing preset button
@@ -252,7 +264,9 @@ describe("PdfCompressor", () => {
 
   describe("file info display", () => {
     it("should display file name after loading", async () => {
-      const file = new File([new ArrayBuffer(50 * 1024)], "test.pdf", { type: "application/pdf" });
+      const file = new File([withPdfHeader(new Uint8Array(50 * 1024))], "test.pdf", {
+        type: "application/pdf",
+      });
       await component.handleFiles(asFileList([file]));
 
       const fileName = component.querySelector("#fileName");
@@ -262,7 +276,7 @@ describe("PdfCompressor", () => {
 
   describe("results display", () => {
     it("should show final size after compression", async () => {
-      const file = new File(["test"], "test.pdf", { type: "application/pdf" });
+      const file = new File(["%PDF-1.7\ntest"], "test.pdf", { type: "application/pdf" });
       await component.handleFiles(asFileList([file]));
       await component.startCompression();
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -272,7 +286,7 @@ describe("PdfCompressor", () => {
     });
 
     it("should show saved percentage", async () => {
-      const file = new File(["test"], "test.pdf", { type: "application/pdf" });
+      const file = new File(["%PDF-1.7\ntest"], "test.pdf", { type: "application/pdf" });
       await component.handleFiles(asFileList([file]));
       await component.startCompression();
       await new Promise((resolve) => setTimeout(resolve, 0));

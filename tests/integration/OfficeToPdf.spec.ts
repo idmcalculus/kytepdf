@@ -45,7 +45,7 @@ describe("OfficeToPdf (Office to Markdown)", () => {
       markdown: "# Hello",
       warnings: [],
       engine: "anydoc-wasm",
-      engineVersion: "0.1.8",
+      engineVersion: "0.2.4",
       processingTimeMs: 1,
     });
     mocks.persistence.get.mockResolvedValue(undefined);
@@ -215,7 +215,7 @@ describe("OfficeToPdf (Office to Markdown) edge cases", () => {
       markdown: "# Proposal\n\nBody",
       warnings: [],
       engine: "anydoc-wasm",
-      engineVersion: "0.1.8",
+      engineVersion: "0.2.4",
       processingTimeMs: 1,
     });
     mocks.persistence.get.mockResolvedValue(undefined);
@@ -263,7 +263,7 @@ describe("OfficeToPdf (Office to Markdown) edge cases", () => {
       markdown: "| a | b |",
       warnings: ["Some cells were merged."],
       engine: "anydoc-wasm",
-      engineVersion: "0.1.8",
+      engineVersion: "0.2.4",
       processingTimeMs: 1,
     });
     const component = await mount();
@@ -281,7 +281,7 @@ describe("OfficeToPdf (Office to Markdown) edge cases", () => {
       markdown: "  \n",
       warnings: ["The document parser produced no text."],
       engine: "anydoc-wasm",
-      engineVersion: "0.1.8",
+      engineVersion: "0.2.4",
       processingTimeMs: 1,
     });
     const component = await mount();
@@ -333,7 +333,7 @@ describe("OfficeToPdf (Office to Markdown) edge cases", () => {
       markdown: "# First",
       warnings: [],
       engine: "anydoc-wasm",
-      engineVersion: "0.1.8",
+      engineVersion: "0.2.4",
       processingTimeMs: 1,
     });
     await run;
@@ -396,6 +396,10 @@ describe("OfficeToPdf (Office to Markdown) edge cases", () => {
     [
       "resourceLimit",
       "This document is too large or complex to convert in the browser. Try a smaller file.",
+    ],
+    [
+      "needsOcr",
+      "This file is really a PDF with scanned pages, which hold no text to convert. Open it in the PDF to Text tool, which reads scanned pages with OCR.",
     ],
     [
       "engine-unavailable",

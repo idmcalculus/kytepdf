@@ -1,3 +1,5 @@
+import { version as tesseractVersion } from "tesseract.js/package.json";
+
 /** 1-indexed page OCR result. */
 export interface OcrPageResult {
   page: number;
@@ -40,4 +42,8 @@ export const DEFAULT_OCR_BUDGET: OcrBudget = {
   languages: "eng",
 };
 
-export const TESSERACT_ENGINE_VERSION = "6.0.1";
+/**
+ * The tesseract.js release recorded with each OCR result, read from the
+ * installed package at build time so an upgrade never leaves it stale.
+ */
+export const TESSERACT_ENGINE_VERSION: string = tesseractVersion;

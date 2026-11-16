@@ -16,7 +16,9 @@ export type AnydocErrorCode =
   | "malformed"
   | "encrypted"
   | "resourceLimit"
-  | "missingPart";
+  | "missingPart"
+  /** A PDF whose pages, some or all, are scanned images: only OCR can read them. */
+  | "needsOcr";
 
 export interface AnydocAnalysisEnvelope {
   /** Original format detected from the bytes (or the one the caller named). */

@@ -24,12 +24,12 @@ containers (Caddy, auth, Postgres) with automatic TLS via Let's Encrypt.
 
 ## Prerequisites
 
-| Tool | Version | Notes |
-|---|---|---|
-| [Pulumi CLI](https://www.pulumi.com/docs/install/) | v3+ | `brew install pulumi` or see install docs |
-| [OCI CLI](https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm) | any | Must be configured with API keys (`oci setup config`) |
-| [Node.js](https://nodejs.org/) | 22+ | Required by the Pulumi Node.js runtime |
-| [Bun](https://bun.sh/) | any | Optional — only needed to run the test suite locally |
+| Tool                                                                             | Version | Notes                                                 |
+| -------------------------------------------------------------------------------- | ------- | ----------------------------------------------------- |
+| [Pulumi CLI](https://www.pulumi.com/docs/install/)                               | v3+     | `brew install pulumi` or see install docs             |
+| [OCI CLI](https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm) | any     | Must be configured with API keys (`oci setup config`) |
+| [Node.js](https://nodejs.org/)                                                   | 22+     | Required by the Pulumi Node.js runtime                |
+| [Bun](https://bun.sh/)                                                           | any     | Optional — only needed to run the test suite locally  |
 
 ### OCI CLI configuration
 
@@ -41,6 +41,7 @@ oci iam compartment list --all
 ```
 
 You will need:
+
 - A **compartment OCID** (or use the root/tenancy compartment)
 - An **SSH key pair** — the public key is passed to the stack as `sshPublicKey`
 
@@ -156,16 +157,16 @@ Pulumi will show a preview of all resources to be created. Type `yes` to confirm
 
 **What gets created:**
 
-| Resource | Details |
-|---|---|
-| VCN | `10.0.0.0/16`, DNS label `authvcn` |
-| Internet Gateway | Attached to VCN, enabled |
-| Route Table | Default route `0.0.0.0/0` → Internet Gateway |
-| Security List | Ingress: TCP 443, 80 (public), TCP 22 (admin CIDRs), ICMP type 3/4 (VCN); Egress: all |
-| Public Subnet | `10.0.1.0/24`, DNS label `authsubnet` |
-| Reserved Public IP | Lifetime `RESERVED` — persists across instance replacements |
-| VM.Standard.A1.Flex | ARM64, configurable OCPU/RAM, 50 GB boot volume, cloud-init bootstrap |
-| Block Volume | Paravirtualized, in-transit encryption, mounted at `/mnt/data` |
+| Resource            | Details                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------- |
+| VCN                 | `10.0.0.0/16`, DNS label `authvcn`                                                    |
+| Internet Gateway    | Attached to VCN, enabled                                                              |
+| Route Table         | Default route `0.0.0.0/0` → Internet Gateway                                          |
+| Security List       | Ingress: TCP 443, 80 (public), TCP 22 (admin CIDRs), ICMP type 3/4 (VCN); Egress: all |
+| Public Subnet       | `10.0.1.0/24`, DNS label `authsubnet`                                                 |
+| Reserved Public IP  | Lifetime `RESERVED` — persists across instance replacements                           |
+| VM.Standard.A1.Flex | ARM64, configurable OCPU/RAM, 50 GB boot volume, cloud-init bootstrap                 |
+| Block Volume        | Paravirtualized, in-transit encryption, mounted at `/mnt/data`                        |
 
 **What happens on first boot (cloud-init):**
 
@@ -184,12 +185,12 @@ Pulumi will show a preview of all resources to be created. Type `yes` to confirm
 
 Cloud-init writes four env files under `/opt/auth/`. Each file is owned by `root:root`.
 
-| Path | Mode | Contains | Consumed by |
-|---|---|---|---|
-| `/opt/auth/postgres-secrets.env` | `0600` (secrets) | `POSTGRES_PASSWORD` | Postgres container |
-| `/opt/auth/auth-secrets.env` | `0600` (secrets) | `POSTGRES_PASSWORD`, `DATABASE_URL`, OAuth client secrets, `RESEND_API_KEY` | auth container |
-| `/opt/auth/backup-secrets.env` | `0600` (secrets) | `BACKUP_PASSPHRASE` | backup script (`/opt/auth/backup.sh`) |
-| `/opt/auth/app.env` | `0644` (non-secret config) | `BASE_URL`, `CORS_ORIGINS`, `EMAIL_PROVIDER`, `EMAIL_FROM_ADDRESS`, OAuth client IDs, redirect URIs, `TRUSTED_PROXY_HOP_COUNT`, cookie/CSRF settings | auth container |
+| Path                             | Mode                       | Contains                                                                                                                                             | Consumed by                           |
+| -------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `/opt/auth/postgres-secrets.env` | `0600` (secrets)           | `POSTGRES_PASSWORD`                                                                                                                                  | Postgres container                    |
+| `/opt/auth/auth-secrets.env`     | `0600` (secrets)           | `POSTGRES_PASSWORD`, `DATABASE_URL`, OAuth client secrets, `RESEND_API_KEY`                                                                          | auth container                        |
+| `/opt/auth/backup-secrets.env`   | `0600` (secrets)           | `BACKUP_PASSPHRASE`                                                                                                                                  | backup script (`/opt/auth/backup.sh`) |
+| `/opt/auth/app.env`              | `0644` (non-secret config) | `BASE_URL`, `CORS_ORIGINS`, `EMAIL_PROVIDER`, `EMAIL_FROM_ADDRESS`, OAuth client IDs, redirect URIs, `TRUSTED_PROXY_HOP_COUNT`, cookie/CSRF settings | auth container                        |
 
 Secrets are split across separate files so each component only has access to the credentials it
 needs. The Postgres container never sees OAuth secrets; the backup script never sees the database
@@ -212,12 +213,12 @@ pulumi stack output dnsInstruction
 
 Create an **A record** at your DNS registrar:
 
-| Field | Value |
-|---|---|
-| Type | `A` |
-| Name / Host | `auth` (or the full subdomain, e.g. `auth.kytepdf.com`) |
-| Value / Points to | The IP from `pulumi stack output reservedIp` |
-| TTL | `300` (5 minutes) or lower for faster propagation |
+| Field             | Value                                                   |
+| ----------------- | ------------------------------------------------------- |
+| Type              | `A`                                                     |
+| Name / Host       | `auth` (or the full subdomain, e.g. `auth.kytepdf.com`) |
+| Value / Points to | The IP from `pulumi stack output reservedIp`            |
+| TTL               | `300` (5 minutes) or lower for faster propagation       |
 
 Once DNS propagates (typically 1–5 minutes with a low TTL), Caddy will automatically obtain a
 TLS certificate from Let's Encrypt via the ACME HTTP-01 challenge. The first HTTPS request may
@@ -330,10 +331,12 @@ ls -lh /mnt/data/backups/
 ### Capacity error during instance creation
 
 **Symptom:** `pulumi up` fails with an error like:
+
 ```
 Out of host capacity.
 ```
 or
+
 ```
 The requested shape VM.Standard.A1.Flex is not available in availability domain AD-1.
 ```
@@ -369,12 +372,14 @@ pulumi up
 **Fix:**
 
 1. Verify the A record is correct:
+
    ```bash
    dig +short auth.kytepdf.com
    # Should return the IP from: pulumi stack output reservedIp
    ```
 
 2. If DNS is correct, check Caddy logs on the VM:
+
    ```bash
    ssh ubuntu@$(pulumi stack output reservedIp)
    sudo docker compose -f /opt/auth/docker-compose.yml logs caddy
@@ -385,6 +390,7 @@ pulumi up
    is typically under 5 minutes with TTL ≤ 300.
 
 4. If Caddy is stuck, restart it:
+
    ```bash
    sudo docker compose -f /opt/auth/docker-compose.yml restart caddy
    ```
@@ -463,16 +469,19 @@ sudo docker compose -f /opt/auth/docker-compose.yml ps
 - **Postgres not healthy:** The auth container waits for Postgres to pass its health check
   (`pg_isready -U authuser -d authdb`). If Postgres fails to start (e.g. bad password, corrupt
   data directory), auth will remain in a waiting state. Check Postgres logs:
+
   ```bash
   sudo docker compose -f /opt/auth/docker-compose.yml logs postgres
   ```
 
 - **Port 80/443 already in use:** Another process is using the ports. Check with:
+
   ```bash
   sudo ss -tlnp | grep -E ':80|:443'
   ```
 
 - **Cloud-init still running:** On first boot, cloud-init may still be in progress. Wait for it:
+
   ```bash
   sudo cloud-init status --wait
   ```
@@ -495,43 +504,43 @@ provisioning steps.
 
 All values are set with `pulumi config set [--secret] KEY VALUE`.
 
-| Key | Type | Default | Secret | Description |
-|---|---|---|---|---|
-| `oci:region` | string | `us-ashburn-1` | no | OCI region for all resources |
-| `compartmentOcid` | string | **required** | no | OCID of the compartment to deploy into |
-| `sshPublicKey` | string | **required** | no | SSH public key for VM access |
-| `corsOrigins` | string | **required** | no | Comma-separated CORS origins, e.g. `https://kytepdf.com` |
-| `adminCidrs` | string | — | no | Comma-separated IPv4 CIDRs allowed SSH (port 22), e.g. `203.0.113.10/32,198.51.100.0/24`. `0.0.0.0/0` is rejected. Set this, `tailscaleAuthKey`, or both. |
-| `domain` | string | `auth.kytepdf.com` | no | FQDN for Caddy TLS and OAuth callback URLs |
-| `frontendUrl` | string | **required** | no | Frontend app URL used for email links and OAuth success redirects |
-| `ocpu` | number | `1` | no | OCPU count for `VM.Standard.A1.Flex` (1–4) |
-| `memoryGb` | number | `6` | no | RAM in GB for `VM.Standard.A1.Flex` (6–24) |
-| `availabilityDomainIndex` | number | `0` | no | Index into the compartment's availability domains (0-based). Change on capacity errors. |
-| `imageOcid` | string | *(auto-detect)* | no | Override ARM64 image OCID. If unset, the latest Ubuntu 24.04 ARM64 image for `VM.Standard.A1.Flex` is used. |
-| `emailProvider` | string | `console` | no | Email provider: `console` or `resend` |
-| `resendApiKey` | string | — | **yes** | Resend API key. Required when `emailProvider` is `resend`. |
-| `resendFromAddress` | string | — | no | Sender address, e.g. `noreply@kytepdf.com`. Required when `emailProvider` is `resend`; must be a valid email address. |
-| `enableGoogle` | boolean | `false` | no | Enable Google OAuth. Requires `googleClientId` and `googleClientSecret`. |
-| `googleClientId` | string | — | no | Google OAuth client ID |
-| `googleClientSecret` | string | — | **yes** | Google OAuth client secret |
-| `enableGithub` | boolean | `false` | no | Enable GitHub OAuth. Requires `githubClientId` and `githubClientSecret`. |
-| `githubClientId` | string | — | no | GitHub OAuth client ID |
-| `githubClientSecret` | string | — | **yes** | GitHub OAuth client secret |
-| `enableBlockVolume` | boolean | `true` | no | Attach an extra block volume for Postgres data |
-| `blockVolumeSizeGb` | number | `50` | no | Block volume size in GB (1–150; with the 50 GB boot volume this stays within the OCI Always Free 200 GB total) |
-| `trustedProxyHopCount` | number | `1` | no | Reverse-proxy hops in front of the auth container (Caddy is one). 0–8. |
-| `tailscaleAuthKey` | string | — | **yes** | Tailscale auth key. When set, the VM joins your tailnet with Tailscale SSH. Use a single-use key: it sits in the instance metadata. |
-| `tailscaleHostname` | string | `kytepdf-auth` | no | Tailscale hostname for the VM. One DNS label: letters, digits and hyphens, 1–63 chars. |
-| `tailscaleTag` | string | — | no | Tailscale ACL tag in the form `tag:<name>`, e.g. `tag:server`. Must exist in your tailnet's ACL policy. |
-| `postgresPassword` | string | *(auto-generated, 32 chars)* | **yes** | Postgres password. Auto-generated via `@pulumi/random` if not set. |
-| `backupPassphrase` | string | *(auto-generated, 48 chars)* | **yes** | GPG passphrase for backup encryption. Auto-generated via `@pulumi/random` if not set. |
+| Key                       | Type    | Default                      | Secret  | Description                                                                                                                                               |
+| ------------------------- | ------- | ---------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `oci:region`              | string  | `us-ashburn-1`               | no      | OCI region for all resources                                                                                                                              |
+| `compartmentOcid`         | string  | **required**                 | no      | OCID of the compartment to deploy into                                                                                                                    |
+| `sshPublicKey`            | string  | **required**                 | no      | SSH public key for VM access                                                                                                                              |
+| `corsOrigins`             | string  | **required**                 | no      | Comma-separated CORS origins, e.g. `https://kytepdf.com`                                                                                                  |
+| `adminCidrs`              | string  | —                            | no      | Comma-separated IPv4 CIDRs allowed SSH (port 22), e.g. `203.0.113.10/32,198.51.100.0/24`. `0.0.0.0/0` is rejected. Set this, `tailscaleAuthKey`, or both. |
+| `domain`                  | string  | `auth.kytepdf.com`           | no      | FQDN for Caddy TLS and OAuth callback URLs                                                                                                                |
+| `frontendUrl`             | string  | **required**                 | no      | Frontend app URL used for email links and OAuth success redirects                                                                                         |
+| `ocpu`                    | number  | `1`                          | no      | OCPU count for `VM.Standard.A1.Flex` (1–4)                                                                                                                |
+| `memoryGb`                | number  | `6`                          | no      | RAM in GB for `VM.Standard.A1.Flex` (6–24)                                                                                                                |
+| `availabilityDomainIndex` | number  | `0`                          | no      | Index into the compartment's availability domains (0-based). Change on capacity errors.                                                                   |
+| `imageOcid`               | string  | _(auto-detect)_              | no      | Override ARM64 image OCID. If unset, the latest Ubuntu 24.04 ARM64 image for `VM.Standard.A1.Flex` is used.                                               |
+| `emailProvider`           | string  | `console`                    | no      | Email provider: `console` or `resend`                                                                                                                     |
+| `resendApiKey`            | string  | —                            | **yes** | Resend API key. Required when `emailProvider` is `resend`.                                                                                                |
+| `resendFromAddress`       | string  | —                            | no      | Sender address, e.g. `noreply@kytepdf.com`. Required when `emailProvider` is `resend`; must be a valid email address.                                     |
+| `enableGoogle`            | boolean | `false`                      | no      | Enable Google OAuth. Requires `googleClientId` and `googleClientSecret`.                                                                                  |
+| `googleClientId`          | string  | —                            | no      | Google OAuth client ID                                                                                                                                    |
+| `googleClientSecret`      | string  | —                            | **yes** | Google OAuth client secret                                                                                                                                |
+| `enableGithub`            | boolean | `false`                      | no      | Enable GitHub OAuth. Requires `githubClientId` and `githubClientSecret`.                                                                                  |
+| `githubClientId`          | string  | —                            | no      | GitHub OAuth client ID                                                                                                                                    |
+| `githubClientSecret`      | string  | —                            | **yes** | GitHub OAuth client secret                                                                                                                                |
+| `enableBlockVolume`       | boolean | `true`                       | no      | Attach an extra block volume for Postgres data                                                                                                            |
+| `blockVolumeSizeGb`       | number  | `50`                         | no      | Block volume size in GB (1–150; with the 50 GB boot volume this stays within the OCI Always Free 200 GB total)                                            |
+| `trustedProxyHopCount`    | number  | `1`                          | no      | Reverse-proxy hops in front of the auth container (Caddy is one). 0–8.                                                                                    |
+| `tailscaleAuthKey`        | string  | —                            | **yes** | Tailscale auth key. When set, the VM joins your tailnet with Tailscale SSH. Use a single-use key: it sits in the instance metadata.                       |
+| `tailscaleHostname`       | string  | `kytepdf-auth`               | no      | Tailscale hostname for the VM. One DNS label: letters, digits and hyphens, 1–63 chars.                                                                    |
+| `tailscaleTag`            | string  | —                            | no      | Tailscale ACL tag in the form `tag:<name>`, e.g. `tag:server`. Must exist in your tailnet's ACL policy.                                                   |
+| `postgresPassword`        | string  | _(auto-generated, 32 chars)_ | **yes** | Postgres password. Auto-generated via `@pulumi/random` if not set.                                                                                        |
+| `backupPassphrase`        | string  | _(auto-generated, 48 chars)_ | **yes** | GPG passphrase for backup encryption. Auto-generated via `@pulumi/random` if not set.                                                                     |
 
 ### Stack outputs
 
-| Output | Description |
-|---|---|
-| `reservedIp` | The reserved public IPv4 address assigned to the VM |
-| `instanceId` | The OCI instance OCID |
+| Output           | Description                                                                               |
+| ---------------- | ----------------------------------------------------------------------------------------- |
+| `reservedIp`     | The reserved public IPv4 address assigned to the VM                                       |
+| `instanceId`     | The OCI instance OCID                                                                     |
 | `dnsInstruction` | Ready-made DNS instruction string, e.g. `Create DNS A record: auth.kytepdf.com → 1.2.3.4` |
 
 > **Security note:** `postgresPassword`, `backupPassphrase`, `googleClientSecret`,

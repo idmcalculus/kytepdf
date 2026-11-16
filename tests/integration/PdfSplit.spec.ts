@@ -68,10 +68,16 @@ import { PDFDocument } from "../../utils/pdfConfig";
 import { loadProcessablePdf } from "../../utils/pdfSecurity";
 import { persistence } from "../../utils/persistence";
 
+/** Writes a %PDF- header into a fixture's bytes so it passes the PDF header check. */
+const withPdfHeader = (bytes: Uint8Array) => {
+  bytes.set(new TextEncoder().encode("%PDF-1.7").subarray(0, bytes.length));
+  return bytes;
+};
+
 const asFileList = (files: File[]) => files as unknown as FileList;
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 const pdfFile = (name = "test.pdf", size = 12) =>
-  new File([new Uint8Array(size)], name, { type: "application/pdf" });
+  new File([withPdfHeader(new Uint8Array(size))], name, { type: "application/pdf" });
 
 describe("PdfSplit", () => {
   let component: PdfSplit;
@@ -304,18 +310,24 @@ describe("PdfSplit", () => {
 
     it("closes the previous document when another PDF is loaded and when the tool closes", async () => {
       // A document that fails to close must not stop the next one loading.
-      const first = { numPages: 2, destroy: vi.fn().mockRejectedValue(new Error("worker gone")) };
-      const second = { numPages: 3, destroy: vi.fn().mockResolvedValue(undefined) };
+      const first = {
+        numPages: 2,
+        loadingTask: { destroy: vi.fn().mockRejectedValue(new Error("worker gone")) },
+      };
+      const second = {
+        numPages: 3,
+        loadingTask: { destroy: vi.fn().mockResolvedValue(undefined) },
+      };
       mocks.loadPdfDocument.mockResolvedValueOnce(first).mockResolvedValueOnce(second);
 
       await loadFile(pdfFile("a.pdf"));
       await loadFile(pdfFile("b.pdf"));
-      expect(first.destroy).toHaveBeenCalledTimes(1);
-      expect(second.destroy).not.toHaveBeenCalled();
+      expect(first.loadingTask.destroy).toHaveBeenCalledTimes(1);
+      expect(second.loadingTask.destroy).not.toHaveBeenCalled();
 
       mocks.thumbnailDestroy.mockClear();
       component.remove();
-      expect(second.destroy).toHaveBeenCalledTimes(1);
+      expect(second.loadingTask.destroy).toHaveBeenCalledTimes(1);
       expect(mocks.thumbnailDestroy).toHaveBeenCalledTimes(1);
     });
 

@@ -739,38 +739,39 @@ describe("ImageExtractor", () => {
       expect(images.map(regionOf)).toEqual([{ x: 96, y: 64, width: 80, height: 160 }]);
     });
 
-    it.each([
-      0, 90, 180, 270,
-    ])("measures images from the crop box on a page turned %i°", async (rotation) => {
-      installCanvasFactory();
-      const viewBox = [20, 30, 380, 480];
-      const shown = fakeViewport(viewBox, 1, rotation);
-      const scale = 800 / shown.width;
-      const corners = [
-        [60, 100],
-        [160, 150],
-      ].map(([x, y]) => shown.convertToViewportPoint(x, y));
-      const region = {
-        x: Math.min(corners[0][0], corners[1][0]) * scale,
-        y: Math.min(corners[0][1], corners[1][1]) * scale,
-        width: Math.abs(corners[0][0] - corners[1][0]) * scale,
-        height: Math.abs(corners[0][1] - corners[1][1]) * scale,
-      };
-      const { pdfDoc, rendered } = makePdf({
-        width: 400,
-        height: 500,
-        rotation,
-        viewBox,
-        ...drawImage([100, 0, 0, 50, 60, 100]),
-        content: [region],
-      });
+    it.each([0, 90, 180, 270])(
+      "measures images from the crop box on a page turned %i°",
+      async (rotation) => {
+        installCanvasFactory();
+        const viewBox = [20, 30, 380, 480];
+        const shown = fakeViewport(viewBox, 1, rotation);
+        const scale = 800 / shown.width;
+        const corners = [
+          [60, 100],
+          [160, 150],
+        ].map(([x, y]) => shown.convertToViewportPoint(x, y));
+        const region = {
+          x: Math.min(corners[0][0], corners[1][0]) * scale,
+          y: Math.min(corners[0][1], corners[1][1]) * scale,
+          width: Math.abs(corners[0][0] - corners[1][0]) * scale,
+          height: Math.abs(corners[0][1] - corners[1][1]) * scale,
+        };
+        const { pdfDoc, rendered } = makePdf({
+          width: 400,
+          height: 500,
+          rotation,
+          viewBox,
+          ...drawImage([100, 0, 0, 50, 60, 100]),
+          content: [region],
+        });
 
-      const [image] = await extractor.extractPageImages(pdfDoc, 0, rendered as any);
+        const [image] = await extractor.extractPageImages(pdfDoc, 0, rendered as any);
 
-      expect(image.x).toBeCloseTo(Math.round(region.x), 0);
-      expect(image.y).toBeCloseTo(Math.round(region.y), 0);
-      expect(image.width).toBeCloseTo(region.width, -1);
-      expect(image.height).toBeCloseTo(region.height, -1);
-    });
+        expect(image.x).toBeCloseTo(Math.round(region.x), 0);
+        expect(image.y).toBeCloseTo(Math.round(region.y), 0);
+        expect(image.width).toBeCloseTo(region.width, -1);
+        expect(image.height).toBeCloseTo(region.height, -1);
+      },
+    );
   });
 });

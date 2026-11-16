@@ -800,26 +800,18 @@ const dataUrlToBytes = (dataUrl: string) => {
     throw new Error("Invalid image data");
   }
 
-  const binary = atob(data);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  return { meta, bytes };
+  return { meta, bytes: base64ToUint8Array(data) };
 };
 
-const base64ToUint8Array = (value: string) => {
-  if (typeof Buffer !== "undefined") {
-    return new Uint8Array(Buffer.from(value, "base64"));
-  }
-
+/** Browser-safe base64 decoding (atob exists in browsers and in Node 16+). */
+function base64ToUint8Array(value: string) {
   const binary = atob(value);
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) {
     bytes[index] = binary.charCodeAt(index);
   }
   return bytes;
-};
+}
 
 const parseMultiline = (text: string) =>
   sanitizeText(text)

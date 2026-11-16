@@ -17,11 +17,14 @@ import "./components/AboutModal.ts";
 import "./components/EmailCollectionModal.ts";
 import "./components/AccountModal.ts";
 import "./components/KyteFooter.ts";
-import { createIcons, icons } from "lucide";
+import { createIcons } from "lucide";
 import { bootstrapKytePdf } from "./utils/appBootstrap.ts";
+import { APP_ICONS } from "./utils/appIcons.ts";
 
+// Components call window.lucide.createIcons() after rendering; it draws only
+// the icons the app registers (see utils/appIcons.ts), not lucide's full set.
 (window as any).lucide = {
-  createIcons: (options = {}) => createIcons({ icons, ...options }),
+  createIcons: (options = {}) => createIcons({ icons: APP_ICONS, ...options }),
 };
 
 bootstrapKytePdf({ prod: import.meta.env.PROD });

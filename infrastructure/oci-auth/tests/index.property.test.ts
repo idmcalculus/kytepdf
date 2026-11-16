@@ -96,14 +96,12 @@ describe("isIpv4Cidr", () => {
     expect(isIpv4Cidr(cidr)).toBe(true);
   });
 
-  it.each([
-    "203.0.113.10/32,198.51.100.0/24",
-    "203.0.113.10",
-    "203.0.113.10/33",
-    "::1/128",
-  ])("rejects %j", (cidr) => {
-    expect(isIpv4Cidr(cidr)).toBe(false);
-  });
+  it.each(["203.0.113.10/32,198.51.100.0/24", "203.0.113.10", "203.0.113.10/33", "::1/128"])(
+    "rejects %j",
+    (cidr) => {
+      expect(isIpv4Cidr(cidr)).toBe(false);
+    },
+  );
 
   it("accepts every entry of the README adminCidrs example once split", () => {
     expect(parseCommaList("203.0.113.10/32,198.51.100.0/24").every(isIpv4Cidr)).toBe(true);

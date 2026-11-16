@@ -74,8 +74,8 @@
 
 // PDF page canvas
 .pdf-page-canvas {
-  width: 100% !important;
-  height: auto !important;
+  width: 100%;
+  height: auto;
   display: block;
 }
 
@@ -301,6 +301,23 @@
   border-style: dashed;
 }
 
+// File item details
+.file-item-details {
+  display: flex;
+  align-items: center;
+  gap: $spacing-lg;
+  flex: 1;
+  min-width: 0;
+
+  @media (max-width: 580px) {
+    grid-area: details;
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-xs;
+    min-width: 0;
+  }
+}
+
 .security-file-item .file-item-details {
   @media (max-width: 580px) {
     flex-direction: row;
@@ -323,23 +340,6 @@
   height: 18px;
   accent-color: $color-primary;
   cursor: pointer;
-}
-
-// File item details
-.file-item-details {
-  display: flex;
-  align-items: center;
-  gap: $spacing-lg;
-  flex: 1;
-  min-width: 0;
-
-  @media (max-width: 580px) {
-    grid-area: details;
-    display: flex;
-    flex-direction: column;
-    gap: $spacing-xs;
-    min-width: 0;
-  }
 }
 
 // File name

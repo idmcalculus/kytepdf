@@ -1,6 +1,7 @@
 import { describeFailure } from "../utils/errorMapper.ts";
 import { logger } from "../utils/logger.ts";
 import { PDFDocument } from "../utils/pdfConfig.ts";
+import { destroyPdfDocument } from "../utils/pdfDocument.ts";
 import {
   clearPreviewLoadingState,
   getPdfPreviewErrorMessage,
@@ -156,7 +157,7 @@ export class PdfSplit extends BaseComponent {
     const doc = this.currentPdfDoc;
     this.currentPdfDoc = null;
     try {
-      void Promise.resolve(doc?.destroy?.()).catch(() => undefined);
+      void destroyPdfDocument(doc).catch(() => undefined);
     } catch {
       // A document that fails to close is dropped anyway.
     }

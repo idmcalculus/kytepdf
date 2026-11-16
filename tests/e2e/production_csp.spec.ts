@@ -97,9 +97,45 @@ const test = base.extend<{ cspViolations: string[] }>({
 test.use({ baseURL: PREVIEW_URL });
 test.describe.configure({ timeout: 120_000 });
 
-/** A one-page PDF with real Helvetica text, built by hand so the test needs no PDF library. */
+/** A PDF object: a dictionary, or a stream with its dictionary entries. */
+type PdfObject = string | { dict: string; data: Buffer };
+
+/**
+ * Writes a PDF by hand, so the tests need no PDF library. Object n is
+ * `objects[n - 1]`; object 1 must be the catalog.
+ */
+function assemblePdf(objects: PdfObject[]): Buffer {
+  const parts: Buffer[] = [Buffer.from("%PDF-1.5\n", "latin1")];
+  let length = parts[0].length;
+  const append = (part: Buffer | string) => {
+    const bytes = typeof part === "string" ? Buffer.from(part, "latin1") : part;
+    parts.push(bytes);
+    length += bytes.length;
+  };
+  const offsets: number[] = [];
+  objects.forEach((object, index) => {
+    offsets.push(length);
+    if (typeof object === "string") {
+      append(`${index + 1} 0 obj\n${object}\nendobj\n`);
+    } else {
+      append(`${index + 1} 0 obj\n<< ${object.dict} /Length ${object.data.length} >>\nstream\n`);
+      append(object.data);
+      append("\nendstream\nendobj\n");
+    }
+  });
+  const xrefOffset = length;
+  append(`xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`);
+  for (const offset of offsets) append(`${String(offset).padStart(10, "0")} 00000 n \n`);
+  append(
+    `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`,
+  );
+  return Buffer.concat(parts);
+}
+
+const escapePdf = (text: string) => text.replace(/[\\()]/g, (c) => `\\${c}`);
+
+/** A one-page PDF with real Helvetica text. */
 function buildTextPdf(lines: string[]): Buffer {
-  const escapePdf = (text: string) => text.replace(/[\\()]/g, (c) => `\\${c}`);
   const content = [
     "BT",
     "/F1 24 Tf",
@@ -108,25 +144,75 @@ function buildTextPdf(lines: string[]): Buffer {
     ...lines.map((line, index) => `${index > 0 ? "T* " : ""}(${escapePdf(line)}) Tj`),
     "ET",
   ].join("\n");
-  const objects = [
+  return assemblePdf([
     "<< /Type /Catalog /Pages 2 0 R >>",
     "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
     "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
-    `<< /Length ${Buffer.byteLength(content, "latin1")} >>\nstream\n${content}\nendstream`,
-  ];
+    { dict: "", data: Buffer.from(content, "latin1") },
+  ]);
+}
 
-  let pdf = "%PDF-1.4\n";
-  const offsets: number[] = [];
-  objects.forEach((body, index) => {
-    offsets.push(Buffer.byteLength(pdf, "latin1"));
-    pdf += `${index + 1} 0 obj\n${body}\nendobj\n`;
-  });
-  const xrefOffset = Buffer.byteLength(pdf, "latin1");
-  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  for (const offset of offsets) pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
-  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
-  return Buffer.from(pdf, "latin1");
+/**
+ * Group 4 fax data for an 8-pixel-wide, all-black image `rows` high. The first
+ * row, read against the white row Group 4 imagines above the image, is
+ * horizontal mode (001) with a white run of 0 (00110101) and a black run of 8
+ * (000101). Each later row repeats the one above: two vertical-0 codes (1 1).
+ * Two end-of-line codes end the block.
+ */
+function ccittBlackSquare(rows: number): Buffer {
+  const bits = `001${"00110101"}${"000101"}${"11".repeat(rows - 1)}${"000000000001".repeat(2)}`;
+  const padded = bits.padEnd(Math.ceil(bits.length / 8) * 8, "0");
+  return Buffer.from(padded.match(/.{8}/g)?.map((byte) => Number.parseInt(byte, 2)) ?? []);
+}
+
+/** An 8 by 8 all-black greyscale JPEG 2000 codestream, made with OpenJPEG's opj_compress. */
+const JPX_BLACK_SQUARE = Buffer.from(
+  "/0//UQApAAAAAAAIAAAACAAAAAAAAAAAAAAACAAAAAgAAAAAAAAAAAABBwEB/1IADAAAAAEAAAQEAAH/XAAEQED/ZAAlAAFDcmVhdGVkIGJ5IE9wZW5KUEVHIHZlcnNpb24gMi41LjP/kAAKAAAAAAAWAAH/k9+AKBFQVKNv/9k=",
+  "base64",
+);
+
+/**
+ * A 300 by 150 point page with two black squares: on the left a CCITT fax
+ * image, on the right a JPEG 2000 one. pdf.js decodes both with WebAssembly
+ * from its wasmUrl, and leaves them out of the page if it cannot.
+ */
+function buildFaxAndJpxPdf(): Buffer {
+  const content = "q 100 0 0 100 25 25 cm /Fax Do Q\nq 100 0 0 100 175 25 cm /Jpx Do Q";
+  return assemblePdf([
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 150] /Resources << /XObject << /Fax 4 0 R /Jpx 5 0 R >> >> /Contents 6 0 R >>",
+    {
+      dict: "/Type /XObject /Subtype /Image /Width 8 /Height 8 /ColorSpace /DeviceGray /BitsPerComponent 1 /Filter /CCITTFaxDecode /DecodeParms << /K -1 /Columns 8 /Rows 8 >>",
+      data: ccittBlackSquare(8),
+    },
+    {
+      dict: "/Type /XObject /Subtype /Image /Width 8 /Height 8 /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /JPXDecode",
+      data: JPX_BLACK_SQUARE,
+    },
+    { dict: "", data: Buffer.from(content, "latin1") },
+  ]);
+}
+
+/**
+ * A page of text in an embedded TrueType font, Liberation Sans Bold Italic
+ * (from pdfjs-dist), under a subset-style name. Nothing but the font's name
+ * says it is bold and italic: pdf.js sets its own bold and italic flags only
+ * for fonts a PDF does not embed.
+ */
+function buildEmbeddedFontPdf(text: string, fontFile: Buffer): Buffer {
+  const fontName = "KYTEAB+LiberationSans-BoldItalic";
+  const content = `BT\n/F1 24 Tf\n72 700 Td\n(${escapePdf(text)}) Tj\nET`;
+  return assemblePdf([
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 7 0 R >>",
+    `<< /Type /Font /Subtype /TrueType /BaseFont /${fontName} /FirstChar 32 /LastChar 126 /Widths [${Array(95).fill(600).join(" ")}] /Encoding /WinAnsiEncoding /FontDescriptor 5 0 R >>`,
+    `<< /Type /FontDescriptor /FontName /${fontName} /Flags 32 /FontBBox [-200 -300 1200 1000] /ItalicAngle 0 /Ascent 905 /Descent -212 /CapHeight 716 /StemV 80 /FontFile2 6 0 R >>`,
+    { dict: `/Length1 ${fontFile.length}`, data: fontFile },
+    { dict: "", data: Buffer.from(content, "latin1") },
+  ]);
 }
 
 const TEXT_LINES = ["KytePDF production CSP check", "Plain words for the extractor"];
@@ -282,6 +368,28 @@ async function downloadFrom(
 
 const collapse = (text: string) => text.replace(/\s+/g, " ").trim();
 
+/**
+ * Counts the opaque, near-black pixels in each half of a canvas. A canvas
+ * pdf.js has not drawn on yet is transparent, so it counts none.
+ */
+const darkPixelsByHalf = (canvas: Locator) =>
+  canvas.evaluate((element: HTMLCanvasElement) => {
+    const { width, height } = element;
+    if (width === 0 || height === 0) return { left: 0, right: 0 };
+    const data = (element.getContext("2d") as CanvasRenderingContext2D).getImageData(
+      0,
+      0,
+      width,
+      height,
+    ).data;
+    const counts = { left: 0, right: 0 };
+    for (let i = 0; i < data.length; i += 4) {
+      const dark = data[i + 3] > 200 && data[i] < 80 && data[i + 1] < 80 && data[i + 2] < 80;
+      if (dark) counts[(i / 4) % width < width / 2 ? "left" : "right"] += 1;
+    }
+    return counts;
+  });
+
 test.describe("Production Content-Security-Policy", () => {
   test("dashboard loads under the deployed policy", async ({ page }, testInfo) => {
     const response = await page.goto("/");
@@ -398,6 +506,57 @@ test.describe("Production Content-Security-Policy", () => {
     expect(saved.bytes.subarray(0, 5).toString("latin1")).toBe("%PDF-");
     expect(saved.bytes.toString("latin1")).toMatch(/\/Subtype\s*\/Image/);
     expect(saved.bytes.length).toBeGreaterThan(TEXT_PDF.length + photoPng.length / 2);
+  });
+
+  test("PDF editor keeps the bold and italic of an embedded font", async ({ page }, testInfo) => {
+    const fontFile = await readFile(
+      resolve(
+        testInfo.project.testDir,
+        "../../node_modules/pdfjs-dist/standard_fonts/LiberationSans-BoldItalic.ttf",
+      ),
+    );
+    const tool = await openTool(page, "edit", "pdf-editor");
+    await tool.locator("#fileInput").setInputFiles({
+      name: "embedded-font.pdf",
+      mimeType: "application/pdf",
+      buffer: buildEmbeddedFontPdf("Quarterly report", fontFile),
+    });
+    await expect(tool.locator("#statusText")).toHaveText("Ready", { timeout: 60_000 });
+
+    // The editor reads bold and italic from the font's name, which pdf.js
+    // sends only when the document is opened with fontExtraProperties.
+    const block = tool.locator(".annotation-textblock [contenteditable]");
+    await expect(block).toHaveText("Quarterly report");
+    // pdf.js may split the line into several runs; each must be bold italic.
+    const boldItalic = await block.locator("b > i").allTextContents();
+    expect(collapse(boldItalic.join(""))).toBe("Quarterly report");
+  });
+
+  test("PDF to Image draws CCITT fax and JPEG 2000 images", async ({ page }) => {
+    const tool = await openTool(page, "pdf-to-img", "pdf-to-image");
+    await tool.locator("#fileInput").setInputFiles({
+      name: "fax-and-jpx.pdf",
+      mimeType: "application/pdf",
+      buffer: buildFaxAndJpxPdf(),
+    });
+    const thumbnail = tool.locator("#thumbnailGrid .page-item canvas");
+    await expect(thumbnail).toHaveCount(1);
+
+    // Each square covers a third of its half of the page, at scale 0.3 about
+    // 30 by 30 pixels. pdf.js leaves out an image it cannot decode, and draws
+    // the rest of the page, so a missing decoder shows as a white half.
+    await expect
+      .poll(async () => (await darkPixelsByHalf(thumbnail)).left, {
+        message: "CCITT fax image (JBIG2 decoder)",
+        timeout: 30_000,
+      })
+      .toBeGreaterThan(600);
+    await expect
+      .poll(async () => (await darkPixelsByHalf(thumbnail)).right, {
+        message: "JPEG 2000 image (OpenJPEG decoder)",
+        timeout: 30_000,
+      })
+      .toBeGreaterThan(600);
   });
 
   test("PDF to Image renders pages and downloads a ZIP", async ({ page }) => {

@@ -21,40 +21,40 @@ bun run auth-server:dev       # start in watch mode
 
 ### Required Environment Variables
 
-| Variable | Example | Notes |
-|---|---|---|
-| `DATABASE_URL` | `postgresql://user:pass@host:5432/dbname` | PostgreSQL connection string |
-| `COOKIE_SECURE` | `true` | Must be `true` in production (HTTPS) |
-| `COOKIE_SAMESITE` | `none` | Use `none` for cross-origin; `lax` for same-site |
-| `CSRF_COOKIE_SECURE` | `true` | Must be `true` in production |
-| `CSRF_COOKIE_SAMESITE` | `none` | Match `COOKIE_SAMESITE` |
-| `BASE_URL` | `https://kytepdf.com` | Frontend URL for email links |
-| `CORS_ORIGINS` | `https://kytepdf.com` | Comma-separated allowed origins |
-| `EMAIL_PROVIDER` | `resend` | `resend` for production email, `console` for dev logging |
-| `RESEND_API_KEY` | `re_...` | Required when `EMAIL_PROVIDER=resend` |
-| `EMAIL_FROM_ADDRESS` | `noreply@kytepdf.com` | Sender address for emails (required when `EMAIL_PROVIDER=resend`) |
+| Variable               | Example                                   | Notes                                                             |
+| ---------------------- | ----------------------------------------- | ----------------------------------------------------------------- |
+| `DATABASE_URL`         | `postgresql://user:pass@host:5432/dbname` | PostgreSQL connection string                                      |
+| `COOKIE_SECURE`        | `true`                                    | Must be `true` in production (HTTPS)                              |
+| `COOKIE_SAMESITE`      | `none`                                    | Use `none` for cross-origin; `lax` for same-site                  |
+| `CSRF_COOKIE_SECURE`   | `true`                                    | Must be `true` in production                                      |
+| `CSRF_COOKIE_SAMESITE` | `none`                                    | Match `COOKIE_SAMESITE`                                           |
+| `BASE_URL`             | `https://kytepdf.com`                     | Frontend URL for email links                                      |
+| `CORS_ORIGINS`         | `https://kytepdf.com`                     | Comma-separated allowed origins                                   |
+| `EMAIL_PROVIDER`       | `resend`                                  | `resend` for production email, `console` for dev logging          |
+| `RESEND_API_KEY`       | `re_...`                                  | Required when `EMAIL_PROVIDER=resend`                             |
+| `EMAIL_FROM_ADDRESS`   | `noreply@kytepdf.com`                     | Sender address for emails (required when `EMAIL_PROVIDER=resend`) |
 
 ### OAuth (Optional)
 
 OAuth buttons are only shown in the frontend when `VITE_AUTH_OAUTH_PROVIDERS` is set (see below). On the server side, configure:
 
-| Variable | Notes |
-|---|---|
-| `GOOGLE_CLIENT_ID` | From Google Cloud Console |
-| `GOOGLE_CLIENT_SECRET` | From Google Cloud Console |
-| `GOOGLE_REDIRECT_URI` | `https://auth.kytepdf.com/auth/oauth/google/callback` |
-| `GITHUB_CLIENT_ID` | From GitHub Developer Settings |
-| `GITHUB_CLIENT_SECRET` | From GitHub Developer Settings |
-| `GITHUB_REDIRECT_URI` | `https://auth.kytepdf.com/auth/oauth/github/callback` |
+| Variable               | Notes                                                 |
+| ---------------------- | ----------------------------------------------------- |
+| `GOOGLE_CLIENT_ID`     | From Google Cloud Console                             |
+| `GOOGLE_CLIENT_SECRET` | From Google Cloud Console                             |
+| `GOOGLE_REDIRECT_URI`  | `https://auth.kytepdf.com/auth/oauth/google/callback` |
+| `GITHUB_CLIENT_ID`     | From GitHub Developer Settings                        |
+| `GITHUB_CLIENT_SECRET` | From GitHub Developer Settings                        |
+| `GITHUB_REDIRECT_URI`  | `https://auth.kytepdf.com/auth/oauth/github/callback` |
 
 ## Frontend Configuration
 
 The KytePDF frontend requires these Vite build-time env vars:
 
-| Variable | Example | Notes |
-|---|---|---|
-| `VITE_AUTH_API_URL` | `https://auth.kytepdf.com` | **Required in production.** If unset, auth UI shows "unavailable". |
-| `VITE_AUTH_OAUTH_PROVIDERS` | `google,github` | Comma-separated. Only listed providers show buttons. Empty = no OAuth UI. |
+| Variable                    | Example                    | Notes                                                                     |
+| --------------------------- | -------------------------- | ------------------------------------------------------------------------- |
+| `VITE_AUTH_API_URL`         | `https://auth.kytepdf.com` | **Required in production.** If unset, auth UI shows "unavailable".        |
+| `VITE_AUTH_OAUTH_PROVIDERS` | `google,github`            | Comma-separated. Only listed providers show buttons. Empty = no OAuth UI. |
 
 ### Content Security Policy
 

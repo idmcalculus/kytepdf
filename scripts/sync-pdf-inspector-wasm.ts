@@ -1,6 +1,46 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+/**
+ * The pdf.js worker the app ships as /pdf.worker.min.js, relative to the
+ * project root. It must be the legacy build, like the library
+ * utils/pdfConfig.ts imports: the default build calls
+ * Map.prototype.getOrInsertComputed, Math.sumPrecise and
+ * Uint8Array.prototype.toHex with no fallback, so it fails before Chrome 147,
+ * Firefox 144 and Safari 26.2. The legacy build polyfills them.
+ */
+export const PDFJS_WORKER_SOURCE = "node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs";
+
+/** pdf.js's WebAssembly in node_modules, and where it is copied to. */
+export const PDFJS_WASM_SOURCE = "node_modules/pdfjs-dist/wasm";
+/** Served as /wasm/pdfjs/, the `wasmUrl` in utils/config.ts. */
+export const PDFJS_WASM_DEST = "public/wasm/pdfjs";
+
+/**
+ * The files pdf.js fetches from its `wasmUrl`, with the licence files that
+ * sit beside them. Each image decoder has a plain JavaScript copy that pdf.js
+ * imports when WebAssembly will not start. QuickJS, also in that folder, is
+ * left out: only pdf.js scripting (pdf.sandbox.mjs) uses it, and the app never
+ * loads that.
+ */
+export const PDFJS_WASM_COMPONENTS = [
+  {
+    name: "JBIG2 and CCITT fax image decoder (PDFium)",
+    files: ["jbig2.wasm", "jbig2_nowasm_fallback.js"],
+    licences: ["LICENSE_JBIG2", "LICENSE_PDFJS_JBIG2"],
+  },
+  {
+    name: "JPEG 2000 image decoder (OpenJPEG)",
+    files: ["openjpeg.wasm", "openjpeg_nowasm_fallback.js"],
+    licences: ["LICENSE_OPENJPEG", "LICENSE_PDFJS_OPENJPEG"],
+  },
+  {
+    name: "ICC colour management (qcms)",
+    files: ["qcms_bg.wasm"],
+    licences: ["LICENSE_QCMS", "LICENSE_PDFJS_QCMS"],
+  },
+];
+
 function ensureDir(dir: string) {
   mkdirSync(dir, { recursive: true });
 }
@@ -85,12 +125,10 @@ function syncTesseract() {
 }
 
 /**
- * Bundle third-party notices for vendored WASM/OCR binaries into public/ so the
- * shipped distribution carries required attribution.
+ * The third-party notices for the vendored pdf.js, WASM and OCR files, so the
+ * shipped distribution carries the attribution they require.
  */
-function writeThirdPartyNotices() {
-  const noticesDir = join(process.cwd(), "public", "third-party");
-  ensureDir(noticesDir);
+export function thirdPartyNotices(root = process.cwd()): string {
   const sections: string[] = [
     "# Third-Party Notices",
     "",
@@ -115,16 +153,37 @@ function writeThirdPartyNotices() {
       name: "tesseract.js-core",
       note: "Apache-2.0. Tesseract OCR compiled to WebAssembly.",
     },
+    {
+      name: "pdfjs-dist",
+      note: "Apache-2.0. PDF.js rendering library (Mozilla), including its worker (/pdf.worker.min.js).",
+    },
   ];
 
   for (const entry of packages) {
-    const pkgDir = join(process.cwd(), "node_modules", entry.name);
+    const pkgDir = join(root, "node_modules", entry.name);
     sections.push(`## ${entry.name}`, "", entry.note, "");
     const license = existsSync(pkgDir) ? readLicense(pkgDir) : null;
     if (license) {
       sections.push("```", license.trim(), "```", "");
     } else {
       sections.push(`(License text not found under node_modules/${entry.name}.)`, "");
+    }
+  }
+
+  for (const component of PDFJS_WASM_COMPONENTS) {
+    sections.push(
+      `## pdfjs-dist: ${component.name}`,
+      "",
+      `Shipped as ${component.files.map((file) => `/wasm/pdfjs/${file}`).join(" and ")}.`,
+      "",
+    );
+    for (const licence of component.licences) {
+      const path = join(root, PDFJS_WASM_SOURCE, licence);
+      if (existsSync(path)) {
+        sections.push("```", readFileSync(path, "utf8").trim(), "```", "");
+      } else {
+        sections.push(`(License text not found at ${PDFJS_WASM_SOURCE}/${licence}.)`, "");
+      }
     }
   }
 
@@ -137,25 +196,68 @@ function writeThirdPartyNotices() {
     "",
   );
 
+  return sections.join("\n");
+}
+
+function writeThirdPartyNotices() {
+  const noticesDir = join(process.cwd(), "public", "third-party");
+  ensureDir(noticesDir);
+  const notices = thirdPartyNotices();
+
   const out = join(noticesDir, "NOTICES.md");
-  writeFileSync(out, sections.join("\n"));
+  writeFileSync(out, notices);
   console.log(`wrote ${out.replace(`${process.cwd()}/`, "")}`);
 
   // Also place a root-level copy for source-tree visibility.
   const rootOut = join(process.cwd(), "THIRD_PARTY_NOTICES.md");
-  writeFileSync(rootOut, sections.join("\n"));
+  writeFileSync(rootOut, notices);
   console.log(`wrote ${rootOut.replace(`${process.cwd()}/`, "")}`);
 }
 
+/**
+ * pdf.js refuses to run with a worker from a different version, so copy the
+ * worker that belongs to the installed pdfjs-dist on every dev start and
+ * build, rather than keeping a hand-copied file in git that can drift.
+ */
+function syncPdfjsWorker() {
+  copyIfPresent(
+    join(process.cwd(), PDFJS_WORKER_SOURCE),
+    join(process.cwd(), "public", "pdf.worker.min.js"),
+    "pdfjs-dist legacy worker",
+  );
+}
+
+/**
+ * pdf.js decodes JBIG2, CCITT fax and JPEG 2000 images, and applies ICC
+ * colour profiles, with WebAssembly it fetches from `wasmUrl` at run time.
+ * Without these files it leaves those images out of the page.
+ */
+function syncPdfjsWasm() {
+  const destDir = join(process.cwd(), PDFJS_WASM_DEST);
+  ensureDir(destDir);
+  for (const file of PDFJS_WASM_COMPONENTS.flatMap((component) => component.files)) {
+    copyIfPresent(
+      join(process.cwd(), PDFJS_WASM_SOURCE, file),
+      join(destDir, file),
+      `pdfjs-dist ${file}`,
+    );
+  }
+}
+
 function main() {
+  syncPdfjsWorker();
+  syncPdfjsWasm();
   syncWasmPackages();
   syncTesseract();
   writeThirdPartyNotices();
 }
 
-try {
-  main();
-} catch (err) {
-  console.error(err);
-  process.exit(1);
+// Run only as a script (`bun run sync:wasm`), so tests can import the paths above.
+if (import.meta.main) {
+  try {
+    main();
+  } catch (err) {
+    console.error(err);
+    process.exit(1);
+  }
 }

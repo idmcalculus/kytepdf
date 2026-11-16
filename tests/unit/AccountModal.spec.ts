@@ -935,6 +935,14 @@ describe("AccountModal", () => {
       config.auth.oauthProviders = ["google", "github"];
       modal.show();
 
+      // Lucide 1.0 dropped brand icons, so each button carries its own logo.
+      for (const id of ["#btnGoogle", "#btnGithub"]) {
+        const logo = $(`${id} svg.brand-icon`);
+        expect(logo?.getAttribute("aria-hidden")).toBe("true");
+      }
+      expect($("#btnGoogle")!.textContent?.trim()).toBe("Google");
+      expect($("#btnGithub")!.textContent?.trim()).toBe("GitHub");
+
       $("#btnGoogle")!.click();
       $("#btnGithub")!.click();
 

@@ -1,4 +1,5 @@
 import init, { type Format, formatFromBytes, toMarkdownBytes } from "@firecrawl/anydoc-wasm";
+import { version as anydocVersion } from "@firecrawl/anydoc-wasm/package.json";
 import type {
   AnydocAnalysisEnvelope,
   AnydocErrorCode,
@@ -33,9 +34,9 @@ async function ensureLoaded(): Promise<void> {
   await loadPromise;
 }
 
-// anydoc does not export a `version()` function in 0.1.8; pin the known
-// emitted version here for provenance. Bump this when upgrading the package.
-const ANYDOC_WASM_VERSION = "0.1.8";
+// anydoc has no `version()` export, so provenance comes from the installed
+// package, read at build time: an upgrade can never leave it stale.
+const ANYDOC_WASM_VERSION: string = anydocVersion;
 
 /**
  * The format read from the bytes wins, so a DOCX saved as report.doc still
@@ -73,6 +74,7 @@ function mapFailure(err: unknown): AnydocWorkerFailure {
     "encrypted",
     "resourceLimit",
     "missingPart",
+    "needsOcr",
   ];
   return {
     reason: known.includes(code as AnydocErrorCode) ? (code as AnydocErrorCode) : "unknown",

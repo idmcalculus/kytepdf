@@ -7,7 +7,7 @@ import init, {
   processPdf,
   version,
 } from "@firecrawl/pdf-inspector-wasm";
-import { markdownToPlainText } from "./markdownText.ts";
+import { markdownToPlainText, stripInlineTags } from "./markdownText.ts";
 import type {
   AnalysisEnvelope,
   WorkerFailure,
@@ -204,7 +204,8 @@ async function handle(request: WorkerRequest): Promise<WorkerResponse> {
         let text: string;
         if (!request.password && !request.pages?.length) {
           try {
-            text = extractText(bytes) ?? "";
+            // extractText() keeps the <sup>/<sub> tags the Markdown has.
+            text = stripInlineTags(extractText(bytes) ?? "");
           } catch (err) {
             // A trapped instance must not be used again; let the outer catch report it.
             if (err instanceof WebAssembly.RuntimeError) throw err;
