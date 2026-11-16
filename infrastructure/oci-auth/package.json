@@ -10,7 +10,7 @@
     "test": "npm run build && vitest run"
   },
   "lint-staged": {
-    "**/*.{js,ts,json}": "npx biome check --write"
+    "**/*.{js,ts,json}": "npx biome check --write --no-errors-on-unmatched"
   },
   "dependencies": {
     "@pulumi/oci": "^5.7.0",
