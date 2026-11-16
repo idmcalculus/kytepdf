@@ -1,7 +1,13 @@
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
+import { runtimeAssetVersion } from "./scripts/runtimeAssetVersion.ts";
 
 export default defineConfig({
+  define: {
+    // See scripts/runtimeAssetVersion.ts: ties the service worker's cache name
+    // to the WASM/OCR files, so upgrades never serve stale binaries.
+    __KYTE_ASSET_VERSION__: JSON.stringify(runtimeAssetVersion(resolve(__dirname, "public"))),
+  },
   css: {
     preprocessorOptions: {
       scss: {

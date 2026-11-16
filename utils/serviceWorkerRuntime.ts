@@ -1,6 +1,22 @@
-export const CACHE_NAME = "kytepdf-static-v2";
+/**
+ * Set at build time from a hash of the unhashed runtime files (WASM engines,
+ * OCR, the pdf.js worker), so sw.js changes whenever they do. Browsers then
+ * install the new worker and its activate step deletes the old cache, instead
+ * of serving last release's binary to this release's glue code. Tests and
+ * other unbundled runs see "dev".
+ */
+declare const __KYTE_ASSET_VERSION__: string | undefined;
+const ASSET_VERSION = typeof __KYTE_ASSET_VERSION__ === "string" ? __KYTE_ASSET_VERSION__ : "dev";
 
+export const CACHE_NAME = `kytepdf-static-v6-${ASSET_VERSION}`;
+
+/**
+ * Lightweight shell assets only. Heavy WASM/OCR binaries (~21 MiB) are
+ * lazy-cached on first use via shouldCacheAsset(), not installed eagerly.
+ */
 export const STATIC_ASSETS = [
+  "/",
+  "/index.html",
   "/manifest.json",
   "/logo.svg",
   "/logo-icon.svg",
@@ -10,17 +26,9 @@ export const STATIC_ASSETS = [
 ];
 
 type CacheStorageLike = Pick<CacheStorage, "delete" | "keys" | "open">;
-type WindowClientLike = {
-  navigate?: (url: string) => Promise<unknown>;
-  url: string;
-};
 
 type ClientsLike = {
   claim: () => Promise<void>;
-  matchAll: (options: {
-    includeUncontrolled: boolean;
-    type: "window";
-  }) => Promise<WindowClientLike[]>;
 };
 
 type ExtendableEventLike = {
@@ -59,8 +67,24 @@ export function isVersionedKyteCache(key: string, cacheName = CACHE_NAME) {
 }
 
 export function shouldCacheAsset(pathname: string, destination: RequestDestination) {
+  // Lazy-cache WebAssembly modules and OCR language packs so document analysis
+  // works offline after the first use. These are fetched with an empty
+  // destination, so they are matched by extension here rather than by the
+  // destination allowlist below.
+  const lower = pathname.toLowerCase();
+  if (
+    lower.endsWith(".wasm") ||
+    lower.endsWith(".traineddata") ||
+    lower.endsWith(".traineddata.gz") ||
+    lower.includes("/tesseract/")
+  ) {
+    return true;
+  }
+  // Engine scripts started with `new Worker()` arrive as "worker"; without
+  // them the cached WASM is useless offline.
   return (
-    STATIC_ASSETS.includes(pathname) || ["script", "style", "image", "font"].includes(destination)
+    STATIC_ASSETS.includes(pathname) ||
+    ["script", "style", "image", "font", "worker", "sharedworker"].includes(destination)
   );
 }
 
@@ -80,7 +104,16 @@ export async function installStaticCache({
   staticAssets = STATIC_ASSETS,
 }: RuntimeOptions & { serviceWorker: Pick<ServiceWorkerLike, "skipWaiting"> }) {
   const cache = await cacheStorage.open(cacheName);
-  await cache.addAll(staticAssets);
+  // Best-effort: missing optional assets (e.g. icons) must not fail install.
+  await Promise.all(
+    staticAssets.map(async (asset) => {
+      try {
+        await cache.add(asset);
+      } catch {
+        /* ignore individual asset failures */
+      }
+    }),
+  );
   await serviceWorker.skipWaiting();
 }
 
@@ -90,18 +123,22 @@ export async function activateStaticCache({
   clients,
 }: RuntimeOptions & { clients: ClientsLike }) {
   const keys = await cacheStorage.keys();
-  const hasKyteCacheToReplace = keys.some((key) => isVersionedKyteCache(key, cacheName));
-  await Promise.all(keys.filter((key) => key !== cacheName).map((key) => cacheStorage.delete(key)));
+  const staleKyteCaches = keys.filter((key) => isVersionedKyteCache(key, cacheName));
+  // Only remove older versioned Kyte caches — other same-origin caches
+  // (e.g. unrelated to this service worker) must be left alone.
+  await Promise.all(staleKyteCaches.map((key) => cacheStorage.delete(key)));
+  // Open tabs are not reloaded from here: that would throw away unsaved work.
+  // The page asks the user on "controllerchange" (see appBootstrap.ts).
   await clients.claim();
+}
 
-  if (!hasKyteCacheToReplace) return;
-
-  const browserClients = await clients.matchAll({ includeUncontrolled: true, type: "window" });
-  await Promise.all(
-    browserClients.map((client) =>
-      typeof client.navigate === "function" ? client.navigate(client.url) : undefined,
-    ),
-  );
+/** Caching is best effort: a failed write (e.g. storage quota) must never cost the page a good response. */
+async function putQuietly(cache: Cache, key: RequestInfo, response: Response) {
+  try {
+    await cache.put(key, response);
+  } catch {
+    /* keep serving from the network */
+  }
 }
 
 export async function resolveCachedResponse({
@@ -117,9 +154,49 @@ export async function resolveCachedResponse({
   const response = await fetcher(request);
   const url = new URL(request.url);
   if (response?.ok && shouldCacheAsset(url.pathname, request.destination)) {
-    cache.put(request, response.clone());
+    // Await the write so the browser cannot terminate the worker before the
+    // clone is persisted — an un-awaited cache.put() races the fetch event's
+    // lifetime.
+    await putQuietly(cache, request, response.clone());
   }
   return response;
+}
+
+/** Network-first navigation with offline shell fallback. */
+export async function resolveNavigationResponse({
+  cacheName = CACHE_NAME,
+  cacheStorage = caches,
+  fetcher = fetch,
+  request,
+}: RuntimeOptions & { request: Request }) {
+  const cache = await cacheStorage.open(cacheName);
+  let response: Response | undefined;
+  try {
+    response = await fetcher(request);
+  } catch {
+    /* offline or network error — fall through to cache */
+  }
+
+  if (response?.ok) {
+    // Keep a fresh SPA shell for offline reloads, but only from an HTML page:
+    // opening /manifest.json in a tab must not become the offline app. Await
+    // the writes so the worker cannot be terminated before they're persisted.
+    const contentType = response.headers.get("content-type") ?? "";
+    if (contentType.toLowerCase().includes("text/html")) {
+      await Promise.all([
+        putQuietly(cache, "/index.html", response.clone()),
+        putQuietly(cache, "/", response.clone()),
+      ]);
+    }
+    return response;
+  }
+
+  return (
+    (await cache.match(request)) ||
+    (await cache.match("/index.html")) ||
+    (await cache.match("/")) ||
+    new Response("Offline", { status: 503, statusText: "Service Unavailable" })
+  );
 }
 
 export function installServiceWorker(
@@ -162,7 +239,14 @@ export function installServiceWorker(
     if (!shouldHandleFetch(event.request, serviceWorker.location.origin)) return;
 
     if (isNavigationRequest(event.request)) {
-      event.respondWith(fetcher(event.request));
+      event.respondWith(
+        resolveNavigationResponse({
+          cacheName,
+          cacheStorage,
+          fetcher,
+          request: event.request,
+        }),
+      );
       return;
     }
 
