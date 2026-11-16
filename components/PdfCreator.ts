@@ -1,12 +1,16 @@
+import { UserFacingError } from "../utils/errorMapper.ts";
 import { logger } from "../utils/logger.ts";
 import {
+  type CreatorInvoiceItem,
   type CreatorParagraph,
   type CreatorSection,
   calculateInvoiceTotal,
   calculatePayslipTotals,
   createDefaultCreatorDraft,
   createPdfFromDraft,
+  detectDataUrlImageFormat,
   getInvoiceTotalLabel,
+  getPdfOutputName,
   getTemplateLabel,
   INVOICE_DETAILS_ALIGNMENT_OPTIONS,
   INVOICE_FOOTER_LOGO_OPTIONS,
@@ -36,21 +40,39 @@ import {
   computePreviewMetaText,
   computeSummaryText,
   type DraftState,
+  describeSourcesProgress,
   FLOATING_PREVIEW_HEIGHT,
   FLOATING_PREVIEW_TOP,
   FLOATING_PREVIEW_WIDTH,
   formatCurrencyAmount,
+  getCreatorLabel,
   getDefaultFloatingPreviewPosition,
   getDraftStatusText,
   moveCollectionItem,
   normalizeDraft,
   removeCollectionItem,
+  SOURCES_MODE_LABEL,
 } from "../utils/pdfCreatorWorkflow.ts";
+import { buildPdfFromSources, type SourcesProgress } from "../utils/pdfFromSources.ts";
 import { PdfPreviewController } from "../utils/pdfPreview.ts";
 import { persistence } from "../utils/persistence.ts";
 import { BaseComponent } from "./BaseComponent.ts";
+import { CreatorSourcesPanel, type SourcesChangeDetail } from "./CreatorSourcesPanel.ts";
 
 type PreviewMode = "floating" | "docked";
+
+/** Keeps the sources panel's text and files across this component's re-renders. */
+const SOURCES_STORE_KEY = "pdf-creator";
+const SOURCES_DESCRIPTION =
+  "Type or paste text, or add files: images, PDFs, Word, Excel, PowerPoint, CSV and more.";
+const SOURCES_EMPTY_MESSAGE = "Type some text or add a file to see a preview.";
+
+interface BuiltDocument {
+  bytes: Uint8Array;
+  pageCount: number;
+  outputName: string;
+  warnings: string[];
+}
 
 const TEMPLATE_DESCRIPTIONS: Record<PdfCreatorTemplate, string> = {
   report: "Polished reports, proposals, and briefs with structured sections.",
@@ -84,13 +106,18 @@ export class PdfCreator extends BaseComponent {
   render() {
     const draft = this.draft;
     const isPreviewFloating = this.isFloatingPreviewActive();
+    const usesSources = draft.mode === "sources";
 
+    // Custom elements are inline by default, but this one holds the whole
+    // tool's block layout. Inline, it confuses hit testing (Playwright reports
+    // it as covering the Download button).
+    this.style.display = "block";
     this.innerHTML = `
       <div class="tool-view">
         ${this.getBackButton()}
 
         <h1>Create PDF</h1>
-        <p class="subtitle">Compose polished PDFs from structured templates, brand them, and export them locally.</p>
+        <p class="subtitle">Turn your own text and files into a PDF, or start from a template. Everything is built in your browser.</p>
 
         <div class="creator-header-stack">
           <div class="creator-status-bar">
@@ -118,15 +145,23 @@ export class PdfCreator extends BaseComponent {
             <div class="card creator-card">
               <div class="creator-card-header">
                 <div>
-                  <h3>Template</h3>
-                  <p>Pick the document shape first. You can switch at any time.</p>
+                  <h3>Start From</h3>
+                  <p>Use your own text and files, or pick a template. You can switch at any time.</p>
                 </div>
               </div>
               <div class="creator-template-grid">
+                <button
+                  class="creator-template-option ${usesSources ? "active" : ""}"
+                  data-mode="sources"
+                  type="button"
+                >
+                  <span class="creator-template-title">${SOURCES_MODE_LABEL}</span>
+                  <span class="creator-template-desc">${SOURCES_DESCRIPTION}</span>
+                </button>
                 ${PDF_CREATOR_TEMPLATES.map(
                   (template) => `
                   <button
-                    class="creator-template-option ${draft.template === template ? "active" : ""}"
+                    class="creator-template-option ${!usesSources && draft.template === template ? "active" : ""}"
                     data-template="${template}"
                     type="button"
                   >
@@ -142,7 +177,7 @@ export class PdfCreator extends BaseComponent {
               <div class="creator-card-header">
                 <div>
                   <h3>Document Settings</h3>
-                  <p>Control output name, page size, orientation, and overall style.</p>
+                  <p>${usesSources ? "Control output name, page size and orientation." : "Control output name, page size, orientation, and overall style."}</p>
                 </div>
               </div>
 
@@ -169,22 +204,91 @@ export class PdfCreator extends BaseComponent {
                 </div>
               </div>
 
-              <div class="creator-settings-grid">
-                <div class="control-group">
-                  <label for="accentColorInput">Accent Color</label>
-                  <input type="color" id="accentColorInput" value="${this.sanitize(draft.accentColor)}" />
-                </div>
-
-                <div class="control-group">
-                  <label>&nbsp;</label>
-                  <label class="creator-inline-check">
-                    <input type="checkbox" id="pageNumbersToggle" ${draft.includePageNumbers ? "checked" : ""} />
-                    <span>Include page numbers</span>
-                  </label>
-                </div>
-              </div>
+              ${usesSources ? "" : this.renderStyleSettings()}
             </div>
 
+            ${usesSources ? "" : this.renderBrandingCard()}
+
+            <div class="card creator-card">
+              <div class="creator-card-header">
+                <div>
+                  <h3>${usesSources ? SOURCES_MODE_LABEL : `${getTemplateLabel(draft.template)} Content`}</h3>
+                  <p>${usesSources ? SOURCES_DESCRIPTION : TEMPLATE_DESCRIPTIONS[draft.template]}</p>
+                </div>
+              </div>
+              ${usesSources ? `<creator-sources-panel store-key="${SOURCES_STORE_KEY}"></creator-sources-panel>` : this.renderTemplateEditor()}
+            </div>
+
+            <div class="creator-action-row">
+              <span id="creatorSummary">${computeSummaryText(this.draft, this.previewPageCount)}</span>
+              <button id="createPdfBtn" class="btn btn-primary" ${this.isCreating ? "disabled" : ""}>
+                ${this.isCreating ? "Creating..." : "Create PDF"}
+              </button>
+            </div>
+
+            ${this.renderResultArea()}
+          </div>
+
+          ${
+            isPreviewFloating
+              ? ""
+              : `
+            <div class="creator-preview-column">
+              ${this.renderPreviewCard(false)}
+            </div>
+          `
+          }
+        </div>
+
+        <input type="file" id="logoInput" class="hidden" accept="image/png,image/jpeg" />
+        <input type="file" id="watermarkImageInput" class="hidden" accept="image/png,image/jpeg" />
+
+      </div>
+    `;
+  }
+
+  /**
+   * Progress and the Download button sit in the editor column, under Create.
+   * That column keeps clear of the floating preview, so the preview never
+   * covers them (a full-width row below the layout would be).
+   */
+  private renderResultArea() {
+    return `
+      ${this.getProgressSection("Preparing document...")}
+
+      <div id="successMessage" class="success-message hidden" style="margin-top: 2rem;">
+        <p id="successTitle" style="font-size: 1.1rem; margin-bottom: 0.5rem;">PDF Created</p>
+        <div id="successDetails" style="font-size: 0.95rem; color: var(--text-muted); margin-bottom: 1rem; line-height: 1.6;">
+          Your new document is ready to download.
+        </div>
+        <button id="downloadLink" class="btn btn-primary">Download PDF</button>
+      </div>
+    `;
+  }
+
+  private renderStyleSettings() {
+    const draft = this.draft;
+    return `
+      <div class="creator-settings-grid">
+        <div class="control-group">
+          <label for="accentColorInput">Accent Color</label>
+          <input type="color" id="accentColorInput" value="${this.sanitize(draft.accentColor)}" />
+        </div>
+
+        <div class="control-group">
+          <label>&nbsp;</label>
+          <label class="creator-inline-check">
+            <input type="checkbox" id="pageNumbersToggle" ${draft.includePageNumbers ? "checked" : ""} />
+            <span>Include page numbers</span>
+          </label>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderBrandingCard() {
+    const draft = this.draft;
+    return `
             <div class="card creator-card">
               <div class="creator-card-header">
                 <div>
@@ -211,49 +315,6 @@ export class PdfCreator extends BaseComponent {
                 }
               </p>
             </div>
-
-            <div class="card creator-card">
-              <div class="creator-card-header">
-                <div>
-                  <h3>${getTemplateLabel(draft.template)} Content</h3>
-                  <p>${TEMPLATE_DESCRIPTIONS[draft.template]}</p>
-                </div>
-              </div>
-              ${this.renderTemplateEditor()}
-            </div>
-
-            <div class="creator-action-row">
-              <span id="creatorSummary">${computeSummaryText(this.draft, this.previewPageCount)}</span>
-              <button id="createPdfBtn" class="btn btn-primary" ${this.isCreating ? "disabled" : ""}>
-                ${this.isCreating ? "Creating..." : "Create PDF"}
-              </button>
-            </div>
-          </div>
-
-          ${
-            isPreviewFloating
-              ? ""
-              : `
-            <div class="creator-preview-column">
-              ${this.renderPreviewCard(false)}
-            </div>
-          `
-          }
-        </div>
-
-        <input type="file" id="logoInput" class="hidden" accept="image/png,image/jpeg" />
-        <input type="file" id="watermarkImageInput" class="hidden" accept="image/png,image/jpeg" />
-
-        ${this.getProgressSection("Preparing document...")}
-
-        <div id="successMessage" class="success-message hidden" style="margin-top: 2rem;">
-          <p id="successTitle" style="font-size: 1.1rem; margin-bottom: 0.5rem;">PDF Created</p>
-          <div id="successDetails" style="font-size: 0.95rem; color: var(--text-muted); margin-bottom: 1rem; line-height: 1.6;">
-            Your new document is ready to download.
-          </div>
-          <button id="downloadLink" class="btn btn-primary">Download PDF</button>
-        </div>
-      </div>
     `;
   }
 
@@ -267,8 +328,17 @@ export class PdfCreator extends BaseComponent {
     this.querySelectorAll<HTMLElement>("[data-template]").forEach((button) => {
       button.onclick = () => {
         const template = button.dataset.template as PdfCreatorTemplate;
-        if (template === this.draft.template) return;
+        if (this.draft.mode === "template" && template === this.draft.template) return;
+        this.draft.mode = "template";
         this.draft.template = template;
+        this.refreshUi();
+        this.handleDraftMutation();
+      };
+    });
+    this.querySelectorAll<HTMLElement>('[data-mode="sources"]').forEach((button) => {
+      button.onclick = () => {
+        if (this.draft.mode === "sources") return;
+        this.draft.mode = "sources";
         this.refreshUi();
         this.handleDraftMutation();
       };
@@ -290,7 +360,13 @@ export class PdfCreator extends BaseComponent {
       this.draft.includePageNumbers = checked;
     });
 
-    this.bindTemplateEditor();
+    // The panel is rendered in place of a template editor in "Your own content" mode.
+    const sourcesPanel = this.getSourcesPanel();
+    if (sourcesPanel) {
+      this.bindSourcesPanel(sourcesPanel);
+    } else {
+      this.bindTemplateEditor();
+    }
 
     const uploadLogoBtn = this.querySelector("#uploadLogoBtn") as HTMLButtonElement | null;
     const clearLogoBtn = this.querySelector("#clearLogoBtn") as HTMLButtonElement | null;
@@ -319,7 +395,9 @@ export class PdfCreator extends BaseComponent {
       }
 
       try {
-        this.draft.logoDataUrl = await this.fileToDataUrl(file);
+        const dataUrl = await this.readPngOrJpeg(file);
+        if (!dataUrl) return;
+        this.draft.logoDataUrl = dataUrl;
         this.draft.logoFileName = file.name;
         this.refreshUi();
         this.handleDraftMutation();
@@ -337,6 +415,7 @@ export class PdfCreator extends BaseComponent {
     createPdfBtn?.addEventListener("click", () => {
       void this.startCreation();
     });
+    this.updateCreateButton();
 
     if (!this.hasInitialized) {
       this.hasInitialized = true;
@@ -351,8 +430,10 @@ export class PdfCreator extends BaseComponent {
       this.previewTimer = null;
     }
     if (this.saveTimer !== null) {
+      // Leaving the tool must not drop the last few edits.
       window.clearTimeout(this.saveTimer);
       this.saveTimer = null;
+      void this.saveDraft();
     }
     this.activeDragCleanup?.();
     this.activeDragCleanup = null;
@@ -454,18 +535,18 @@ export class PdfCreator extends BaseComponent {
             <div class="creator-item-toolbar">
               <span>Section ${index + 1}</span>
               <div class="creator-item-actions">
-                <button type="button" class="action-btn report-move-up" data-id="${section.id}" ${index === 0 ? "disabled" : ""}>↑</button>
-                <button type="button" class="action-btn report-move-down" data-id="${section.id}" ${index === this.draft.report.sections.length - 1 ? "disabled" : ""}>↓</button>
-                <button type="button" class="action-btn report-remove" data-id="${section.id}" ${this.draft.report.sections.length === 1 ? "disabled" : ""}>×</button>
+                <button type="button" class="action-btn report-move-up" data-id="${this.sanitize(section.id)}" aria-label="Move section ${index + 1} up" ${index === 0 ? "disabled" : ""}>↑</button>
+                <button type="button" class="action-btn report-move-down" data-id="${this.sanitize(section.id)}" aria-label="Move section ${index + 1} down" ${index === this.draft.report.sections.length - 1 ? "disabled" : ""}>↓</button>
+                <button type="button" class="action-btn report-remove" data-id="${this.sanitize(section.id)}" aria-label="Remove section ${index + 1}" ${this.draft.report.sections.length === 1 ? "disabled" : ""}>×</button>
               </div>
             </div>
             <div class="control-group">
-              <label>Heading</label>
-              <input type="text" class="report-section-heading" data-id="${section.id}" value="${this.sanitize(section.heading)}" />
+              <label for="report-section-heading-${this.sanitize(section.id)}">Heading</label>
+              <input type="text" id="report-section-heading-${this.sanitize(section.id)}" class="report-section-heading" data-id="${this.sanitize(section.id)}" value="${this.sanitize(section.heading)}" />
             </div>
             <div class="control-group">
-              <label>Body</label>
-              <textarea class="report-section-body" data-id="${section.id}" rows="5">${this.sanitize(section.body)}</textarea>
+              <label for="report-section-body-${this.sanitize(section.id)}">Body</label>
+              <textarea id="report-section-body-${this.sanitize(section.id)}" class="report-section-body" data-id="${this.sanitize(section.id)}" rows="5">${this.sanitize(section.body)}</textarea>
             </div>
           </div>
         `,
@@ -523,14 +604,14 @@ export class PdfCreator extends BaseComponent {
             <div class="creator-item-toolbar">
               <span>Paragraph ${index + 1}</span>
               <div class="creator-item-actions">
-                <button type="button" class="action-btn letter-move-up" data-id="${paragraph.id}" ${index === 0 ? "disabled" : ""}>↑</button>
-                <button type="button" class="action-btn letter-move-down" data-id="${paragraph.id}" ${index === this.draft.letter.paragraphs.length - 1 ? "disabled" : ""}>↓</button>
-                <button type="button" class="action-btn letter-remove" data-id="${paragraph.id}" ${this.draft.letter.paragraphs.length === 1 ? "disabled" : ""}>×</button>
+                <button type="button" class="action-btn letter-move-up" data-id="${this.sanitize(paragraph.id)}" aria-label="Move paragraph ${index + 1} up" ${index === 0 ? "disabled" : ""}>↑</button>
+                <button type="button" class="action-btn letter-move-down" data-id="${this.sanitize(paragraph.id)}" aria-label="Move paragraph ${index + 1} down" ${index === this.draft.letter.paragraphs.length - 1 ? "disabled" : ""}>↓</button>
+                <button type="button" class="action-btn letter-remove" data-id="${this.sanitize(paragraph.id)}" aria-label="Remove paragraph ${index + 1}" ${this.draft.letter.paragraphs.length === 1 ? "disabled" : ""}>×</button>
               </div>
             </div>
             <div class="control-group">
-              <label>Paragraph text</label>
-              <textarea class="letter-paragraph-text" data-id="${paragraph.id}" rows="4">${this.sanitize(paragraph.text)}</textarea>
+              <label for="letter-paragraph-text-${this.sanitize(paragraph.id)}">Paragraph text</label>
+              <textarea id="letter-paragraph-text-${this.sanitize(paragraph.id)}" class="letter-paragraph-text" data-id="${this.sanitize(paragraph.id)}" rows="4">${this.sanitize(paragraph.text)}</textarea>
             </div>
           </div>
         `,
@@ -701,33 +782,13 @@ export class PdfCreator extends BaseComponent {
       </div>
       <div class="creator-repeatable-list">
         ${this.draft.invoice.lineItems
-          .map(
-            (item, index) => `
-          <div class="creator-item-card">
-            <div class="creator-item-toolbar">
-              <span>Item ${index + 1}</span>
-              <div class="creator-item-actions">
-                <button type="button" class="action-btn invoice-move-up" data-id="${item.id}" ${index === 0 ? "disabled" : ""}>↑</button>
-                <button type="button" class="action-btn invoice-move-down" data-id="${item.id}" ${index === this.draft.invoice.lineItems.length - 1 ? "disabled" : ""}>↓</button>
-                <button type="button" class="action-btn invoice-remove" data-id="${item.id}" ${this.draft.invoice.lineItems.length === 1 ? "disabled" : ""}>×</button>
-              </div>
-            </div>
-            <div class="control-group">
-              <label>Description</label>
-              <textarea class="invoice-item-description" data-id="${item.id}" rows="3">${this.sanitize(item.description)}</textarea>
-            </div>
-            <div class="creator-settings-grid">
-              <div class="control-group">
-                <label>Quantity</label>
-                <input type="number" min="0" step="1" class="invoice-item-quantity" data-id="${item.id}" value="${item.quantity}" />
-              </div>
-              <div class="control-group">
-                <label>Unit Price</label>
-                <input type="number" min="0" step="0.01" class="invoice-item-rate" data-id="${item.id}" value="${item.unitPrice}" />
-              </div>
-            </div>
-          </div>
-        `,
+          .map((item, index, items) =>
+            this.renderPricedRow(item, index, items.length, {
+              noun: "item",
+              buttons: "invoice",
+              fields: "invoice-item",
+              rateLabel: "Unit Price",
+            }),
           )
           .join("")}
       </div>
@@ -752,6 +813,47 @@ export class PdfCreator extends BaseComponent {
         />
       </div>
     `;
+  }
+
+  /**
+   * One priced row (invoice item, earning or deduction). Each field has a
+   * linked label and each icon button says what it does to which row.
+   */
+  private renderPricedRow(
+    item: CreatorInvoiceItem,
+    index: number,
+    count: number,
+    names: { noun: string; buttons: string; fields: string; rateLabel: string },
+  ) {
+    const id = this.sanitize(item.id);
+    const fieldId = (part: string) => `${names.fields}-${part}-${id}`;
+    const position = `${names.noun} ${index + 1}`;
+    return `
+          <div class="creator-item-card">
+            <div class="creator-item-toolbar">
+              <span>${position.charAt(0).toUpperCase()}${position.slice(1)}</span>
+              <div class="creator-item-actions">
+                <button type="button" class="action-btn ${names.buttons}-move-up" data-id="${id}" aria-label="Move ${position} up" ${index === 0 ? "disabled" : ""}>↑</button>
+                <button type="button" class="action-btn ${names.buttons}-move-down" data-id="${id}" aria-label="Move ${position} down" ${index === count - 1 ? "disabled" : ""}>↓</button>
+                <button type="button" class="action-btn ${names.buttons}-remove" data-id="${id}" aria-label="Remove ${position}" ${count === 1 ? "disabled" : ""}>×</button>
+              </div>
+            </div>
+            <div class="control-group">
+              <label for="${fieldId("description")}">Description</label>
+              <textarea id="${fieldId("description")}" class="${names.fields}-description" data-id="${id}" rows="3">${this.sanitize(item.description)}</textarea>
+            </div>
+            <div class="creator-settings-grid">
+              <div class="control-group">
+                <label for="${fieldId("quantity")}">Quantity</label>
+                <input type="number" min="0" step="1" id="${fieldId("quantity")}" class="${names.fields}-quantity" data-id="${id}" value="${item.quantity}" />
+              </div>
+              <div class="control-group">
+                <label for="${fieldId("rate")}">${names.rateLabel}</label>
+                <input type="number" min="0" step="0.01" id="${fieldId("rate")}" class="${names.fields}-rate" data-id="${id}" value="${item.unitPrice}" />
+              </div>
+            </div>
+          </div>
+        `;
   }
 
   private renderPayslipEditor() {
@@ -973,33 +1075,13 @@ export class PdfCreator extends BaseComponent {
       </div>
       <div class="creator-repeatable-list">
         ${payslip.lineItems
-          .map(
-            (item, index) => `
-          <div class="creator-item-card">
-            <div class="creator-item-toolbar">
-              <span>Earning ${index + 1}</span>
-              <div class="creator-item-actions">
-                <button type="button" class="action-btn payslip-move-up" data-id="${item.id}" ${index === 0 ? "disabled" : ""}>↑</button>
-                <button type="button" class="action-btn payslip-move-down" data-id="${item.id}" ${index === payslip.lineItems.length - 1 ? "disabled" : ""}>↓</button>
-                <button type="button" class="action-btn payslip-remove" data-id="${item.id}" ${payslip.lineItems.length === 1 ? "disabled" : ""}>×</button>
-              </div>
-            </div>
-            <div class="control-group">
-              <label>Description</label>
-              <textarea class="payslip-item-description" data-id="${item.id}" rows="3">${this.sanitize(item.description)}</textarea>
-            </div>
-            <div class="creator-settings-grid">
-              <div class="control-group">
-                <label>Quantity</label>
-                <input type="number" min="0" step="1" class="payslip-item-quantity" data-id="${item.id}" value="${item.quantity}" />
-              </div>
-              <div class="control-group">
-                <label>Rate</label>
-                <input type="number" min="0" step="0.01" class="payslip-item-rate" data-id="${item.id}" value="${item.unitPrice}" />
-              </div>
-            </div>
-          </div>
-        `,
+          .map((item, index, items) =>
+            this.renderPricedRow(item, index, items.length, {
+              noun: "earning",
+              buttons: "payslip",
+              fields: "payslip-item",
+              rateLabel: "Rate",
+            }),
           )
           .join("")}
       </div>
@@ -1010,33 +1092,13 @@ export class PdfCreator extends BaseComponent {
       </div>
       <div class="creator-repeatable-list">
         ${payslip.deductions
-          .map(
-            (item, index) => `
-          <div class="creator-item-card">
-            <div class="creator-item-toolbar">
-              <span>Deduction ${index + 1}</span>
-              <div class="creator-item-actions">
-                <button type="button" class="action-btn payslip-deduction-move-up" data-id="${item.id}" ${index === 0 ? "disabled" : ""}>↑</button>
-                <button type="button" class="action-btn payslip-deduction-move-down" data-id="${item.id}" ${index === payslip.deductions.length - 1 ? "disabled" : ""}>↓</button>
-                <button type="button" class="action-btn payslip-deduction-remove" data-id="${item.id}" ${payslip.deductions.length === 1 ? "disabled" : ""}>×</button>
-              </div>
-            </div>
-            <div class="control-group">
-              <label>Description</label>
-              <textarea class="payslip-deduction-description" data-id="${item.id}" rows="3">${this.sanitize(item.description)}</textarea>
-            </div>
-            <div class="creator-settings-grid">
-              <div class="control-group">
-                <label>Quantity</label>
-                <input type="number" min="0" step="1" class="payslip-deduction-quantity" data-id="${item.id}" value="${item.quantity}" />
-              </div>
-              <div class="control-group">
-                <label>Rate</label>
-                <input type="number" min="0" step="0.01" class="payslip-deduction-rate" data-id="${item.id}" value="${item.unitPrice}" />
-              </div>
-            </div>
-          </div>
-        `,
+          .map((item, index, items) =>
+            this.renderPricedRow(item, index, items.length, {
+              noun: "deduction",
+              buttons: "payslip-deduction",
+              fields: "payslip-deduction",
+              rateLabel: "Rate",
+            }),
           )
           .join("")}
       </div>
@@ -1143,43 +1205,43 @@ export class PdfCreator extends BaseComponent {
             <div class="creator-item-toolbar">
               <span>Role ${index + 1}</span>
               <div class="creator-item-actions">
-                <button type="button" class="action-btn cv-experience-move-up" data-id="${entry.id}" ${index === 0 ? "disabled" : ""}>↑</button>
-                <button type="button" class="action-btn cv-experience-move-down" data-id="${entry.id}" ${index === cv.experiences.length - 1 ? "disabled" : ""}>↓</button>
-                <button type="button" class="action-btn cv-experience-remove" data-id="${entry.id}" ${cv.experiences.length === 1 ? "disabled" : ""}>×</button>
+                <button type="button" class="action-btn cv-experience-move-up" data-id="${this.sanitize(entry.id)}" aria-label="Move role ${index + 1} up" ${index === 0 ? "disabled" : ""}>↑</button>
+                <button type="button" class="action-btn cv-experience-move-down" data-id="${this.sanitize(entry.id)}" aria-label="Move role ${index + 1} down" ${index === cv.experiences.length - 1 ? "disabled" : ""}>↓</button>
+                <button type="button" class="action-btn cv-experience-remove" data-id="${this.sanitize(entry.id)}" aria-label="Remove role ${index + 1}" ${cv.experiences.length === 1 ? "disabled" : ""}>×</button>
               </div>
             </div>
             <div class="creator-settings-grid">
               <div class="control-group">
-                <label>Role Title</label>
-                <input type="text" class="cv-experience-role" data-id="${entry.id}" value="${this.sanitize(entry.role)}" />
+                <label for="cv-experience-role-${this.sanitize(entry.id)}">Role Title</label>
+                <input type="text" id="cv-experience-role-${this.sanitize(entry.id)}" class="cv-experience-role" data-id="${this.sanitize(entry.id)}" value="${this.sanitize(entry.role)}" />
               </div>
               <div class="control-group">
-                <label>Organization</label>
-                <input type="text" class="cv-experience-organization" data-id="${entry.id}" value="${this.sanitize(entry.organization)}" />
-              </div>
-            </div>
-            <div class="creator-settings-grid">
-              <div class="control-group">
-                <label>Location</label>
-                <input type="text" class="cv-experience-location" data-id="${entry.id}" value="${this.sanitize(entry.location)}" />
-              </div>
-              <div class="control-group">
-                <label>Start Date</label>
-                <input type="text" class="cv-experience-start" data-id="${entry.id}" value="${this.sanitize(entry.startDate)}" placeholder="2022" />
+                <label for="cv-experience-organization-${this.sanitize(entry.id)}">Organization</label>
+                <input type="text" id="cv-experience-organization-${this.sanitize(entry.id)}" class="cv-experience-organization" data-id="${this.sanitize(entry.id)}" value="${this.sanitize(entry.organization)}" />
               </div>
             </div>
             <div class="creator-settings-grid">
               <div class="control-group">
-                <label>End Date</label>
-                <input type="text" class="cv-experience-end" data-id="${entry.id}" value="${this.sanitize(entry.endDate)}" placeholder="Present" />
+                <label for="cv-experience-location-${this.sanitize(entry.id)}">Location</label>
+                <input type="text" id="cv-experience-location-${this.sanitize(entry.id)}" class="cv-experience-location" data-id="${this.sanitize(entry.id)}" value="${this.sanitize(entry.location)}" />
+              </div>
+              <div class="control-group">
+                <label for="cv-experience-start-${this.sanitize(entry.id)}">Start Date</label>
+                <input type="text" id="cv-experience-start-${this.sanitize(entry.id)}" class="cv-experience-start" data-id="${this.sanitize(entry.id)}" value="${this.sanitize(entry.startDate)}" placeholder="2022" />
+              </div>
+            </div>
+            <div class="creator-settings-grid">
+              <div class="control-group">
+                <label for="cv-experience-end-${this.sanitize(entry.id)}">End Date</label>
+                <input type="text" id="cv-experience-end-${this.sanitize(entry.id)}" class="cv-experience-end" data-id="${this.sanitize(entry.id)}" value="${this.sanitize(entry.endDate)}" placeholder="Present" />
               </div>
               <div class="control-group">
                 <label>&nbsp;</label>
               </div>
             </div>
             <div class="control-group">
-              <label>Achievements</label>
-              <textarea class="cv-experience-achievements" data-id="${entry.id}" rows="4">${this.sanitize(entry.achievements)}</textarea>
+              <label for="cv-experience-achievements-${this.sanitize(entry.id)}">Achievements</label>
+              <textarea id="cv-experience-achievements-${this.sanitize(entry.id)}" class="cv-experience-achievements" data-id="${this.sanitize(entry.id)}" rows="4">${this.sanitize(entry.achievements)}</textarea>
             </div>
           </div>
         `,
@@ -1199,43 +1261,43 @@ export class PdfCreator extends BaseComponent {
             <div class="creator-item-toolbar">
               <span>Education ${index + 1}</span>
               <div class="creator-item-actions">
-                <button type="button" class="action-btn cv-education-move-up" data-id="${entry.id}" ${index === 0 ? "disabled" : ""}>↑</button>
-                <button type="button" class="action-btn cv-education-move-down" data-id="${entry.id}" ${index === cv.education.length - 1 ? "disabled" : ""}>↓</button>
-                <button type="button" class="action-btn cv-education-remove" data-id="${entry.id}" ${cv.education.length === 1 ? "disabled" : ""}>×</button>
+                <button type="button" class="action-btn cv-education-move-up" data-id="${this.sanitize(entry.id)}" aria-label="Move education ${index + 1} up" ${index === 0 ? "disabled" : ""}>↑</button>
+                <button type="button" class="action-btn cv-education-move-down" data-id="${this.sanitize(entry.id)}" aria-label="Move education ${index + 1} down" ${index === cv.education.length - 1 ? "disabled" : ""}>↓</button>
+                <button type="button" class="action-btn cv-education-remove" data-id="${this.sanitize(entry.id)}" aria-label="Remove education ${index + 1}" ${cv.education.length === 1 ? "disabled" : ""}>×</button>
               </div>
             </div>
             <div class="creator-settings-grid">
               <div class="control-group">
-                <label>Qualification</label>
-                <input type="text" class="cv-education-qualification" data-id="${entry.id}" value="${this.sanitize(entry.qualification)}" />
+                <label for="cv-education-qualification-${this.sanitize(entry.id)}">Qualification</label>
+                <input type="text" id="cv-education-qualification-${this.sanitize(entry.id)}" class="cv-education-qualification" data-id="${this.sanitize(entry.id)}" value="${this.sanitize(entry.qualification)}" />
               </div>
               <div class="control-group">
-                <label>Institution</label>
-                <input type="text" class="cv-education-institution" data-id="${entry.id}" value="${this.sanitize(entry.institution)}" />
-              </div>
-            </div>
-            <div class="creator-settings-grid">
-              <div class="control-group">
-                <label>Location</label>
-                <input type="text" class="cv-education-location" data-id="${entry.id}" value="${this.sanitize(entry.location)}" />
-              </div>
-              <div class="control-group">
-                <label>Start Date</label>
-                <input type="text" class="cv-education-start" data-id="${entry.id}" value="${this.sanitize(entry.startDate)}" placeholder="2016" />
+                <label for="cv-education-institution-${this.sanitize(entry.id)}">Institution</label>
+                <input type="text" id="cv-education-institution-${this.sanitize(entry.id)}" class="cv-education-institution" data-id="${this.sanitize(entry.id)}" value="${this.sanitize(entry.institution)}" />
               </div>
             </div>
             <div class="creator-settings-grid">
               <div class="control-group">
-                <label>End Date</label>
-                <input type="text" class="cv-education-end" data-id="${entry.id}" value="${this.sanitize(entry.endDate)}" placeholder="2019" />
+                <label for="cv-education-location-${this.sanitize(entry.id)}">Location</label>
+                <input type="text" id="cv-education-location-${this.sanitize(entry.id)}" class="cv-education-location" data-id="${this.sanitize(entry.id)}" value="${this.sanitize(entry.location)}" />
+              </div>
+              <div class="control-group">
+                <label for="cv-education-start-${this.sanitize(entry.id)}">Start Date</label>
+                <input type="text" id="cv-education-start-${this.sanitize(entry.id)}" class="cv-education-start" data-id="${this.sanitize(entry.id)}" value="${this.sanitize(entry.startDate)}" placeholder="2016" />
+              </div>
+            </div>
+            <div class="creator-settings-grid">
+              <div class="control-group">
+                <label for="cv-education-end-${this.sanitize(entry.id)}">End Date</label>
+                <input type="text" id="cv-education-end-${this.sanitize(entry.id)}" class="cv-education-end" data-id="${this.sanitize(entry.id)}" value="${this.sanitize(entry.endDate)}" placeholder="2019" />
               </div>
               <div class="control-group">
                 <label>&nbsp;</label>
               </div>
             </div>
             <div class="control-group">
-              <label>Details</label>
-              <textarea class="cv-education-details" data-id="${entry.id}" rows="3">${this.sanitize(entry.details)}</textarea>
+              <label for="cv-education-details-${this.sanitize(entry.id)}">Details</label>
+              <textarea id="cv-education-details-${this.sanitize(entry.id)}" class="cv-education-details" data-id="${this.sanitize(entry.id)}" rows="3">${this.sanitize(entry.details)}</textarea>
             </div>
           </div>
         `,
@@ -1260,18 +1322,18 @@ export class PdfCreator extends BaseComponent {
             <div class="creator-item-toolbar">
               <span>Section ${index + 1}</span>
               <div class="creator-item-actions">
-                <button type="button" class="action-btn cv-section-move-up" data-id="${section.id}" ${index === 0 ? "disabled" : ""}>↑</button>
-                <button type="button" class="action-btn cv-section-move-down" data-id="${section.id}" ${index === cv.additionalSections.length - 1 ? "disabled" : ""}>↓</button>
-                <button type="button" class="action-btn cv-section-remove" data-id="${section.id}" ${cv.additionalSections.length === 1 ? "disabled" : ""}>×</button>
+                <button type="button" class="action-btn cv-section-move-up" data-id="${this.sanitize(section.id)}" aria-label="Move section ${index + 1} up" ${index === 0 ? "disabled" : ""}>↑</button>
+                <button type="button" class="action-btn cv-section-move-down" data-id="${this.sanitize(section.id)}" aria-label="Move section ${index + 1} down" ${index === cv.additionalSections.length - 1 ? "disabled" : ""}>↓</button>
+                <button type="button" class="action-btn cv-section-remove" data-id="${this.sanitize(section.id)}" aria-label="Remove section ${index + 1}" ${cv.additionalSections.length === 1 ? "disabled" : ""}>×</button>
               </div>
             </div>
             <div class="control-group">
-              <label>Section Title</label>
-              <input type="text" class="cv-section-title" data-id="${section.id}" value="${this.sanitize(section.title)}" />
+              <label for="cv-section-title-${this.sanitize(section.id)}">Section Title</label>
+              <input type="text" id="cv-section-title-${this.sanitize(section.id)}" class="cv-section-title" data-id="${this.sanitize(section.id)}" value="${this.sanitize(section.title)}" />
             </div>
             <div class="control-group">
-              <label>Content</label>
-              <textarea class="cv-section-body" data-id="${section.id}" rows="4">${this.sanitize(section.body)}</textarea>
+              <label for="cv-section-body-${this.sanitize(section.id)}">Content</label>
+              <textarea id="cv-section-body-${this.sanitize(section.id)}" class="cv-section-body" data-id="${this.sanitize(section.id)}" rows="4">${this.sanitize(section.body)}</textarea>
             </div>
           </div>
         `,
@@ -1279,6 +1341,45 @@ export class PdfCreator extends BaseComponent {
           .join("")}
       </div>
     `;
+  }
+
+  private getSourcesPanel() {
+    return this.querySelector("creator-sources-panel") as CreatorSourcesPanel | null;
+  }
+
+  private isSourcesEmpty() {
+    return this.draft.mode === "sources" && !this.getSourcesPanel()?.hasContent();
+  }
+
+  private bindSourcesPanel(panel: CreatorSourcesPanel) {
+    // Files live in memory only, but the typed text and where it goes are saved
+    // with the draft. After a reload the panel starts empty, so give them back.
+    // The listener is added afterwards, so this does not count as an edit.
+    const saved = this.draft.sources;
+    const current = panel.getText();
+    if (current.text !== saved.text || current.markdown !== saved.markdown) {
+      panel.setText(saved.text, saved.markdown);
+    }
+    if (panel.textPosition !== saved.textPosition) {
+      panel.setTextPosition(saved.textPosition);
+    }
+
+    panel.addEventListener("sources-change", (event) => {
+      const { reason } = (event as CustomEvent<SourcesChangeDetail>).detail;
+      if (reason === "text" || reason === "markdown" || reason === "position") {
+        this.draft.sources = { ...panel.getText(), textPosition: panel.textPosition };
+      }
+      this.updateCreateButton();
+      this.handleDraftMutation();
+    });
+  }
+
+  private updateCreateButton() {
+    const button = this.querySelector<HTMLButtonElement>("#createPdfBtn");
+    const empty = this.isSourcesEmpty();
+    button?.toggleAttribute("disabled", this.isCreating || empty);
+    button?.replaceChildren(this.isCreating ? "Creating..." : "Create PDF");
+    button?.setAttribute("title", empty ? "Type some text or add a file first." : "");
   }
 
   private bindTemplateEditor() {
@@ -1654,7 +1755,9 @@ export class PdfCreator extends BaseComponent {
       }
 
       try {
-        this.draft.payslip.watermark.customImageDataUrl = await this.fileToDataUrl(file);
+        const dataUrl = await this.readPngOrJpeg(file);
+        if (!dataUrl) return;
+        this.draft.payslip.watermark.customImageDataUrl = dataUrl;
         this.draft.payslip.watermark.customImageFileName = file.name;
         this.refreshUi();
         this.handleDraftMutation();
@@ -2024,6 +2127,8 @@ export class PdfCreator extends BaseComponent {
   private async initializeDraft() {
     try {
       const savedDraft = await persistence.get<PdfCreatorDraft>(this.toolKey);
+      // The tool may have been closed while the draft loaded; stop here.
+      if (!this.isConnected) return;
       if (savedDraft) {
         this.draft = normalizeDraft(savedDraft);
         this.draftState = "restored";
@@ -2031,6 +2136,7 @@ export class PdfCreator extends BaseComponent {
       }
     } catch (error) {
       logger.error("Failed to restore create-pdf draft", error);
+      if (!this.isConnected) return;
     }
 
     this.updateDraftStatus();
@@ -2062,6 +2168,11 @@ export class PdfCreator extends BaseComponent {
   }
 
   private queueDraftSave(delay = 250) {
+    if (!this.isConnected) {
+      // Nothing is left on the page to wait for: save now, without a timer.
+      void this.saveDraft();
+      return;
+    }
     if (this.saveTimer !== null) {
       window.clearTimeout(this.saveTimer);
     }
@@ -2085,7 +2196,10 @@ export class PdfCreator extends BaseComponent {
     }
   }
 
-  private queuePreviewRefresh(delay = 300) {
+  /** Text and files can be slow to convert, so typing waits a little longer. */
+  private queuePreviewRefresh(delay = this.draft.mode === "sources" ? 400 : 300) {
+    // A closed tool has no preview to refresh (and in tests, maybe no window).
+    if (!this.isConnected) return;
     if (this.previewTimer !== null) {
       window.clearTimeout(this.previewTimer);
     }
@@ -2102,18 +2216,65 @@ export class PdfCreator extends BaseComponent {
     }, delay);
   }
 
+  /** Builds the PDF for the current mode: a template, or the panel's text and files. */
+  /**
+   * Builds the PDF for a draft snapshot: a template, or the panel's text and
+   * files. Callers pass a copy so edits made while it runs cannot mix in.
+   */
+  private async buildDocument(
+    draft: PdfCreatorDraft,
+    onProgress?: (progress: SourcesProgress) => void,
+  ): Promise<BuiltDocument> {
+    if (draft.mode !== "sources") {
+      return await createPdfFromDraft(draft);
+    }
+    const result = await buildPdfFromSources(
+      // In this mode the panel is always rendered in place of a template editor.
+      (this.getSourcesPanel() as CreatorSourcesPanel).getSources(),
+      {
+        pageSize: draft.pageSize,
+        orientation: draft.orientation,
+        title: draft.fileName,
+      },
+      onProgress,
+    );
+    return {
+      bytes: result.bytes,
+      pageCount: result.pageCount,
+      outputName: getPdfOutputName(draft.fileName),
+      warnings: result.warnings,
+    };
+  }
+
+  private showEmptyPreview() {
+    this.previewPageCount = null;
+    this.lastPreviewBytes = null;
+    this.lastPreviewOutputName = null;
+    const previewState = this.getPreviewRoot().querySelector("#previewState") as HTMLElement | null;
+    if (previewState) {
+      previewState.textContent = SOURCES_EMPTY_MESSAGE;
+      previewState.classList.remove("hidden", "error");
+    }
+    this.updatePreviewMeta("Nothing to preview yet.");
+    this.updateSummary();
+  }
+
   private async refreshPreview() {
     const token = ++this.previewToken;
+    if (this.isSourcesEmpty()) {
+      this.showEmptyPreview();
+      return;
+    }
 
     try {
-      const result = await createPdfFromDraft(this.draft);
-      if (token !== this.previewToken) return;
+      const result = await this.buildDocument(structuredClone(this.draft));
+      if (token !== this.previewToken || !this.isConnected) return;
 
       this.lastPreviewBytes = result.bytes.slice();
       this.lastPreviewOutputName = result.outputName;
       this.previewPageCount = result.pageCount;
-      await this.previewController?.load(result.bytes);
-      if (token !== this.previewToken) return;
+      await this.loadPreview(result.bytes);
+      if (token !== this.previewToken || !this.isConnected) return;
 
       const previewState = this.getPreviewRoot().querySelector(
         "#previewState",
@@ -2123,7 +2284,7 @@ export class PdfCreator extends BaseComponent {
       this.updateSummary();
     } catch (error) {
       logger.error("Preview generation failed", error);
-      if (token !== this.previewToken) return;
+      if (token !== this.previewToken || !this.isConnected) return;
 
       this.previewPageCount = null;
       this.lastPreviewBytes = null;
@@ -2132,8 +2293,11 @@ export class PdfCreator extends BaseComponent {
         "#previewState",
       ) as HTMLElement | null;
       if (previewState) {
+        // Problems with the user's own files are explained as written.
         previewState.textContent =
-          "Preview could not be generated. Adjust the content and try again.";
+          error instanceof UserFacingError
+            ? error.message
+            : "Preview could not be generated. Adjust the content and try again.";
         previewState.classList.remove("hidden");
         previewState.classList.add("error");
       }
@@ -2143,10 +2307,13 @@ export class PdfCreator extends BaseComponent {
   }
 
   private async startCreation() {
-    if (this.isCreating) return;
+    if (this.isCreating || this.isSourcesEmpty()) return;
 
     // The editor can re-render while the PDF is built, so every element below is
-    // looked up when it is used rather than once here.
+    // looked up when it is used rather than once here. The draft is copied for
+    // the same reason: the PDF and its label must match what was clicked.
+    const draft = structuredClone(this.draft);
+    const label = getCreatorLabel(draft);
     this.isCreating = true;
     const createButton = this.querySelector("#createPdfBtn") as HTMLButtonElement | null;
     if (createButton) createButton.disabled = true;
@@ -2154,46 +2321,74 @@ export class PdfCreator extends BaseComponent {
     this.updateProgress(12, "Composing pages...");
 
     try {
-      const result = await createPdfFromDraft(this.draft);
+      const result = await this.buildDocument(draft, (progress) =>
+        this.updateProgress(progress.percent, describeSourcesProgress(progress)),
+      );
       const previewBytes = result.bytes.slice();
       const historyBytes = result.bytes.slice();
       const downloadBytes = result.bytes.slice();
-      this.updateProgress(70, "Finalizing PDF...");
+      if (draft.mode === "template") this.updateProgress(70, "Finalizing PDF...");
+
+      await this.recordJob("Create", result.outputName, historyBytes, {
+        template: label,
+        pageCount: result.pageCount,
+      });
+      // Closed while the PDF was built: it is in history; skip the screen updates.
+      if (!this.isConnected) return;
 
       this.lastPreviewBytes = previewBytes.slice();
       this.lastPreviewOutputName = result.outputName;
       this.previewPageCount = result.pageCount;
-      await this.previewController?.load(previewBytes);
+      await this.loadPreview(previewBytes);
+      if (!this.isConnected) return;
       this.updateProgress(100, "Ready to download");
-
-      await this.recordJob("Create", result.outputName, historyBytes, {
-        template: getTemplateLabel(this.draft.template),
-        pageCount: result.pageCount,
-      });
 
       const successDetails = this.querySelector("#successDetails") as HTMLElement | null;
       if (successDetails) {
-        successDetails.textContent = `${getTemplateLabel(this.draft.template)} created with ${result.pageCount} page${result.pageCount === 1 ? "" : "s"}.`;
+        successDetails.textContent = `${label} created with ${result.pageCount} page${result.pageCount === 1 ? "" : "s"}.`;
+        if (result.warnings.length > 0) {
+          const list = document.createElement("ul");
+          list.className = "creator-warnings";
+          for (const warning of result.warnings) {
+            const item = document.createElement("li");
+            item.textContent = warning;
+            list.append(item);
+          }
+          successDetails.append(list);
+        }
       }
 
+      // Warnings never block the download; they are shown alongside it.
       this.showSuccess(downloadBytes, result.outputName, "", ".pdf");
-      await this.showSuccessDialog(`${getTemplateLabel(this.draft.template)} PDF is ready.`);
+      await this.showSuccessDialog([`${label} PDF is ready.`, ...result.warnings].join(" "));
       this.updatePreviewMeta(computePreviewMetaText(result.pageCount, result.outputName));
       this.updateSummary();
     } catch (error) {
       logger.error("Failed to create PDF", error);
+      if (!this.isConnected) return;
       await this.showErrorDialog(
-        "Failed to create PDF. Please review the document fields and try again.",
+        error instanceof UserFacingError
+          ? error.message
+          : "Failed to create PDF. Please review the document fields and try again.",
       );
     } finally {
       this.isCreating = false;
       // A re-render during creation draws the button as disabled "Creating...".
-      const currentButton = this.querySelector("#createPdfBtn") as HTMLButtonElement | null;
-      if (currentButton) {
-        currentButton.disabled = false;
-        currentButton.textContent = "Create PDF";
-      }
+      this.updateCreateButton();
       this.setProgressVisible(false);
+    }
+  }
+
+  /**
+   * Shows bytes in the preview. A re-render can replace the controller while
+   * it is still opening the PDF; the old one then keeps the document it opened
+   * (and its pdf.js worker), so it is destroyed again here.
+   */
+  private async loadPreview(bytes: Uint8Array) {
+    const controller = this.previewController;
+    await controller?.load(bytes);
+    if (controller && controller !== this.previewController) {
+      await controller.destroy();
     }
   }
 
@@ -2209,6 +2404,8 @@ export class PdfCreator extends BaseComponent {
     if (!confirmed) return;
 
     this.draft = createDefaultCreatorDraft();
+    // Typed text and files are not part of the saved draft, so clear them too.
+    CreatorSourcesPanel.clearStore(SOURCES_STORE_KEY);
     this.previewPageCount = null;
     this.lastPreviewBytes = null;
     this.lastPreviewOutputName = null;
@@ -2245,10 +2442,14 @@ export class PdfCreator extends BaseComponent {
   }
 
   private getDefaultPreviewPosition() {
+    // The stylesheet leaves room beside the editor column, but a little less
+    // than the preview needs at some widths; start right of the column instead.
+    const column = this.querySelector(".creator-sidebar")?.getBoundingClientRect();
     return getDefaultFloatingPreviewPosition(
       window,
       this.getFloatingPreviewAnchorRect()?.right ?? null,
       this.getFloatingPreviewSize(),
+      column?.width ? column.right : null,
     );
   }
 
@@ -2405,7 +2606,8 @@ export class PdfCreator extends BaseComponent {
     }
 
     try {
-      await this.previewController.load(this.lastPreviewBytes.slice());
+      await this.loadPreview(this.lastPreviewBytes.slice());
+      if (!this.isConnected) return;
       const previewState = this.getPreviewRoot().querySelector(
         "#previewState",
       ) as HTMLElement | null;
@@ -2417,6 +2619,19 @@ export class PdfCreator extends BaseComponent {
     } catch (error) {
       logger.error("Failed to restore preview after layout change", error);
     }
+  }
+
+  /**
+   * Reads an uploaded image, checking its bytes: a PNG saved as "logo.jpg" is
+   * labelled image/jpeg and would otherwise break every preview.
+   */
+  private async readPngOrJpeg(file: File) {
+    const dataUrl = await this.fileToDataUrl(file);
+    if (detectDataUrlImageFormat(dataUrl)) return dataUrl;
+    await this.showErrorDialog(
+      `"${file.name}" is not a PNG or JPEG image, whatever its name says. Save it as PNG or JPEG and try again.`,
+    );
+    return null;
   }
 
   private fileToDataUrl(file: File) {

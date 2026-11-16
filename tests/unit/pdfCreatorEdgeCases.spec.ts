@@ -69,6 +69,7 @@ import {
   createDefaultLetterParagraph,
   createDefaultReportSection,
   createPdfFromDraft,
+  detectDataUrlImageFormat,
   getInvoiceStatusLabel,
   getInvoiceTotalLabel,
   getTemplateLabel,
@@ -79,6 +80,10 @@ import {
   normalizeWatermarkStyle,
   type PdfCreatorDraft,
 } from "../../utils/pdfCreator";
+
+// Real PNG and JPEG signatures: the engine reads the format from the bytes.
+const PNG_DATA_URL = "data:image/png;base64,iVBORw0KGgo=";
+const JPEG_DATA_URL = "data:image/jpeg;base64,/9j/4A==";
 
 type TextCall = {
   page: number;
@@ -258,7 +263,7 @@ describe("pdfCreator edge cases", () => {
     it("caps a tall report logo at 48pt and starts the title just after it", async () => {
       pdfMock.doc.embedPng.mockResolvedValueOnce({ width: 60, height: 240 });
       const draft = draftFor("report");
-      draft.logoDataUrl = "data:image/png;base64,AQID";
+      draft.logoDataUrl = PNG_DATA_URL;
 
       await createPdfFromDraft(draft);
 
@@ -271,7 +276,7 @@ describe("pdfCreator edge cases", () => {
     it("keeps a wide letter logo at 72pt and starts the sender block after it", async () => {
       pdfMock.doc.embedJpg.mockResolvedValueOnce({ width: 240, height: 60 });
       const draft = draftFor("letter");
-      draft.logoDataUrl = "data:image/jpeg;base64,AQID";
+      draft.logoDataUrl = JPEG_DATA_URL;
 
       await createPdfFromDraft(draft);
 
@@ -466,7 +471,7 @@ describe("pdfCreator edge cases", () => {
     it("fits a wide logo into the invoice header and footer slots", async () => {
       pdfMock.doc.embedPng.mockResolvedValueOnce({ width: 400, height: 40 });
       const draft = draftFor("invoice");
-      draft.logoDataUrl = "data:image/png;base64,AQID";
+      draft.logoDataUrl = PNG_DATA_URL;
       draft.invoice.footerLogoPosition = "left";
 
       await createPdfFromDraft(draft);
@@ -484,20 +489,41 @@ describe("pdfCreator edge cases", () => {
       draft.payslip.companyReference = "X".repeat(50);
       draft.payslip.copyrightNote = "word ".repeat(80);
 
-      await createPdfFromDraft(draft);
+      const result = await createPdfFromDraft(draft);
 
       const reference = findText(`Ref: ${"X".repeat(50)}`)!;
       expect(reference.size).toBe(8);
       expect(reference.text.length * reference.size * 0.52).toBeLessThanOrEqual(500 * 0.46);
 
+      // Four lines stacked up from the bottom edge; the cut is marked and reported.
       const copyright = textCalls().filter((call) => call.text.startsWith("word"));
-      expect(copyright).toHaveLength(2);
-      expect(copyright.map((line) => line.size)).toEqual([5.5, 5.5]);
-      expect(copyright.map((line) => line.y)).toEqual([16, 8.5]);
+      expect(copyright.map((line) => line.size)).toEqual([5.5, 5.5, 5.5, 5.5]);
+      expect(copyright.map((line) => line.y)).toEqual([31, 23.5, 16, 8.5]);
+      expect(copyright.at(-1)!.text.endsWith("...")).toBe(true);
+      for (const line of copyright) {
+        expect(line.text.length * line.size * 0.52).toBeLessThanOrEqual(500 * 0.46);
+      }
+      expect(reference.y).toBe(31 + 13);
+      expect(reference.y + reference.size).toBeLessThan(MARGIN_BOTTOM);
+      expect(result.warnings).toEqual([
+        "The copyright note is longer than 4 footer lines, so its end was cut. Shorten it to show all of it.",
+      ]);
 
       draft.payslip.companyReference = "R".repeat(100);
       await createPdfFromDraft(draft);
       expect(findText(`Ref: ${"R".repeat(100)}`)?.size).toBe(6.5);
+    });
+
+    it("shows a three-line copyright note in full, without a warning", async () => {
+      const draft = draftFor("payslip");
+      draft.payslip.copyrightNote = "word ".repeat(30);
+
+      const result = await createPdfFromDraft(draft);
+
+      const copyright = textCalls().filter((call) => call.text.startsWith("word"));
+      expect(copyright.map((line) => line.text.split(" ").length)).toEqual([12, 12, 6]);
+      expect(copyright.map((line) => line.y)).toEqual([23.5, 16, 8.5]);
+      expect(result.warnings).toEqual([]);
     });
 
     it("signs in the standard italic font when the handwriting font request fails", async () => {
@@ -527,37 +553,60 @@ describe("pdfCreator edge cases", () => {
       expect(texts()).not.toContain("Habeeb Tijani");
     });
 
-    it("simplifies or drops signature characters the fallback font cannot encode", async () => {
+    it("turns signature characters the fallback font lacks into near matches, and says so", async () => {
       vi.stubGlobal(
         "fetch",
         vi.fn(async () => {
           throw new Error("offline");
         }),
       );
-      const warn = vi.spyOn(logger, "warn");
       const draft = draftFor("invoice");
       draft.invoice.signature = "José Łukasz Dvořák 李";
 
+      const result = await createPdfFromDraft(draft);
+
+      // Ł has a near match, ř loses its accent, and 李 has no WinAnsi form.
+      const signature = findText("José Lukasz Dvorák ?");
+      expect(signature?.font.source).toBe("TimesRomanItalic");
+      expect(result.warnings).toEqual([
+        'Some characters are not in the PDF\'s built-in fonts and were replaced with a similar letter or "?": Ł ř 李.',
+      ]);
+    });
+
+    it("never asks the handwriting font for letters its Latin subset lacks", async () => {
+      const warn = vi.spyOn(logger, "warn");
+      const draft = draftFor("invoice");
+      // Š and Œ are in WinAnsi but not in the handwriting font's Latin subset:
+      // Š can lose its accent, Œ has no near match and is left out.
+      draft.invoice.signature = "Šárka Œuvre";
+
       await createPdfFromDraft(draft);
 
-      // "ř" loses its accent; "Ł" and "李" have no WinAnsi form and are dropped.
-      const signature = findText("José ukasz Dvorák");
-      expect(signature?.font.source).toBe("TimesRomanItalic");
+      expect(findText("Sárka uvre")?.font.source).toBeInstanceOf(Uint8Array);
       expect(warn).toHaveBeenCalledWith(
-        "The fallback signature font cannot show every character in the signature.",
-        { replaced: 1, dropped: 2 },
+        "The signature font cannot show every character in the signature.",
+        { replaced: 1, dropped: 1 },
       );
     });
 
-    it("keeps every signature character when the handwriting font loads", async () => {
-      const warn = vi.spyOn(logger, "warn");
-      const draft = draftFor("invoice");
-      draft.invoice.signature = "José Łukasz Dvořák";
+    it("draws characters outside the built-in fonts' range instead of failing the whole PDF", async () => {
+      const draft = draftFor("payslip");
+      draft.payslip.employeeName = "Łukasz Żółć";
+      draft.payslip.companyName = "Northwind Ltd";
+      draft.payslip.watermark = {
+        ...draft.payslip.watermark,
+        source: "text",
+        text: "Конфиденциально",
+      };
 
-      await createPdfFromDraft(draft);
+      const result = await createPdfFromDraft(draft);
 
-      expect(findText("José Łukasz Dvořák")?.font.source).toBeInstanceOf(Uint8Array);
-      expect(warn).not.toHaveBeenCalled();
+      expect(texts()).toContain("Lukasz Zólc");
+      expect(texts().some((text) => /^\?+$/.test(text))).toBe(true);
+      expect(result.warnings[0]).toMatch(/^Some characters are not in the PDF's built-in fonts/);
+      expect(result.warnings[0]).toContain("Ł");
+      // The document's own metadata keeps the original Unicode text.
+      expect(pdfMock.doc.setAuthor).toHaveBeenCalledWith("Northwind Ltd");
     });
 
     it("keeps the payment link label on the same page as the link", async () => {
@@ -630,7 +679,7 @@ describe("pdfCreator edge cases", () => {
       draft.payslip.watermark = {
         ...draft.payslip.watermark,
         source: "custom-image",
-        customImageDataUrl: "data:image/png;base64,AQID",
+        customImageDataUrl: PNG_DATA_URL,
         size: 90,
       };
 
@@ -644,7 +693,7 @@ describe("pdfCreator edge cases", () => {
 
     it("skips the watermark when the custom image source has no image", async () => {
       const draft = draftFor("payslip");
-      draft.logoDataUrl = "data:image/png;base64,AQID";
+      draft.logoDataUrl = PNG_DATA_URL;
       draft.payslip.watermark = {
         ...draft.payslip.watermark,
         source: "custom-image",
@@ -708,7 +757,7 @@ describe("pdfCreator edge cases", () => {
 
     it("centres a rotated image watermark on the page", async () => {
       const draft = draftFor("payslip");
-      draft.logoDataUrl = "data:image/png;base64,AQID";
+      draft.logoDataUrl = PNG_DATA_URL;
       draft.payslip.watermark = { ...draft.payslip.watermark, rotation: 30 };
 
       await createPdfFromDraft(draft);
@@ -726,7 +775,7 @@ describe("pdfCreator edge cases", () => {
     }) => {
       const centresAt = async (rotation: number) => {
         const draft = draftFor("payslip");
-        draft.logoDataUrl = "data:image/png;base64,AQID";
+        draft.logoDataUrl = PNG_DATA_URL;
         draft.payslip.watermark = {
           ...draft.payslip.watermark,
           source,
@@ -750,11 +799,14 @@ describe("pdfCreator edge cases", () => {
     const setUpCanvas = (context: unknown) => {
       vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(context as any);
       vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(
-        "data:image/png;base64,BQYH",
+        "data:image/png;base64,iVBORw0KGgoFBgc=",
       );
+      // The production CSP blocks fetch() on data: URLs, so it must not be used.
       vi.stubGlobal(
         "fetch",
-        vi.fn(async () => ({ blob: async () => new Blob(["image"]) })),
+        vi.fn(async () => {
+          throw new TypeError("Refused to connect: violates connect-src");
+        }),
       );
     };
 
@@ -780,17 +832,24 @@ describe("pdfCreator edge cases", () => {
         putImageData: vi.fn(),
       };
       setUpCanvas(context);
-      const draft = grayscaleDraft("data:image/jpeg;base64,AQID");
+      const draft = grayscaleDraft("data:image/jpeg;base64,/9j/4AAB");
 
       await createPdfFromDraft(draft);
 
+      expect(fetch).not.toHaveBeenCalled();
+      const [decoded] = createImageBitmap.mock.calls[0] as unknown as [Blob];
+      expect(decoded).toBeInstanceOf(Blob);
+      expect(decoded.type).toBe("image/jpeg");
+      expect(decoded.size).toBe(6);
       expect(context.drawImage).toHaveBeenCalledWith(bitmap, 0, 0);
       expect(bitmap.close).toHaveBeenCalled();
       // Luma weights: red → 76, blue → 29; alpha is left alone.
       expect(Array.from(context.putImageData.mock.calls[0][0].data)).toEqual([
         76, 76, 76, 255, 29, 29, 29, 128,
       ]);
-      expect(pdfMock.doc.embedPng).toHaveBeenCalledWith(new Uint8Array([5, 6, 7]));
+      expect(pdfMock.doc.embedPng).toHaveBeenCalledWith(
+        new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 5, 6, 7]),
+      );
       expect(pdfMock.doc.embedJpg).not.toHaveBeenCalled();
 
       await createPdfFromDraft(draft);
@@ -807,9 +866,11 @@ describe("pdfCreator edge cases", () => {
       );
       setUpCanvas(null);
 
-      await createPdfFromDraft(grayscaleDraft("data:image/jpeg;base64,AQIE"));
+      await createPdfFromDraft(grayscaleDraft("data:image/jpeg;base64,/9j/4AAC"));
 
-      expect(pdfMock.doc.embedJpg).toHaveBeenCalledWith(new Uint8Array([1, 2, 4]));
+      expect(pdfMock.doc.embedJpg).toHaveBeenCalledWith(
+        new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 2]),
+      );
       expect(imageCalls().some((call: any) => call.opacity === 0.08)).toBe(true);
     });
 
@@ -820,9 +881,11 @@ describe("pdfCreator edge cases", () => {
       );
       setUpCanvas(null);
 
-      await createPdfFromDraft(grayscaleDraft("data:image/jpeg;base64,AQIF"));
+      await createPdfFromDraft(grayscaleDraft("data:image/jpeg;base64,/9j/4AAD"));
 
-      expect(pdfMock.doc.embedJpg).toHaveBeenCalledWith(new Uint8Array([1, 2, 5]));
+      expect(pdfMock.doc.embedJpg).toHaveBeenCalledWith(
+        new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 3]),
+      );
       expect(HTMLCanvasElement.prototype.toDataURL).not.toHaveBeenCalled();
     });
   });
@@ -1099,6 +1162,121 @@ describe("pdfCreator edge cases", () => {
       expect(subtitleLines.map((line) => line.text).join(" ")).toContain("Manchester");
       expect(calls[titleIndex].y - subtitleLines[0].y).toBe(14 + 2);
       expect(subtitleLines[0].y - subtitleLines[1].y).toBe(12);
+    });
+  });
+
+  describe("review fixes", () => {
+    it("draws the payslip watermark over the tables rather than under them", async () => {
+      const draft = draftFor("payslip");
+      draft.logoDataUrl = PNG_DATA_URL;
+
+      await createPdfFromDraft(draft);
+
+      const page = pdfMock.pages[0];
+      const watermarkCall = page.drawImage.mock.calls.findIndex(
+        ([, options]: [unknown, { opacity?: number }]) => options.opacity === 0.08,
+      );
+      const watermarkOrder = page.drawImage.mock.invocationCallOrder[watermarkCall];
+      const lastFill = Math.max(...page.drawRectangle.mock.invocationCallOrder);
+      expect(watermarkOrder).toBeGreaterThan(lastFill);
+    });
+
+    it("reads a logo's real format from its bytes, whatever its label says", async () => {
+      const pngLabelledJpeg = PNG_DATA_URL.replace("image/png", "image/jpeg");
+      const draft = draftFor("report");
+      draft.logoDataUrl = pngLabelledJpeg;
+
+      await createPdfFromDraft(draft);
+
+      expect(pdfMock.doc.embedPng).toHaveBeenCalled();
+      expect(pdfMock.doc.embedJpg).not.toHaveBeenCalled();
+      expect(detectDataUrlImageFormat(pngLabelledJpeg)).toBe("png");
+      expect(detectDataUrlImageFormat(JPEG_DATA_URL)).toBe("jpeg");
+      expect(detectDataUrlImageFormat("data:image/gif;base64,R0lGODlh")).toBeNull();
+      expect(detectDataUrlImageFormat("data:image/png,raw")).toBeNull();
+      expect(detectDataUrlImageFormat("data:image/png;base64,***")).toBeNull();
+
+      draft.logoDataUrl = "data:image/png;base64,R0lGODlh";
+      await expect(createPdfFromDraft(draft)).rejects.toThrow(
+        "The logo or watermark image is not a PNG or JPEG file. Remove it and upload a PNG or JPEG.",
+      );
+    });
+
+    it.each([
+      0, 0.01, 35, -35, 90,
+    ])("keeps a long text watermark turned %s° inside the page", async (rotation) => {
+      const text = "STRICTLY CONFIDENTIAL - EMPLOYEE COPY";
+      const draft = draftFor("payslip");
+      draft.payslip.watermark = { ...draft.payslip.watermark, source: "text", text, rotation };
+
+      await createPdfFromDraft(draft);
+
+      const call = findText(text)!;
+      const width = text.length * call.size * 0.52;
+      const radians = (call.rotate!.angle * Math.PI) / 180;
+      const corners = [
+        [0, 0],
+        [width, 0],
+        [0, call.size],
+        [width, call.size],
+      ].map(([dx, dy]) => [
+        call.x + dx * Math.cos(radians) - dy * Math.sin(radians),
+        call.y + dx * Math.sin(radians) + dy * Math.cos(radians),
+      ]);
+      for (const [x, y] of corners) {
+        expect(x).toBeGreaterThanOrEqual(-0.001);
+        expect(x).toBeLessThanOrEqual(612.001);
+        expect(y).toBeGreaterThanOrEqual(-0.001);
+        expect(y).toBeLessThanOrEqual(LETTER_HEIGHT + 0.001);
+      }
+    });
+
+    it("splits a line item taller than a page across pages without losing lines", async () => {
+      const lines = Array.from({ length: 70 }, (_, index) => `Detail ${index + 1}`);
+      const draft = draftFor("invoice");
+      draft.invoice.notes = "";
+      draft.invoice.lineItems = [
+        createDefaultInvoiceItem({ description: lines.join("\n"), quantity: 2, unitPrice: 50 }),
+      ];
+
+      const result = await createPdfFromDraft(draft);
+
+      expect(result.pageCount).toBeGreaterThan(1);
+      const calls = textCalls();
+      const drawn = lines.map((line) => calls.find((call) => call.text === line));
+      expect(drawn.every(Boolean)).toBe(true);
+      for (const call of drawn) {
+        expect(call!.y).toBeGreaterThanOrEqual(MARGIN_BOTTOM);
+        expect(call!.y).toBeLessThan(LETTER_HEIGHT);
+      }
+      // The rate is drawn once, beside the first part; each page repeats the header.
+      expect(calls.filter((call) => call.text === "$50.00")).toHaveLength(1);
+      const rowPages = new Set(drawn.map((call) => call!.page));
+      for (const page of rowPages) {
+        expect(calls.some((call) => call.page === page && call.text === "Description")).toBe(true);
+      }
+      // Rows stay inside the page.
+      for (const rect of rectCalls().filter((r) => r.x === 56 && r.color?.r === 1)) {
+        expect(rect.y).toBeGreaterThanOrEqual(MARGIN_BOTTOM);
+      }
+    });
+
+    it.each([
+      ["late evening", new Date(2026, 10, 15, 23, 30)],
+      ["just after midnight", new Date(2026, 10, 15, 0, 30)],
+    ])("defaults dates to the local day in the %s", (_label, now) => {
+      const originalTimeZone = process.env.TZ;
+      process.env.TZ = "America/New_York";
+      try {
+        vi.useFakeTimers({ toFake: ["Date"], now: new Date(2026, 10, 15, now.getHours(), 30) });
+        const draft = createDefaultCreatorDraft();
+        expect(draft.invoice.issueDate).toBe("2026-11-15");
+        expect(draft.payslip.payDate).toBe("2026-11-15");
+        expect(draft.letter.date).toBe("2026-11-15");
+      } finally {
+        vi.useRealTimers();
+        process.env.TZ = originalTimeZone;
+      }
     });
   });
 });

@@ -78,6 +78,10 @@ import {
   createPdfFromDraft,
 } from "../../utils/pdfCreator";
 
+// Real PNG and JPEG signatures: the engine reads the format from the bytes.
+const PNG_DATA_URL = "data:image/png;base64,iVBORw0KGgo=";
+const JPEG_DATA_URL = "data:image/jpeg;base64,/9j/4A==";
+
 const getRenderedTexts = () =>
   pdfCreatorMock.pages.flatMap((page) => page.drawText.mock.calls.map(([text]: [string]) => text));
 
@@ -216,7 +220,7 @@ describe("pdfCreator", () => {
   it("renders Harvard CV logos, single-line extra sections, and partial date ranges", async () => {
     const draft = createDefaultCreatorDraft();
     draft.template = "cv-harvard";
-    draft.logoDataUrl = "data:image/jpeg;base64,AQID";
+    draft.logoDataUrl = JPEG_DATA_URL;
     draft.cv.experiences[0].startDate = "";
     draft.cv.experiences[0].endDate = "Present";
     draft.cv.educationLabel = "";
@@ -263,7 +267,7 @@ describe("pdfCreator", () => {
   it("renders modern CV logo and single-line extra sections", async () => {
     const draft = createDefaultCreatorDraft();
     draft.template = "cv-modern";
-    draft.logoDataUrl = "data:image/png;base64,AQID";
+    draft.logoDataUrl = PNG_DATA_URL;
     draft.cv.profileLabel = "";
     draft.cv.additionalSections = [
       createDefaultCvExtraSection({
@@ -342,7 +346,7 @@ describe("pdfCreator", () => {
       { id: "tax", description: "Tax", quantity: 1, unitPrice: 750 },
       { id: "pension", description: "Pension", quantity: 2, unitPrice: 100 },
     ];
-    draft.logoDataUrl = "data:image/png;base64,AQID";
+    draft.logoDataUrl = PNG_DATA_URL;
 
     const result = await createPdfFromDraft(draft);
     const texts = getRenderedTexts();
@@ -384,7 +388,7 @@ describe("pdfCreator", () => {
   it("uses the company logo as the default payslip background watermark", async () => {
     const draft = createDefaultCreatorDraft();
     draft.template = "payslip";
-    draft.logoDataUrl = "data:image/png;base64,AQID";
+    draft.logoDataUrl = PNG_DATA_URL;
 
     await createPdfFromDraft(draft);
 
@@ -429,7 +433,7 @@ describe("pdfCreator", () => {
       ...imageDraft.payslip.watermark,
       source: "custom-image",
       style: "tiled",
-      customImageDataUrl: "data:image/png;base64,AQID",
+      customImageDataUrl: PNG_DATA_URL,
       customImageFileName: "watermark.png",
       grayscale: true,
     };
@@ -590,7 +594,7 @@ describe("pdfCreator", () => {
   }) => {
     const draft = createDefaultCreatorDraft();
     draft.template = "invoice";
-    draft.logoDataUrl = "data:image/png;base64,AQID";
+    draft.logoDataUrl = PNG_DATA_URL;
     draft.invoice.companyReference = "REF-123";
     draft.invoice.footerLogoPosition = position;
 
@@ -640,7 +644,7 @@ describe("pdfCreator", () => {
   }) => {
     const draft = createDefaultCreatorDraft();
     draft.template = "payslip";
-    draft.logoDataUrl = "data:image/png;base64,AQID";
+    draft.logoDataUrl = PNG_DATA_URL;
     draft.payslip.companyReference = "PAYROLL-REF";
     draft.payslip.copyrightNote = "© 2026 Northstar Ltd. All rights reserved.";
     draft.payslip.footerLogoPosition = position;
@@ -891,7 +895,7 @@ describe("pdfCreator", () => {
     const draft = createDefaultCreatorDraft();
     draft.template = "invoice";
     draft.invoice.includeBusinessNameInHeader = false;
-    draft.logoDataUrl = "data:image/png;base64,AQID";
+    draft.logoDataUrl = PNG_DATA_URL;
 
     await createPdfFromDraft(draft);
 
@@ -911,7 +915,7 @@ describe("pdfCreator", () => {
   it("places the invoice business name beside the logo in the header", async () => {
     const draft = createDefaultCreatorDraft();
     draft.template = "invoice";
-    draft.logoDataUrl = "data:image/png;base64,AQID";
+    draft.logoDataUrl = PNG_DATA_URL;
     draft.invoice.businessName = "Jumis Cake Studio";
 
     await createPdfFromDraft(draft);
@@ -936,7 +940,7 @@ describe("pdfCreator", () => {
   it("shrinks long invoice business names and paginates tall invoice rows", async () => {
     const draft = createDefaultCreatorDraft();
     draft.template = "invoice";
-    draft.logoDataUrl = "data:image/png;base64,AQID";
+    draft.logoDataUrl = PNG_DATA_URL;
     draft.invoice.businessName = "A very long invoice business name that must be reduced to fit";
     draft.invoice.lineItems = Array.from({ length: 24 }, (_, index) => ({
       id: `item-${index}`,
@@ -947,17 +951,29 @@ describe("pdfCreator", () => {
 
     await createPdfFromDraft(draft);
 
-    const companyCall = pdfCreatorMock.pages
-      .flatMap((page) => page.drawText.mock.calls)
-      .find(([text]: [string]) => text === draft.invoice.businessName);
-    expect(companyCall?.[1].size).toBeLessThan(22);
+    // Even at the smallest size the name is too wide beside the logo, so it
+    // wraps inside the left column instead of running under the INVOICE box.
+    const firstPage = pdfCreatorMock.pages[0];
+    const titleBox = firstPage.drawRectangle.mock.calls
+      .map(([options]: [{ x: number; height: number }]) => options)
+      .find((rect: { x: number; height: number }) => rect.x > 56 && rect.height === 32);
+    const nameWords = new Set(draft.invoice.businessName.split(" "));
+    const nameLines = firstPage.drawText.mock.calls.filter(
+      ([text, options]: [string, { size: number; x: number }]) =>
+        options.size === 14 && text.split(" ").every((word) => nameWords.has(word)),
+    );
+    expect(nameLines.length).toBeGreaterThan(1);
+    expect(nameLines.map(([text]: [string]) => text).join(" ")).toBe(draft.invoice.businessName);
+    for (const [text, options] of nameLines as [string, { x: number; size: number }][]) {
+      expect(options.x + text.length * options.size * 0.52).toBeLessThanOrEqual(titleBox.x - 36);
+    }
     expect(pdfCreatorMock.pages.length).toBeGreaterThan(1);
   });
 
   it("aligns the logo, company name, and invoice label on the same header centerline", async () => {
     const draft = createDefaultCreatorDraft();
     draft.template = "invoice";
-    draft.logoDataUrl = "data:image/png;base64,AQID";
+    draft.logoDataUrl = PNG_DATA_URL;
     draft.invoice.businessName = "Kyte Studio";
 
     await createPdfFromDraft(draft);

@@ -24,7 +24,9 @@ import {
   clampFloatingPreviewPosition,
   computePreviewMetaText,
   computeSummaryText,
+  describeSourcesProgress,
   formatCurrencyAmount,
+  getCreatorLabel,
   getDefaultFloatingPreviewPosition,
   getDraftStatusText,
   moveCollectionItem,
@@ -97,6 +99,32 @@ describe("computeSummaryText", () => {
   it("falls back when pageCount is null", () => {
     const text = computeSummaryText(draft, null);
     expect(text).toContain("Preview updates automatically");
+  });
+});
+
+describe("your own content labels", () => {
+  it("names the mode instead of the template it would otherwise use", () => {
+    const draft = {
+      ...createDefaultCreatorDraft(),
+      mode: "sources" as const,
+      template: "invoice" as const,
+    };
+
+    expect(getCreatorLabel(draft)).toBe("Your own content");
+    expect(getCreatorLabel({ ...draft, mode: "template" })).toBe("Invoice");
+    expect(computeSummaryText(draft, 2)).toBe(
+      "Your own content · LETTER portrait · 2 preview pages",
+    );
+  });
+
+  it("describes each step of a build from text and files", () => {
+    const at = (stage: any) => ({ index: 1, total: 3, name: "deck.pptx", stage, percent: 40 });
+
+    expect(describeSourcesProgress(at("reading"))).toBe("Reading deck.pptx (2 of 3)...");
+    expect(describeSourcesProgress(at("converting"))).toBe("Converting deck.pptx (2 of 3)...");
+    expect(describeSourcesProgress(at("adding"))).toBe("Adding deck.pptx (2 of 3)...");
+    expect(describeSourcesProgress(at("saving"))).toBe("Saving PDF...");
+    expect(describeSourcesProgress(at("done"))).toBe("Finishing up...");
   });
 });
 
@@ -458,6 +486,33 @@ describe("normalizeDraft", () => {
     expect(result.orientation).toBe(defaults.orientation);
     expect(result.invoice.currency).toBe("USD");
     expect(result.payslip.currency).toBe("GBP");
+  });
+
+  it("keeps a valid mode and saved text, and repairs damaged ones", () => {
+    expect(normalizeDraft({}).mode).toBe("template");
+    expect(normalizeDraft({}).sources).toEqual({ text: "", markdown: true, textPosition: "first" });
+    expect(
+      normalizeDraft({
+        mode: "sources",
+        sources: { text: "Notes", markdown: false, textPosition: "last" },
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        mode: "sources",
+        sources: { text: "Notes", markdown: false, textPosition: "last" },
+      }),
+    );
+    expect(
+      normalizeDraft({
+        mode: "files" as any,
+        sources: { text: 42, markdown: "no", textPosition: "middle" } as any,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        mode: "template",
+        sources: { text: "", markdown: true, textPosition: "first" },
+      }),
+    );
   });
 
   it("keeps every allowed template, page size, orientation and currency", () => {
@@ -946,6 +1001,21 @@ describe("getDefaultFloatingPreviewPosition", () => {
   it("top position is FLOATING_PREVIEW_TOP (112) when in bounds", () => {
     const result = getDefaultFloatingPreviewPosition(viewport, null, size);
     expect(result.y).toBe(112);
+  });
+
+  it("starts right of the editor column when told to keep clear of it", () => {
+    // Anchored to the right, the preview would start at 856, inside a column ending at 880.
+    expect(getDefaultFloatingPreviewPosition(viewport, 1300, size, 880)).toEqual({
+      x: 904,
+      y: 112,
+    });
+    // A column that already ends further left changes nothing.
+    expect(getDefaultFloatingPreviewPosition(viewport, 1300, size, 600)).toEqual({
+      x: 856,
+      y: 112,
+    });
+    // The window edge still wins: the preview never leaves the screen.
+    expect(getDefaultFloatingPreviewPosition(viewport, 1300, size, 1200).x).toBe(1440 - 420 - 24);
   });
 
   it("assumes the standard 420 × 560 preview when no size is given", () => {

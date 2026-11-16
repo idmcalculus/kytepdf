@@ -1,4 +1,6 @@
+import { UserFacingError } from "./errorMapper.ts";
 import { logger } from "./logger.ts";
+import { toWinAnsi } from "./markdownPdf.ts";
 import { degrees, PDFDocument, rgb, StandardFonts } from "./pdfConfig.ts";
 
 export type PdfCreatorTemplate =
@@ -16,6 +18,13 @@ export type PdfCreatorInvoiceDetailsAlignment = "left" | "right";
 export type PdfCreatorInvoiceFooterLogoPosition = "none" | "left" | "center" | "right";
 export type PdfCreatorWatermarkSource = "company-logo" | "custom-image" | "text";
 export type PdfCreatorWatermarkStyle = "centered" | "diagonal" | "tiled";
+
+/** "template" fills in a template; "sources" builds from typed text and files. */
+export type PdfCreatorMode = "template" | "sources";
+export const PDF_CREATOR_MODES = [
+  "template",
+  "sources",
+] as const satisfies readonly PdfCreatorMode[];
 
 export const PDF_CREATOR_TEMPLATES = [
   "report",
@@ -217,8 +226,23 @@ export interface CreatorCvDraft {
   additionalSections: CreatorCvExtraSection[];
 }
 
+/** Whether typed text goes before ("first") or after ("last") the added files. */
+export type CreatorSourcesTextPosition = "first" | "last";
+export const CREATOR_SOURCES_TEXT_POSITIONS = [
+  "first",
+  "last",
+] as const satisfies readonly CreatorSourcesTextPosition[];
+
+/** The typed text of "Your own content" and where it goes. Files are never saved. */
+export interface CreatorSourcesDraft {
+  text: string;
+  markdown: boolean;
+  textPosition: CreatorSourcesTextPosition;
+}
+
 export interface PdfCreatorDraft {
   fileName: string;
+  mode: PdfCreatorMode;
   template: PdfCreatorTemplate;
   pageSize: PdfCreatorPageSize;
   orientation: PdfCreatorOrientation;
@@ -231,12 +255,15 @@ export interface PdfCreatorDraft {
   invoice: CreatorInvoiceDraft;
   payslip: CreatorPayslipDraft;
   cv: CreatorCvDraft;
+  sources: CreatorSourcesDraft;
 }
 
 export interface CreatePdfResult {
   bytes: Uint8Array;
   pageCount: number;
   outputName: string;
+  /** Plain-language notes for the user, such as characters that were replaced. */
+  warnings: string[];
 }
 
 type PdfFont = Awaited<ReturnType<PDFDocument["embedFont"]>>;
@@ -279,7 +306,13 @@ const createId = () => {
   return `draft-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+/** Today's date where the user is, as YYYY-MM-DD (toISOString would give the UTC date). */
+const today = () => {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+};
 
 export const getTemplateLabel = (template: PdfCreatorTemplate) => {
   switch (template) {
@@ -364,6 +397,7 @@ export const createDefaultCvExtraSection = (
 
 export const createDefaultCreatorDraft = (): PdfCreatorDraft => ({
   fileName: "kyte-document",
+  mode: "template",
   template: "report",
   pageSize: "letter",
   orientation: "portrait",
@@ -525,6 +559,7 @@ export const createDefaultCreatorDraft = (): PdfCreatorDraft => ({
       "Product design\nDesign systems\nInteraction design\nPrototyping\nUser research synthesis\nFigma\nCross-functional leadership",
     additionalSections: [createDefaultCvExtraSection()],
   },
+  sources: { text: "", markdown: true, textPosition: "first" },
 });
 
 export const calculateInvoiceTotal = (items: CreatorInvoiceItem[]) =>
@@ -613,7 +648,10 @@ const sanitizeCurrencyNumber = (value: number) => {
   return Math.max(0, value);
 };
 
-const normalizeFileName = (value: string) => {
+/** The download name for a draft's file name: unsafe characters replaced, ".pdf" added. */
+export const getPdfOutputName = (fileName: string) => `${normalizeFileName(fileName)}.pdf`;
+
+function normalizeFileName(value: string) {
   const cleaned = value
     .trim()
     .replace(/[<>:"/\\|?*]+/g, "-")
@@ -622,7 +660,7 @@ const normalizeFileName = (value: string) => {
     .replace(/^\.+|\.+$/g, "");
 
   return cleaned || "kyte-document";
-};
+}
 
 const hexToRgb = (hex: string, fallback = DEFAULT_ACCENT) => {
   const normalized = /^#[\da-f]{6}$/i.test(hex) ? hex : fallback;
@@ -730,6 +768,32 @@ const wrapText = (text: string, font: PdfFont, size: number, maxWidth: number) =
   return lines;
 };
 
+/** Reads the real format from the first bytes; file names and MIME labels can be wrong. */
+export const detectImageFormat = (bytes: Uint8Array): "png" | "jpeg" | null => {
+  if (
+    bytes.length >= 8 &&
+    [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((byte, index) => bytes[index] === byte)
+  ) {
+    return "png";
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return "jpeg";
+  }
+  return null;
+};
+
+/** The image format of a base64 data URL, decoding only its first bytes. */
+export const detectDataUrlImageFormat = (dataUrl: string) => {
+  const comma = dataUrl.indexOf(",");
+  if (comma < 0 || !dataUrl.slice(0, comma).includes(";base64")) return null;
+  try {
+    const head = atob(dataUrl.slice(comma + 1, comma + 17));
+    return detectImageFormat(Uint8Array.from(head, (char) => char.charCodeAt(0)));
+  } catch {
+    return null;
+  }
+};
+
 const dataUrlToBytes = (dataUrl: string) => {
   const [meta, data] = dataUrl.split(",", 2);
   if (!meta || !data) {
@@ -791,8 +855,9 @@ const embedInvoiceSignatureFont = async (
 };
 
 /**
- * Standard PDF fonts only cover WinAnsi, and drawing anything else throws.
- * Strip accents the font cannot show and drop other characters it cannot encode.
+ * Keeps only characters the signature font can draw. The standard fallback
+ * font throws on anything else; the handwriting font (a Latin subset) would
+ * draw empty boxes. Accents the font lacks are stripped, other characters dropped.
  */
 const keepEncodableCharacters = (text: string, font: PdfFont) => {
   const supported = new Set(font.getCharacterSet());
@@ -815,7 +880,7 @@ const keepEncodableCharacters = (text: string, font: PdfFont) => {
     .join("");
 
   if (replaced > 0 || dropped > 0) {
-    logger.warn("The fallback signature font cannot show every character in the signature.", {
+    logger.warn("The signature font cannot show every character in the signature.", {
       replaced,
       dropped,
     });
@@ -843,8 +908,10 @@ const getGrayscaleImageDataUrl = async (dataUrl: string) => {
   }
 
   try {
-    const response = await fetch(dataUrl);
-    const bitmap = await globalThis.createImageBitmap(await response.blob());
+    // Decode in place: the production CSP (connect-src) blocks fetch() on data: URLs.
+    const { meta, bytes } = dataUrlToBytes(dataUrl);
+    const type = meta.slice("data:".length).split(";")[0] || "image/png";
+    const bitmap = await globalThis.createImageBitmap(new Blob([bytes], { type }));
     const canvas = document.createElement("canvas");
     canvas.width = bitmap.width;
     canvas.height = bitmap.height;
@@ -949,7 +1016,21 @@ const drawPdfWatermark = (
   }
 
   if (!watermark.text) return;
-  const fontSize = Math.min(72, Math.max(22, pageWidth * sizeRatio * 0.18));
+  const baseFontSize = Math.min(72, Math.max(22, pageWidth * sizeRatio * 0.18));
+  // Long text at that size can run off the page. A box w wide and h tall,
+  // turned by θ, spans w·cos θ + h·sin θ across and w·sin θ + h·cos θ up; both
+  // grow with the font size, so scale it down until that fits 90% of the page.
+  const radians = (rotation * Math.PI) / 180;
+  const cos = Math.abs(Math.cos(radians));
+  const sin = Math.abs(Math.sin(radians));
+  const widthAtBase = watermark.font.widthOfTextAtSize(watermark.text, baseFontSize);
+  const fontSize =
+    baseFontSize *
+    Math.min(
+      1,
+      (pageWidth * 0.9) / (widthAtBase * cos + baseFontSize * sin),
+      (pageHeight * 0.9) / (widthAtBase * sin + baseFontSize * cos),
+    );
   const textWidth = watermark.font.widthOfTextAtSize(watermark.text, fontSize);
   const drawTextCenteredAt = (centerX: number, centerY: number) => {
     const origin = getRotatedBoxOrigin(centerX, centerY, textWidth, fontSize, rotation);
@@ -1044,7 +1125,6 @@ class DocumentComposer {
     this.accentColor = hexToRgb(accentHex);
     this.page = this.pdfDoc.addPage([this.pageWidth, this.pageHeight]);
     this.pages.push(this.page);
-    this.drawWatermark(this.page);
     this.cursorY = this.pageHeight - this.marginTop;
   }
 
@@ -1075,14 +1155,16 @@ class DocumentComposer {
   addPage() {
     this.page = this.pdfDoc.addPage([this.pageWidth, this.pageHeight]);
     this.pages.push(this.page);
-    this.drawWatermark(this.page);
     this.cursorY = this.pageHeight - this.marginTop;
     return this.page;
   }
 
-  private drawWatermark(page: PdfPage) {
-    if (this.watermark) {
-      drawPdfWatermark(page, this.pageWidth, this.pageHeight, this.watermark);
+  /** Draws the watermark over every page; call once the content is in place. */
+  drawWatermarks() {
+    const watermark = this.watermark;
+    if (!watermark) return;
+    for (const page of this.pages) {
+      drawPdfWatermark(page, this.pageWidth, this.pageHeight, watermark);
     }
   }
 
@@ -1160,6 +1242,9 @@ const drawPageNumbers = (
   });
 };
 
+/** A longer note would crowd the reference into the page content. */
+const MAX_COPYRIGHT_LINES = 4;
+
 const drawInvoiceFooter = (
   composer: DocumentComposer,
   font: PdfFont,
@@ -1214,20 +1299,34 @@ const drawInvoiceFooter = (
   while (
     copyrightNote &&
     copyrightSize > 5.5 &&
-    font.widthOfTextAtSize(copyrightNote, copyrightSize) > referenceMaxWidth * 2
+    font.widthOfTextAtSize(copyrightNote, copyrightSize) > referenceMaxWidth * MAX_COPYRIGHT_LINES
   ) {
     copyrightSize -= 0.5;
   }
-  const copyrightLines = copyrightNote
-    ? wrapText(copyrightNote, font, copyrightSize, referenceMaxWidth).filter(Boolean).slice(0, 2)
+  const wrappedCopyright = copyrightNote
+    ? wrapText(copyrightNote, font, copyrightSize, referenceMaxWidth).filter(Boolean)
     : [];
+  const copyrightLines = wrappedCopyright.slice(0, MAX_COPYRIGHT_LINES);
+  const copyrightCut = wrappedCopyright.length > MAX_COPYRIGHT_LINES;
+  if (copyrightCut) {
+    // Mark the cut instead of dropping the rest without a sign.
+    let last = copyrightLines[MAX_COPYRIGHT_LINES - 1];
+    while (last && font.widthOfTextAtSize(`${last}...`, copyrightSize) > referenceMaxWidth) {
+      last = last.replace(/\s*\S+$/, "");
+    }
+    copyrightLines[MAX_COPYRIGHT_LINES - 1] = `${last}...`;
+  }
+  // Lines stack up from the bottom edge, and the reference sits above them.
+  const bottomLineY = copyrightLines.length > 1 ? 8.5 : 16;
+  const copyrightLineY = (lineIndex: number) =>
+    bottomLineY + (copyrightLines.length - 1 - lineIndex) * 7.5;
 
   composer.allPages.forEach((page, index) => {
     if (referenceLabel) {
       const referenceWidth = font.widthOfTextAtSize(referenceLabel, referenceSize);
       page.drawText(referenceLabel, {
         x: getSlotX(referenceWidth, referencePosition),
-        y: copyrightLines.length > 0 ? 29 : 24,
+        y: copyrightLines.length > 0 ? copyrightLineY(0) + 13 : 24,
         size: referenceSize,
         font,
         color,
@@ -1238,7 +1337,7 @@ const drawInvoiceFooter = (
       const lineWidth = font.widthOfTextAtSize(line, copyrightSize);
       page.drawText(line, {
         x: getSlotX(lineWidth, referencePosition),
-        y: 16 - lineIndex * 7.5,
+        y: copyrightLineY(lineIndex),
         size: copyrightSize,
         font,
         color,
@@ -1266,15 +1365,20 @@ const drawInvoiceFooter = (
       });
     }
   });
+
+  return { copyrightCut };
 };
 
 const embedLogo = async (pdfDoc: PDFDocument, logoDataUrl: string | null) => {
   if (!logoDataUrl) return null;
-  const { meta, bytes } = dataUrlToBytes(logoDataUrl);
-  if (meta.includes("image/png")) {
-    return await pdfDoc.embedPng(bytes);
-  }
-  return await pdfDoc.embedJpg(bytes);
+  const { bytes } = dataUrlToBytes(logoDataUrl);
+  // A PNG saved as "logo.jpg" is labelled image/jpeg, so trust the bytes instead.
+  const format = detectImageFormat(bytes);
+  if (format === "png") return await pdfDoc.embedPng(bytes);
+  if (format === "jpeg") return await pdfDoc.embedJpg(bytes);
+  throw new UserFacingError(
+    "The logo or watermark image is not a PNG or JPEG file. Remove it and upload a PNG or JPEG.",
+  );
 };
 
 const drawLogo = (
@@ -1756,25 +1860,25 @@ const drawFinancialItemsTable = (
   items: CreatorInvoiceItem[],
   currency: PdfCreatorCurrency,
 ) => {
-  drawInvoiceTableHeader(composer, fonts, layout, colors);
+  const rowLineHeight = 14;
+  const rowHeightFor = (lineCount: number) =>
+    Math.max(layout.baseRowHeight, lineCount * rowLineHeight + 14);
+  const linesThatFit = () =>
+    Math.floor((composer.currentY - layout.rowGap - composer.marginBottom - 14) / rowLineHeight);
+  // Height left for a row under the repeated header on a fresh page.
+  const freshPageRowRoom =
+    composer.pageHeight -
+    composer.marginTop -
+    composer.marginBottom -
+    layout.headerHeight -
+    layout.rowGap * 2;
+  const startNewPage = () => {
+    composer.addPage();
+    drawInvoiceTableHeader(composer, fonts, layout, colors);
+  };
 
-  items.forEach((item) => {
-    const quantity = sanitizeCurrencyNumber(item.quantity);
-    const unitPrice = sanitizeCurrencyNumber(item.unitPrice);
-    const amount = quantity * unitPrice;
-    const descriptionLines = wrapText(
-      item.description || "Line item",
-      fonts.regular,
-      10.5,
-      layout.description.width - layout.cellPaddingX * 2,
-    );
-    const rowLineHeight = 14;
-    const rowHeight = Math.max(layout.baseRowHeight, descriptionLines.length * rowLineHeight + 14);
-
-    if (composer.ensureSpace(rowHeight + layout.rowGap)) {
-      drawInvoiceTableHeader(composer, fonts, layout, colors);
-    }
-
+  const drawRow = (lines: string[], numbers: string[] | null) => {
+    const rowHeight = rowHeightFor(lines.length);
     const rowBottom = composer.currentY - rowHeight;
     composer.currentPage.drawRectangle({
       x: layout.x,
@@ -1793,9 +1897,9 @@ const drawFinancialItemsTable = (
       colors.border,
     );
 
-    const descBlockHeight = 10.5 + Math.max(0, descriptionLines.length - 1) * rowLineHeight;
+    const descBlockHeight = 10.5 + Math.max(0, lines.length - 1) * rowLineHeight;
     let descY = rowBottom + (rowHeight - descBlockHeight) / 2 + descBlockHeight - 10.5;
-    descriptionLines.forEach((line) => {
+    for (const line of lines) {
       composer.currentPage.drawText(line, {
         x: layout.description.x + layout.cellPaddingX,
         y: descY,
@@ -1804,46 +1908,79 @@ const drawFinancialItemsTable = (
         color: rgb(0.2, 0.25, 0.33),
       });
       descY -= rowLineHeight;
-    });
+    }
 
-    const qtyText = String(quantity || 0);
-    const rateText = formatCurrency(unitPrice, currency);
-    const amountText = formatCurrency(amount, currency);
-    const numericY = getCellTextY(rowBottom, rowHeight, 10.5);
-
-    composer.currentPage.drawText(qtyText, {
-      x: getCenteredTextX(qtyText, fonts.regular, 10.5, layout.qty.x, layout.qty.width),
-      y: numericY,
-      size: 10.5,
-      font: fonts.regular,
-      color: rgb(0.2, 0.25, 0.33),
-    });
-    composer.currentPage.drawText(rateText, {
-      x: getRightAlignedTextX(
-        rateText,
-        fonts.regular,
-        10.5,
-        layout.rate.x + layout.rate.width - layout.cellPaddingX,
-      ),
-      y: numericY,
-      size: 10.5,
-      font: fonts.regular,
-      color: rgb(0.2, 0.25, 0.33),
-    });
-    composer.currentPage.drawText(amountText, {
-      x: getRightAlignedTextX(
-        amountText,
-        fonts.bold,
-        10.5,
-        layout.amount.x + layout.amount.width - layout.cellPaddingX,
-      ),
-      y: numericY,
-      size: 10.5,
-      font: fonts.bold,
-      color: rgb(0.2, 0.25, 0.33),
-    });
+    if (numbers) {
+      const [qtyText, rateText, amountText] = numbers;
+      const numericY = getCellTextY(rowBottom, rowHeight, 10.5);
+      composer.currentPage.drawText(qtyText, {
+        x: getCenteredTextX(qtyText, fonts.regular, 10.5, layout.qty.x, layout.qty.width),
+        y: numericY,
+        size: 10.5,
+        font: fonts.regular,
+        color: rgb(0.2, 0.25, 0.33),
+      });
+      composer.currentPage.drawText(rateText, {
+        x: getRightAlignedTextX(
+          rateText,
+          fonts.regular,
+          10.5,
+          layout.rate.x + layout.rate.width - layout.cellPaddingX,
+        ),
+        y: numericY,
+        size: 10.5,
+        font: fonts.regular,
+        color: rgb(0.2, 0.25, 0.33),
+      });
+      composer.currentPage.drawText(amountText, {
+        x: getRightAlignedTextX(
+          amountText,
+          fonts.bold,
+          10.5,
+          layout.amount.x + layout.amount.width - layout.cellPaddingX,
+        ),
+        y: numericY,
+        size: 10.5,
+        font: fonts.bold,
+        color: rgb(0.2, 0.25, 0.33),
+      });
+    }
 
     composer.setCursor(rowBottom - layout.rowGap);
+  };
+
+  drawInvoiceTableHeader(composer, fonts, layout, colors);
+
+  items.forEach((item) => {
+    const quantity = sanitizeCurrencyNumber(item.quantity);
+    const unitPrice = sanitizeCurrencyNumber(item.unitPrice);
+    const numbers = [
+      String(quantity || 0),
+      formatCurrency(unitPrice, currency),
+      formatCurrency(quantity * unitPrice, currency),
+    ];
+    let remaining = wrapText(
+      item.description || "Line item",
+      fonts.regular,
+      10.5,
+      layout.description.width - layout.cellPaddingX * 2,
+    );
+    let firstPart = true;
+
+    while (remaining.length > 0) {
+      let part = remaining;
+      if (composer.currentY - rowHeightFor(part.length) - layout.rowGap < composer.marginBottom) {
+        // A row that fits on a fresh page moves there whole. Only a row taller
+        // than a page is split, carrying its remaining lines onto new pages.
+        if (rowHeightFor(part.length) <= freshPageRowRoom || linesThatFit() < 1) {
+          startNewPage();
+        }
+        part = remaining.slice(0, Math.max(1, linesThatFit()));
+      }
+      drawRow(part, firstPart ? numbers : null);
+      remaining = remaining.slice(part.length);
+      firstPart = false;
+    }
   });
 };
 
@@ -1927,11 +2064,17 @@ const renderInvoice = async (
     businessNameSize -= 1;
   }
 
-  const topRowHeight = Math.max(
-    invoiceTitleHeight,
-    logoHeight,
-    invoice.includeBusinessNameInHeader ? businessNameSize : 0,
-  );
+  // Even at the smallest size a long name may not fit beside a logo, so it
+  // wraps rather than running under the title box drawn to its right.
+  const businessNameLines = invoice.includeBusinessNameInHeader
+    ? wrapText(businessName, fonts.bold, businessNameSize, businessNameMaxWidth)
+    : [];
+  const businessNameLineHeight = businessNameSize * 1.15;
+  const businessNameBlockHeight =
+    businessNameLines.length > 0
+      ? businessNameSize + (businessNameLines.length - 1) * businessNameLineHeight
+      : 0;
+  const topRowHeight = Math.max(invoiceTitleHeight, logoHeight, businessNameBlockHeight);
   const topRowCenterY = topY - topRowHeight / 2;
 
   if (logo) {
@@ -1943,14 +2086,16 @@ const renderInvoice = async (
     });
   }
 
-  if (invoice.includeBusinessNameInHeader) {
-    page.drawText(businessName, {
+  let businessNameY = topRowCenterY + businessNameBlockHeight / 2 - businessNameSize;
+  for (const line of businessNameLines) {
+    page.drawText(line, {
       x: businessNameX,
-      y: topRowCenterY - businessNameSize / 2,
+      y: businessNameY,
       size: businessNameSize,
       font: fonts.bold,
       color: rgb(0.11, 0.17, 0.29),
     });
+    businessNameY -= businessNameLineHeight;
   }
 
   const invoiceTitleY = topRowCenterY - invoiceTitleHeight / 2;
@@ -2128,98 +2273,14 @@ const renderInvoice = async (
     composer.moveCursor(20);
   }
 
-  drawInvoiceTableHeader(composer, fonts, tableLayout, invoiceTheme);
-
-  invoice.lineItems.forEach((item) => {
-    const quantity = sanitizeCurrencyNumber(item.quantity);
-    const unitPrice = sanitizeCurrencyNumber(item.unitPrice);
-    const amount = quantity * unitPrice;
-    const descriptionLines = wrapText(
-      item.description || "Line item",
-      fonts.regular,
-      10.5,
-      tableLayout.description.width - tableLayout.cellPaddingX * 2,
-    );
-    const rowLineHeight = 14;
-    const rowHeight = Math.max(
-      tableLayout.baseRowHeight,
-      descriptionLines.length * rowLineHeight + 14,
-    );
-
-    if (composer.ensureSpace(rowHeight + tableLayout.rowGap)) {
-      drawInvoiceTableHeader(composer, fonts, tableLayout, invoiceTheme);
-    }
-
-    const rowBottom = composer.currentY - rowHeight;
-    composer.currentPage.drawRectangle({
-      x: tableLayout.x,
-      y: rowBottom,
-      width: tableLayout.width,
-      height: rowHeight,
-      color: rgb(1, 1, 1),
-      borderWidth: 1,
-      borderColor: accentBorderColor,
-    });
-    drawInvoiceTableColumnDividers(
-      composer.currentPage,
-      tableLayout,
-      rowBottom,
-      rowHeight,
-      accentBorderColor,
-    );
-
-    const descBlockHeight = 10.5 + Math.max(0, descriptionLines.length - 1) * rowLineHeight;
-    let descY = rowBottom + (rowHeight - descBlockHeight) / 2 + descBlockHeight - 10.5;
-    descriptionLines.forEach((line) => {
-      composer.currentPage.drawText(line, {
-        x: tableLayout.description.x + tableLayout.cellPaddingX,
-        y: descY,
-        size: 10.5,
-        font: fonts.regular,
-        color: rgb(0.2, 0.25, 0.33),
-      });
-      descY -= rowLineHeight;
-    });
-
-    const qtyText = String(quantity || 0);
-    const rateText = formatCurrency(unitPrice, invoice.currency);
-    const amountText = formatCurrency(amount, invoice.currency);
-    const numericY = getCellTextY(rowBottom, rowHeight, 10.5);
-
-    composer.currentPage.drawText(qtyText, {
-      x: getCenteredTextX(qtyText, fonts.regular, 10.5, tableLayout.qty.x, tableLayout.qty.width),
-      y: numericY,
-      size: 10.5,
-      font: fonts.regular,
-      color: rgb(0.2, 0.25, 0.33),
-    });
-    composer.currentPage.drawText(rateText, {
-      x: getRightAlignedTextX(
-        rateText,
-        fonts.regular,
-        10.5,
-        tableLayout.rate.x + tableLayout.rate.width - tableLayout.cellPaddingX,
-      ),
-      y: numericY,
-      size: 10.5,
-      font: fonts.regular,
-      color: rgb(0.2, 0.25, 0.33),
-    });
-    composer.currentPage.drawText(amountText, {
-      x: getRightAlignedTextX(
-        amountText,
-        fonts.bold,
-        10.5,
-        tableLayout.amount.x + tableLayout.amount.width - tableLayout.cellPaddingX,
-      ),
-      y: numericY,
-      size: 10.5,
-      font: fonts.bold,
-      color: rgb(0.2, 0.25, 0.33),
-    });
-
-    composer.setCursor(rowBottom - tableLayout.rowGap);
-  });
+  drawFinancialItemsTable(
+    composer,
+    fonts,
+    tableLayout,
+    invoiceTheme,
+    invoice.lineItems,
+    invoice.currency,
+  );
 
   if (isPayslip) {
     composer.ensureSpace(110);
@@ -2390,7 +2451,7 @@ const renderInvoice = async (
   }
 
   const signatureText = isPayslip ? "" : sanitizeText(invoice.signature);
-  const signature = fonts.signature?.isFallback
+  const signature = fonts.signature
     ? keepEncodableCharacters(signatureText, fonts.signature.font)
     : signatureText;
   if (signature) {
@@ -3048,7 +3109,44 @@ const serializePdf = async (pdfDoc: PDFDocument) => {
   throw new Error("PDF serialization produced no content.");
 };
 
-export async function createPdfFromDraft(draft: PdfCreatorDraft): Promise<CreatePdfResult> {
+/**
+ * The standard PDF fonts only cover WinAnsi, and pdf-lib throws on anything
+ * else. Returns a copy of the draft with every string made drawable (accents
+ * stripped, near matches such as Ł → L, otherwise "?"), and the characters
+ * that had to change.
+ */
+const toWinAnsiDraft = (draft: PdfCreatorDraft) => {
+  const changed = new Set<string>();
+  const clean = (value: unknown): unknown => {
+    if (typeof value === "string") {
+      // Most strings, including image data URLs, are plain ASCII.
+      if (/^[\x20-\x7e\r\n\t]*$/.test(value)) return value;
+      const result = toWinAnsi(value);
+      if (result.replaced > 0) {
+        for (const char of value.normalize("NFC")) {
+          if (toWinAnsi(char).replaced > 0) changed.add(char);
+        }
+      }
+      return result.text;
+    }
+    if (Array.isArray(value)) return value.map(clean);
+    if (value && typeof value === "object") {
+      return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, clean(item)]));
+    }
+    return value;
+  };
+  return { draft: clean(draft) as PdfCreatorDraft, changed: [...changed] };
+};
+
+const describeReplacedCharacters = (characters: string[]) => {
+  const shown = characters.slice(0, 12).join(" ");
+  const more = characters.length > 12 ? ` and ${characters.length - 12} more` : "";
+  return `Some characters are not in the PDF's built-in fonts and were replaced with a similar letter or "?": ${shown}${more}.`;
+};
+
+export async function createPdfFromDraft(sourceDraft: PdfCreatorDraft): Promise<CreatePdfResult> {
+  const { draft, changed } = toWinAnsiDraft(sourceDraft);
+  const warnings = changed.length > 0 ? [describeReplacedCharacters(changed)] : [];
   const pdfDoc = await PDFDocument.create();
   const signatureText = draft.template === "invoice" ? sanitizeText(draft.invoice.signature) : "";
   const fonts = {
@@ -3066,47 +3164,50 @@ export async function createPdfFromDraft(draft: PdfCreatorDraft): Promise<Create
   switch (draft.template) {
     case "report":
       await renderReport(composer, draft, fonts, logo);
-      pdfDoc.setTitle(sanitizeText(draft.report.title) || "Document");
-      pdfDoc.setAuthor(sanitizeText(draft.report.author) || "Kyte");
+      pdfDoc.setTitle(sanitizeText(sourceDraft.report.title) || "Document");
+      pdfDoc.setAuthor(sanitizeText(sourceDraft.report.author) || "Kyte");
       pdfDoc.setSubject("Generated report");
       pdfDoc.setKeywords(["Kyte PDF", "report"]);
       break;
     case "letter":
       await renderLetter(composer, draft, fonts, logo);
-      pdfDoc.setTitle(sanitizeText(draft.letter.subject) || "Letter");
-      pdfDoc.setAuthor(sanitizeText(draft.letter.senderName) || "Kyte");
+      pdfDoc.setTitle(sanitizeText(sourceDraft.letter.subject) || "Letter");
+      pdfDoc.setAuthor(sanitizeText(sourceDraft.letter.senderName) || "Kyte");
       pdfDoc.setSubject("Business letter");
       pdfDoc.setKeywords(["Kyte PDF", "letter"]);
       break;
     case "invoice":
       await renderInvoice(composer, draft, fonts, logo);
-      pdfDoc.setTitle(sanitizeText(draft.invoice.invoiceNumber) || "Invoice");
-      pdfDoc.setAuthor(sanitizeText(draft.invoice.businessName) || "Kyte");
+      pdfDoc.setTitle(sanitizeText(sourceDraft.invoice.invoiceNumber) || "Invoice");
+      pdfDoc.setAuthor(sanitizeText(sourceDraft.invoice.businessName) || "Kyte");
       pdfDoc.setSubject("Invoice");
       pdfDoc.setKeywords(["Kyte PDF", "invoice"]);
       break;
     case "payslip":
       await renderInvoice(composer, draft, fonts, logo);
-      pdfDoc.setTitle(sanitizeText(draft.payslip.payslipNumber) || "Payslip");
-      pdfDoc.setAuthor(sanitizeText(draft.payslip.companyName) || "Kyte");
+      pdfDoc.setTitle(sanitizeText(sourceDraft.payslip.payslipNumber) || "Payslip");
+      pdfDoc.setAuthor(sanitizeText(sourceDraft.payslip.companyName) || "Kyte");
       pdfDoc.setSubject("Payslip");
       pdfDoc.setKeywords(["Kyte PDF", "payslip"]);
       break;
     case "cv-harvard":
       await renderCvHarvard(composer, draft, fonts, logo);
-      pdfDoc.setTitle(`${sanitizeText(draft.cv.fullName) || "Candidate"} CV`);
-      pdfDoc.setAuthor(sanitizeText(draft.cv.fullName) || "Kyte");
+      pdfDoc.setTitle(`${sanitizeText(sourceDraft.cv.fullName) || "Candidate"} CV`);
+      pdfDoc.setAuthor(sanitizeText(sourceDraft.cv.fullName) || "Kyte");
       pdfDoc.setSubject("Harvard-style curriculum vitae");
       pdfDoc.setKeywords(["Kyte PDF", "cv", "harvard"]);
       break;
     case "cv-modern":
       await renderCvModern(composer, draft, fonts, logo);
-      pdfDoc.setTitle(`${sanitizeText(draft.cv.fullName) || "Candidate"} CV`);
-      pdfDoc.setAuthor(sanitizeText(draft.cv.fullName) || "Kyte");
+      pdfDoc.setTitle(`${sanitizeText(sourceDraft.cv.fullName) || "Candidate"} CV`);
+      pdfDoc.setAuthor(sanitizeText(sourceDraft.cv.fullName) || "Kyte");
       pdfDoc.setSubject("Modern curriculum vitae");
       pdfDoc.setKeywords(["Kyte PDF", "cv", "resume"]);
       break;
   }
+
+  // Drawn last so tables and filled boxes cannot hide it; its opacity keeps text readable.
+  composer.drawWatermarks();
 
   pdfDoc.setCreator("Kyte PDF");
   pdfDoc.setProducer("Kyte PDF");
@@ -3122,13 +3223,23 @@ export async function createPdfFromDraft(draft: PdfCreatorDraft): Promise<Create
             copyrightNote: draft.payslip.copyrightNote,
             footerLogoPosition: draft.payslip.footerLogoPosition,
           };
-    drawInvoiceFooter(composer, fonts.regular, getReadableAccentTextColor(draft.accentColor), {
-      reference: sanitizeText(financialDocument.companyReference),
-      copyrightNote: sanitizeText(financialDocument.copyrightNote),
-      includePageNumbers: draft.includePageNumbers,
-      logo,
-      logoPosition: normalizeInvoiceFooterLogoPosition(financialDocument.footerLogoPosition),
-    });
+    const footer = drawInvoiceFooter(
+      composer,
+      fonts.regular,
+      getReadableAccentTextColor(draft.accentColor),
+      {
+        reference: sanitizeText(financialDocument.companyReference),
+        copyrightNote: sanitizeText(financialDocument.copyrightNote),
+        includePageNumbers: draft.includePageNumbers,
+        logo,
+        logoPosition: normalizeInvoiceFooterLogoPosition(financialDocument.footerLogoPosition),
+      },
+    );
+    if (footer.copyrightCut) {
+      warnings.push(
+        `The copyright note is longer than ${MAX_COPYRIGHT_LINES} footer lines, so its end was cut. Shorten it to show all of it.`,
+      );
+    }
   } else if (draft.includePageNumbers) {
     drawPageNumbers(composer, fonts.regular, rgb(0.52, 0.58, 0.65));
   }
@@ -3136,6 +3247,7 @@ export async function createPdfFromDraft(draft: PdfCreatorDraft): Promise<Create
   return {
     bytes: await serializePdf(pdfDoc),
     pageCount: composer.pageCount,
-    outputName: `${normalizeFileName(draft.fileName)}.pdf`,
+    outputName: getPdfOutputName(sourceDraft.fileName),
+    warnings,
   };
 }

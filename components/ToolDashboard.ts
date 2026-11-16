@@ -111,7 +111,7 @@ export class ToolDashboard extends HTMLElement {
       {
         id: "create-pdf",
         name: "Create PDF",
-        desc: "Build polished PDFs from templates with branding, structure, and live preview.",
+        desc: "Make a PDF from typed text, files you add, or a ready-made template.",
         icon: "file-plus",
         active: true,
       },

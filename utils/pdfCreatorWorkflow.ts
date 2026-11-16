@@ -11,6 +11,7 @@
  */
 
 import {
+  CREATOR_SOURCES_TEXT_POSITIONS,
   type CreatorCvEducation,
   type CreatorCvExperience,
   type CreatorCvExtraSection,
@@ -30,6 +31,7 @@ import {
   normalizeWatermarkSource,
   normalizeWatermarkStyle,
   PDF_CREATOR_CURRENCIES,
+  PDF_CREATOR_MODES,
   PDF_CREATOR_ORIENTATIONS,
   PDF_CREATOR_PAGE_SIZES,
   PDF_CREATOR_TEMPLATES,
@@ -37,6 +39,7 @@ import {
   type PdfCreatorDraft,
   type PdfCreatorTemplate,
 } from "./pdfCreator.ts";
+import type { SourcesProgress } from "./pdfFromSources.ts";
 import { moveArrayItem } from "./pdfUtils.ts";
 
 // ---------------------------------------------------------------------------
@@ -80,11 +83,34 @@ export function getDraftStatusText(state: DraftState): string {
  * Computes the short summary line shown above the Create button.
  * Pure: depends only on the draft and current preview page count.
  */
+/** Status line for the progress bar while a PDF is built from text and files. */
+export function describeSourcesProgress(progress: SourcesProgress): string {
+  switch (progress.stage) {
+    case "saving":
+      return "Saving PDF...";
+    case "done":
+      return "Finishing up...";
+    default: {
+      const verb = { reading: "Reading", converting: "Converting", adding: "Adding" }[
+        progress.stage
+      ];
+      return `${verb} ${progress.name} (${progress.index + 1} of ${progress.total})...`;
+    }
+  }
+}
+
+/** The heading for what is being made: the template name, or "Your own content". */
+export function getCreatorLabel(draft: Pick<PdfCreatorDraft, "mode" | "template">): string {
+  return draft.mode === "sources" ? SOURCES_MODE_LABEL : getTemplateLabel(draft.template);
+}
+
+export const SOURCES_MODE_LABEL = "Your own content";
+
 export function computeSummaryText(
   draft: PdfCreatorDraft,
   previewPageCount: number | null,
 ): string {
-  const base = `${getTemplateLabel(draft.template)} · ${draft.pageSize.toUpperCase()} ${draft.orientation}`;
+  const base = `${getCreatorLabel(draft)} · ${draft.pageSize.toUpperCase()} ${draft.orientation}`;
   if (previewPageCount) {
     return `${base} · ${previewPageCount} preview page${previewPageCount === 1 ? "" : "s"}`;
   }
@@ -131,6 +157,7 @@ export function normalizeDraft(value: Partial<PdfCreatorDraft>): PdfCreatorDraft
   return {
     ...defaults,
     ...value,
+    mode: pickAllowed(value.mode, PDF_CREATOR_MODES, defaults.mode),
     template: pickAllowed(value.template, PDF_CREATOR_TEMPLATES, defaults.template),
     pageSize: pickAllowed(value.pageSize, PDF_CREATOR_PAGE_SIZES, defaults.pageSize),
     orientation: pickAllowed(value.orientation, PDF_CREATOR_ORIENTATIONS, defaults.orientation),
@@ -245,6 +272,18 @@ export function normalizeDraft(value: Partial<PdfCreatorDraft>): PdfCreatorDraft
           : defaults.payslip.watermark.rotation,
         grayscale: value.payslip?.watermark?.grayscale ?? defaults.payslip.watermark.grayscale,
       },
+    },
+    sources: {
+      text: typeof value.sources?.text === "string" ? value.sources.text : defaults.sources.text,
+      markdown:
+        typeof value.sources?.markdown === "boolean"
+          ? value.sources.markdown
+          : defaults.sources.markdown,
+      textPosition: pickAllowed(
+        value.sources?.textPosition,
+        CREATOR_SOURCES_TEXT_POSITIONS,
+        defaults.sources.textPosition,
+      ),
     },
     cv: {
       ...defaults.cv,
@@ -664,7 +703,9 @@ export function clampFloatingPreviewPosition(
 
 /**
  * Computes the default floating preview position anchored to the right of a
- * reference element rectangle (or the viewport right edge if no rect).
+ * reference element rectangle (or the viewport right edge if no rect). With
+ * `keepRightOf`, the preview starts at least a gutter to the right of that x,
+ * so it does not cover the editor column (where Create and Download are).
  */
 export function getDefaultFloatingPreviewPosition(
   viewport: ViewportSize,
@@ -673,11 +714,14 @@ export function getDefaultFloatingPreviewPosition(
     width: FLOATING_PREVIEW_WIDTH,
     height: FLOATING_PREVIEW_HEIGHT,
   },
+  keepRightOf: number | null = null,
 ): PreviewPosition {
-  const rawX =
+  const anchoredX =
     anchorRight != null
       ? anchorRight - previewSize.width - FLOATING_PREVIEW_GUTTER
       : viewport.innerWidth - previewSize.width - FLOATING_PREVIEW_GUTTER;
+  const rawX =
+    keepRightOf != null ? Math.max(anchoredX, keepRightOf + FLOATING_PREVIEW_GUTTER) : anchoredX;
 
   return clampFloatingPreviewPosition({ x: rawX, y: FLOATING_PREVIEW_TOP }, viewport, previewSize);
 }

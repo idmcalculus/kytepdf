@@ -11,6 +11,10 @@ const creatorMocks = vi.hoisted(() => ({
   createPdfFromDraft: vi.fn(),
 }));
 
+const sourcesMocks = vi.hoisted(() => ({
+  buildPdfFromSources: vi.fn(),
+}));
+
 vi.mock("../../utils/pdfPreview", () => ({
   PdfPreviewController: class {
     load = previewMock.load;
@@ -41,7 +45,20 @@ vi.mock("../../utils/pdfCreator", async () => {
   };
 });
 
+// The sources panel needs the real file-type helpers; only the build is faked.
+vi.mock("../../utils/pdfFromSources", async () => {
+  const actual = await vi.importActual<typeof import("../../utils/pdfFromSources")>(
+    "../../utils/pdfFromSources",
+  );
+  return {
+    ...actual,
+    buildPdfFromSources: sourcesMocks.buildPdfFromSources,
+  };
+});
+
+import { CreatorSourcesPanel } from "../../components/CreatorSourcesPanel";
 import { PdfCreator } from "../../components/PdfCreator";
+import { UserFacingError } from "../../utils/errorMapper";
 import { persistence } from "../../utils/persistence";
 
 describe("PdfCreator", () => {
@@ -61,7 +78,15 @@ describe("PdfCreator", () => {
       bytes: new Uint8Array([1, 2, 3]),
       pageCount: 2,
       outputName: "draft.pdf",
+      warnings: [],
     });
+    sourcesMocks.buildPdfFromSources.mockResolvedValue({
+      bytes: new Uint8Array([37, 80, 68, 70]),
+      pageCount: 1,
+      warnings: [],
+      replacedCharacters: 0,
+    });
+    CreatorSourcesPanel.clearStore();
   });
 
   const mountCreator = async () => {
@@ -110,6 +135,8 @@ describe("PdfCreator", () => {
     const component = await mountCreator();
 
     expect(component.innerHTML).toContain("Create PDF");
+    // A custom element is inline by default; the tool's layout needs a block.
+    expect(component.style.display).toBe("block");
     expect(component.querySelector('[data-template="report"]')?.classList.contains("active")).toBe(
       true,
     );
@@ -454,7 +481,7 @@ describe("PdfCreator", () => {
   it("updates document settings, chrome actions, logo upload, and reset", async () => {
     const originalFileReader = globalThis.FileReader;
     class FakeFileReader {
-      result = "data:image/png;base64,logo";
+      result = "data:image/png;base64,iVBORw0KGgo=";
       error: Error | null = null;
       onload: (() => void) | null = null;
       onerror: (() => void) | null = null;
@@ -498,7 +525,7 @@ describe("PdfCreator", () => {
     logoInput.dispatchEvent(new Event("change", { bubbles: true }));
     await flush();
 
-    expect((component as any).draft.logoDataUrl).toBe("data:image/png;base64,logo");
+    expect((component as any).draft.logoDataUrl).toBe("data:image/png;base64,iVBORw0KGgo=");
     expect((component as any).draft.logoFileName).toBe("logo.png");
 
     (component.querySelector("#clearLogoBtn") as HTMLButtonElement).click();
@@ -514,7 +541,7 @@ describe("PdfCreator", () => {
     watermarkInput.dispatchEvent(new Event("change", { bubbles: true }));
     await flush();
     expect((component as any).draft.payslip.watermark.customImageDataUrl).toBe(
-      "data:image/png;base64,logo",
+      "data:image/png;base64,iVBORw0KGgo=",
     );
     expect((component as any).draft.payslip.watermark.customImageFileName).toBe("watermark.png");
     const grayscaleToggle = component.querySelector(
@@ -1471,12 +1498,22 @@ describe("PdfCreator", () => {
     const older = deferred<any>();
     creatorMocks.createPdfFromDraft
       .mockImplementationOnce(() => older.promise)
-      .mockResolvedValueOnce({ bytes: new Uint8Array([7]), pageCount: 3, outputName: "newer.pdf" });
+      .mockResolvedValueOnce({
+        bytes: new Uint8Array([7]),
+        pageCount: 3,
+        outputName: "newer.pdf",
+        warnings: [],
+      });
     previewMock.load.mockClear();
 
     const first = (component as any).refreshPreview();
     await (component as any).refreshPreview();
-    older.resolve({ bytes: new Uint8Array([9]), pageCount: 9, outputName: "older.pdf" });
+    older.resolve({
+      bytes: new Uint8Array([9]),
+      pageCount: 9,
+      outputName: "older.pdf",
+      warnings: [],
+    });
     await first;
 
     expect((component as any).previewPageCount).toBe(3);
@@ -1491,7 +1528,12 @@ describe("PdfCreator", () => {
     const older = deferred<any>();
     creatorMocks.createPdfFromDraft
       .mockImplementationOnce(() => older.promise)
-      .mockResolvedValueOnce({ bytes: new Uint8Array([4]), pageCount: 1, outputName: "fresh.pdf" });
+      .mockResolvedValueOnce({
+        bytes: new Uint8Array([4]),
+        pageCount: 1,
+        outputName: "fresh.pdf",
+        warnings: [],
+      });
 
     const first = (component as any).refreshPreview();
     await (component as any).refreshPreview();
@@ -1511,8 +1553,18 @@ describe("PdfCreator", () => {
     await flush();
     const slowLoad = deferred<void>();
     creatorMocks.createPdfFromDraft
-      .mockResolvedValueOnce({ bytes: new Uint8Array([1]), pageCount: 4, outputName: "slow.pdf" })
-      .mockResolvedValueOnce({ bytes: new Uint8Array([2]), pageCount: 2, outputName: "fast.pdf" });
+      .mockResolvedValueOnce({
+        bytes: new Uint8Array([1]),
+        pageCount: 4,
+        outputName: "slow.pdf",
+        warnings: [],
+      })
+      .mockResolvedValueOnce({
+        bytes: new Uint8Array([2]),
+        pageCount: 2,
+        outputName: "fast.pdf",
+        warnings: [],
+      });
     previewMock.load.mockImplementationOnce(() => slowLoad.promise);
 
     const first = (component as any).refreshPreview();
@@ -1538,7 +1590,12 @@ describe("PdfCreator", () => {
     expect(busyButton.disabled).toBe(true);
     expect(busyButton.textContent?.trim()).toBe("Creating...");
 
-    creation.resolve({ bytes: new Uint8Array([5]), pageCount: 1, outputName: "invoice.pdf" });
+    creation.resolve({
+      bytes: new Uint8Array([5]),
+      pageCount: 1,
+      outputName: "invoice.pdf",
+      warnings: [],
+    });
     await vi.waitFor(() => expect((component as any).isCreating).toBe(false));
 
     const button = query<HTMLButtonElement>(component, "#createPdfBtn");
@@ -1558,10 +1615,18 @@ describe("PdfCreator", () => {
 
     expect(query(component, "#progressSection").classList.contains("hidden")).toBe(false);
 
-    creation.resolve({ bytes: new Uint8Array([5]), pageCount: 3, outputName: "invoice.pdf" });
+    creation.resolve({
+      bytes: new Uint8Array([5]),
+      pageCount: 3,
+      outputName: "invoice.pdf",
+      warnings: [],
+    });
     await vi.waitFor(() => expect((component as any).isCreating).toBe(false));
 
-    expect(query(component, "#successDetails").textContent).toBe("Invoice created with 3 pages.");
+    // The PDF and its label follow what was open when Create was clicked.
+    expect(query(component, "#successDetails").textContent).toBe(
+      "Project Report created with 3 pages.",
+    );
     expect(query(component, "#successMessage").classList.contains("hidden")).toBe(false);
     expect(query(component, "#progressSection").classList.contains("hidden")).toBe(true);
   });
@@ -1598,6 +1663,7 @@ describe("PdfCreator", () => {
       bytes: new Uint8Array([1]),
       pageCount: 1,
       outputName: "brief.pdf",
+      warnings: [],
     });
     const component = await mountCreator();
 
@@ -1640,6 +1706,7 @@ describe("PdfCreator", () => {
       bytes: new Uint8Array([1]),
       pageCount: 1,
       outputName: "one.pdf",
+      warnings: [],
     });
     const component = await mountCreator();
     await flush();
@@ -1667,5 +1734,789 @@ describe("PdfCreator", () => {
       query<HTMLButtonElement>(component, "#aboutBtn").click();
       query<HTMLButtonElement>(component, "#userAccountBtn").click();
     }).not.toThrow();
+  });
+
+  describe("your own content", () => {
+    const EMPTY_PREVIEW = "Type some text or add a file to see a preview.";
+    const useOwnContent = async (component: PdfCreator) => {
+      query<HTMLButtonElement>(component, '[data-mode="sources"]').click();
+      await flush();
+      return query<CreatorSourcesPanel>(component, "creator-sources-panel");
+    };
+    const typeIntoPanel = (panel: CreatorSourcesPanel, text: string) => {
+      const textarea = panel.querySelector("textarea") as HTMLTextAreaElement;
+      textarea.value = text;
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    const previewText = () => document.querySelector("#previewState")?.textContent?.trim();
+    const createButton = (component: PdfCreator) =>
+      query<HTMLButtonElement>(component, "#createPdfBtn");
+    const built = (pageCount: number, extra: Record<string, unknown> = {}) => ({
+      bytes: new Uint8Array([37, 80, 68, 70, pageCount]),
+      pageCount,
+      warnings: [],
+      replacedCharacters: 0,
+      ...extra,
+    });
+
+    it("sits beside the templates and shows only the settings that apply", async () => {
+      const component = await mountCreator();
+      expect(query(component, ".subtitle").textContent).toContain("your own text and files");
+      expect(query(component, ".creator-template-option").dataset.mode).toBe("sources");
+
+      const panel = await useOwnContent(component);
+
+      expect(panel.getAttribute("store-key")).toBe("pdf-creator");
+      expect(query(component, '[data-mode="sources"]').classList.contains("active")).toBe(true);
+      expect(component.querySelector("[data-template].active")).toBeNull();
+      for (const kept of ["#fileNameInput", "#pageSizeSelect", "#orientationSelect"]) {
+        expect(component.querySelector(kept)).toBeTruthy();
+      }
+      for (const hidden of [
+        "#accentColorInput",
+        "#pageNumbersToggle",
+        "#uploadLogoBtn",
+        "#reportTitle",
+      ]) {
+        expect(component.querySelector(hidden)).toBeNull();
+      }
+      expect(query(component, "#creatorSummary").textContent).toContain(
+        "Your own content · LETTER portrait",
+      );
+      expect(createButton(component).disabled).toBe(true);
+      await vi.waitFor(() => expect(previewText()).toBe(EMPTY_PREVIEW));
+      expect(query(component, "#previewMetaText").textContent).toBe("Nothing to preview yet.");
+      expect(sourcesMocks.buildPdfFromSources).not.toHaveBeenCalled();
+
+      const mutationSpy = vi.spyOn(component as any, "handleDraftMutation");
+      query<HTMLButtonElement>(component, '[data-mode="sources"]').click();
+      expect(mutationSpy).not.toHaveBeenCalled();
+
+      await switchTemplate(component, "report");
+      expect((component as any).draft.mode).toBe("template");
+      expect(component.querySelector("#reportTitle")).toBeTruthy();
+      expect(component.querySelector("creator-sources-panel")).toBeNull();
+    });
+
+    it("rebuilds the live preview once typing pauses, with the page settings", async () => {
+      const component = await mountCreator();
+      const panel = await useOwnContent(component);
+
+      typeIntoPanel(panel, "H");
+      typeIntoPanel(panel, "He");
+      typeIntoPanel(panel, "# Hello");
+
+      expect(sourcesMocks.buildPdfFromSources).not.toHaveBeenCalled();
+      expect(createButton(component).disabled).toBe(false);
+      await vi.waitFor(() =>
+        expect(query(component, "#previewMetaText").textContent).toBe("1 page · kyte-document.pdf"),
+      );
+      expect(sourcesMocks.buildPdfFromSources).toHaveBeenCalledTimes(1);
+      expect(sourcesMocks.buildPdfFromSources).toHaveBeenCalledWith(
+        [{ kind: "text", text: "# Hello", markdown: true, name: "Your text" }],
+        { pageSize: "letter", orientation: "portrait", title: "kyte-document" },
+        undefined,
+      );
+      expect(previewMock.load).toHaveBeenLastCalledWith(new Uint8Array([37, 80, 68, 70]));
+      expect((component as any).draft.sources).toEqual({
+        text: "# Hello",
+        markdown: true,
+        textPosition: "first",
+      });
+
+      setInputValue(component, "#pageSizeSelect", "a4", "change");
+      setInputValue(component, "#orientationSelect", "landscape", "change");
+      setInputValue(component, "#fileNameInput", "Notes");
+      await vi.waitFor(() => expect(sourcesMocks.buildPdfFromSources).toHaveBeenCalledTimes(2));
+      expect(sourcesMocks.buildPdfFromSources.mock.calls[1][1]).toEqual({
+        pageSize: "a4",
+        orientation: "landscape",
+        title: "Notes",
+      });
+    });
+
+    it("never lets an older build replace a newer preview or the empty state", async () => {
+      const component = await mountCreator();
+      const panel = await useOwnContent(component);
+      typeIntoPanel(panel, "Draft text");
+      await vi.waitFor(() => expect(sourcesMocks.buildPdfFromSources).toHaveBeenCalledTimes(1));
+      await flush();
+
+      const older = deferred<any>();
+      sourcesMocks.buildPdfFromSources
+        .mockImplementationOnce(() => older.promise)
+        .mockResolvedValueOnce(built(3));
+      const first = (component as any).refreshPreview();
+      await (component as any).refreshPreview();
+      older.resolve(built(9));
+      await first;
+      expect(query(component, "#previewMetaText").textContent).toBe("3 pages · kyte-document.pdf");
+      expect(previewMock.load).not.toHaveBeenCalledWith(built(9).bytes);
+
+      const slow = deferred<any>();
+      sourcesMocks.buildPdfFromSources.mockImplementationOnce(() => slow.promise);
+      const pending = (component as any).refreshPreview();
+      typeIntoPanel(panel, "   ");
+      await (component as any).refreshPreview();
+      slow.resolve(built(5));
+      await pending;
+
+      expect(previewText()).toBe(EMPTY_PREVIEW);
+      expect((component as any).previewPageCount).toBeNull();
+      expect(createButton(component).disabled).toBe(true);
+    });
+
+    it("creates a PDF from added files with progress, and shows warnings beside the download", async () => {
+      const dialog = document.getElementById("globalDialog") as any;
+      const component = await mountCreator();
+      const panel = await useOwnContent(component);
+      panel.addFiles([
+        new File(["png-bytes"], "photo.png", { type: "image/png" }),
+        new File(["a,b"], "table.csv", { type: "text/csv" }),
+      ]);
+      expect(createButton(component).disabled).toBe(false);
+
+      const warning = '"table.csv" has no text Kyte can read, so nothing was added from it.';
+      const seen: {
+        names?: string[];
+        status?: string | null;
+        percent?: string | null;
+        shown?: boolean;
+      } = {};
+      sourcesMocks.buildPdfFromSources.mockImplementationOnce(
+        async (sources: any[], _options: unknown, onProgress: (progress: any) => void) => {
+          seen.names = sources.map((source) => source.file.name);
+          onProgress({ index: 1, total: 2, name: "table.csv", stage: "converting", percent: 55 });
+          seen.status = query(component, "#statusText").textContent;
+          seen.percent = query(component, "#percentText").textContent;
+          seen.shown = !query(component, "#progressSection").classList.contains("hidden");
+          return built(2, { warnings: [warning] });
+        },
+      );
+      const savePdf = vi.spyOn(component as any, "savePdf").mockResolvedValue(true);
+
+      await (component as any).startCreation();
+
+      expect(seen).toEqual({
+        names: ["photo.png", "table.csv"],
+        status: "Converting table.csv (2 of 2)...",
+        percent: "55%",
+        shown: true,
+      });
+      expect(persistence.addJob).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tool: "Create",
+          fileName: "kyte-document.pdf",
+          metadata: { template: "Your own content", pageCount: 2 },
+        }),
+      );
+      const details = query(component, "#successDetails");
+      expect(details.firstChild?.textContent).toBe("Your own content created with 2 pages.");
+      expect(Array.from(details.querySelectorAll("li"), (item) => item.textContent)).toEqual([
+        warning,
+      ]);
+      expect(dialog.show).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "success",
+          message: `Your own content PDF is ready. ${warning}`,
+        }),
+      );
+      expect(query(component, "#progressSection").classList.contains("hidden")).toBe(true);
+
+      query<HTMLButtonElement>(component, "#downloadLink").click();
+      await vi.waitFor(() => expect(savePdf).toHaveBeenCalled());
+      expect(savePdf).toHaveBeenCalledWith(
+        new Uint8Array([37, 80, 68, 70, 2]),
+        "kyte-document.pdf",
+        "",
+        ".pdf",
+      );
+    });
+
+    it("shows the converter's own explanation when a file cannot be used", async () => {
+      const dialog = document.getElementById("globalDialog") as any;
+      const message =
+        'Kyte could not read the image "scan.png". Save it as PNG or JPG and try again.';
+      sourcesMocks.buildPdfFromSources.mockRejectedValue(new UserFacingError(message));
+      const component = await mountCreator();
+      const panel = await useOwnContent(component);
+      panel.addFiles([new File(["x"], "scan.png", { type: "image/png" })]);
+
+      await vi.waitFor(() => expect(previewText()).toBe(message));
+      expect(query(component, "#previewState").classList.contains("error")).toBe(true);
+
+      await (component as any).startCreation();
+      expect(dialog.show).toHaveBeenLastCalledWith(
+        expect.objectContaining({ type: "error", message }),
+      );
+      expect(persistence.addJob).not.toHaveBeenCalled();
+    });
+
+    it("does not start creating while there is nothing to put in the PDF", async () => {
+      const component = await mountCreator();
+      await useOwnContent(component);
+
+      await (component as any).startCreation();
+
+      expect(sourcesMocks.buildPdfFromSources).not.toHaveBeenCalled();
+      expect(persistence.addJob).not.toHaveBeenCalled();
+    });
+
+    it("saves the typed text and Markdown switch with the draft", async () => {
+      const component = await mountCreator();
+      await flush();
+      const panel = await useOwnContent(component);
+      (persistence.set as any).mockClear();
+
+      typeIntoPanel(panel, "Meeting notes");
+      const toggle = panel.querySelector('input[data-part="markdown"]') as HTMLInputElement;
+      toggle.checked = false;
+      toggle.dispatchEvent(new Event("change", { bubbles: true }));
+
+      await vi.waitFor(() => expect(persistence.set).toHaveBeenCalled());
+      expect(persistence.set).toHaveBeenLastCalledWith(
+        "create-pdf",
+        expect.objectContaining({
+          mode: "sources",
+          sources: { text: "Meeting notes", markdown: false, textPosition: "first" },
+        }),
+      );
+    });
+
+    it("saves and restores whether the text goes before or after the files", async () => {
+      const component = await mountCreator();
+      await flush();
+      const panel = await useOwnContent(component);
+      typeIntoPanel(panel, "Cover note");
+      panel.addFiles([new File(["png"], "scan.png", { type: "image/png" })]);
+      (persistence.set as any).mockClear();
+
+      const select = panel.querySelector('select[data-part="position"]') as HTMLSelectElement;
+      select.value = "last";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+
+      expect((component as any).draft.sources.textPosition).toBe("last");
+      await vi.waitFor(() => expect(persistence.set).toHaveBeenCalled());
+      expect(persistence.set).toHaveBeenLastCalledWith(
+        "create-pdf",
+        expect.objectContaining({
+          sources: { text: "Cover note", markdown: true, textPosition: "last" },
+        }),
+      );
+
+      // After a reload the panel's memory is empty; the saved choice comes back.
+      document.body.innerHTML = '<div id="globalDialog"></div>';
+      (document.getElementById("globalDialog") as any).show = vi.fn().mockResolvedValue(true);
+      CreatorSourcesPanel.clearStore();
+      sourcesMocks.buildPdfFromSources.mockClear();
+      (persistence.get as any).mockResolvedValueOnce({
+        mode: "sources",
+        sources: { text: "Cover note", markdown: true, textPosition: "last" },
+      });
+      const restored = new PdfCreator();
+      document.body.appendChild(restored);
+      await vi.waitFor(() => expect(sourcesMocks.buildPdfFromSources).toHaveBeenCalled());
+
+      const restoredPanel = query<CreatorSourcesPanel>(restored, "creator-sources-panel");
+      expect(restoredPanel.textPosition).toBe("last");
+      expect(
+        (restoredPanel.querySelector('select[data-part="position"]') as HTMLSelectElement).value,
+      ).toBe("last");
+      expect(query(restored, "#draftStatusText").textContent).toBe(
+        "Previous draft restored from this browser.",
+      );
+    });
+
+    it("puts saved text back into the empty panel after a reload", async () => {
+      (persistence.get as any).mockResolvedValueOnce({
+        template: "invoice",
+        mode: "sources",
+        sources: { text: "Saved notes", markdown: false },
+      });
+
+      const restored = new PdfCreator();
+      document.body.appendChild(restored);
+      await vi.waitFor(() => expect(sourcesMocks.buildPdfFromSources).toHaveBeenCalled());
+
+      const panel = query<CreatorSourcesPanel>(restored, "creator-sources-panel");
+      expect((panel.querySelector("textarea") as HTMLTextAreaElement).value).toBe("Saved notes");
+      expect((panel.querySelector('input[data-part="markdown"]') as HTMLInputElement).checked).toBe(
+        false,
+      );
+      expect(query(restored, "#draftStatusText").textContent).toBe(
+        "Previous draft restored from this browser.",
+      );
+      expect(createButton(restored).disabled).toBe(false);
+      expect(sourcesMocks.buildPdfFromSources).toHaveBeenCalledWith(
+        [{ kind: "text", text: "Saved notes", markdown: false, name: "Your text" }],
+        expect.objectContaining({ title: "kyte-document" }),
+        undefined,
+      );
+      expect(creatorMocks.createPdfFromDraft).not.toHaveBeenCalled();
+
+      await switchTemplate(restored, "invoice");
+      expect(restored.querySelector("#invoiceBusinessName")).toBeTruthy();
+    });
+
+    it("clears typed text and files when starting over", async () => {
+      const component = await mountCreator();
+      let panel = await useOwnContent(component);
+      typeIntoPanel(panel, "Temporary");
+      panel.addFiles([new File(["x"], "a.png", { type: "image/png" })]);
+
+      query<HTMLButtonElement>(component, "#resetDraftBtn").click();
+      await vi.waitFor(() => expect(persistence.delete).toHaveBeenCalledWith("create-pdf"));
+      await flush();
+
+      expect((component as any).draft.mode).toBe("template");
+      expect((component as any).draft.sources).toEqual({
+        text: "",
+        markdown: true,
+        textPosition: "first",
+      });
+      panel = await useOwnContent(component);
+      expect(panel.hasContent()).toBe(false);
+      expect(panel.fileCount).toBe(0);
+      expect((panel.querySelector("textarea") as HTMLTextAreaElement).value).toBe("");
+      expect(createButton(component).disabled).toBe(true);
+    });
+  });
+
+  it("saves edits that are still waiting when the tool is closed", async () => {
+    const component = await mountCreator();
+    await flush();
+    (persistence.set as any).mockClear();
+
+    setInputValue(component, "#reportTitle", "Last-second change");
+    component.remove();
+
+    expect(persistence.set).toHaveBeenCalledWith(
+      "create-pdf",
+      expect.objectContaining({ report: expect.objectContaining({ title: "Last-second change" }) }),
+    );
+  });
+
+  describe("review fixes", () => {
+    it("shows progress and the Download button in the editor column, clear of a floating preview", async () => {
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 });
+      const component = await mountCreator();
+      const column = query(component, ".creator-layout.preview-floating .creator-sidebar");
+
+      for (const id of ["progressSection", "successMessage", "downloadLink"]) {
+        expect(column.querySelector(`#${id}`)).toBeTruthy();
+      }
+      expect(column.querySelector(".creator-action-row + #progressSection")).toBeTruthy();
+    });
+
+    it("starts the floating preview to the right of the editor column", async () => {
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: 1600 });
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: 1000 });
+      const box = (left: number, right: number) =>
+        ({
+          left,
+          right,
+          x: left,
+          y: 0,
+          top: 0,
+          bottom: 800,
+          width: right - left,
+          height: 800,
+          toJSON: () => ({}),
+        }) as DOMRect;
+      HTMLElement.prototype.getBoundingClientRect = vi.fn(function (this: HTMLElement) {
+        if (this.classList?.contains("tool-view")) return box(200, 1320);
+        // The stylesheet leaves less room than the 420px preview plus its 24px gap.
+        if (this.classList?.contains("creator-sidebar")) return box(250, 900);
+        return originalGetBoundingClientRect.call(this);
+      });
+
+      await mountCreator();
+      const portal = document.body.querySelector("#floatingPreview") as HTMLElement;
+
+      // Anchored to the tool's right edge it would start at 1320 - 444 = 876, inside the column.
+      expect(portal.style.left).toBe(`${900 + 24}px`);
+    });
+
+    it("builds and labels the PDF from the draft as it was when Create was clicked", async () => {
+      const component = await mountCreator();
+      await flush();
+      const creation = deferred<any>();
+
+      await switchTemplate(component, "payslip");
+      creatorMocks.createPdfFromDraft.mockClear();
+      creatorMocks.createPdfFromDraft.mockImplementationOnce(() => creation.promise);
+      query<HTMLButtonElement>(component, "#createPdfBtn").click();
+      await switchTemplate(component, "report");
+      setInputValue(component, "#reportTitle", "Edited during creation");
+
+      const [usedDraft] = creatorMocks.createPdfFromDraft.mock.calls[0];
+      expect(usedDraft.template).toBe("payslip");
+      expect(usedDraft).not.toBe((component as any).draft);
+
+      creation.resolve({
+        bytes: new Uint8Array([5]),
+        pageCount: 1,
+        outputName: "pay.pdf",
+        warnings: [],
+      });
+      await vi.waitFor(() => expect((component as any).isCreating).toBe(false));
+
+      expect(persistence.addJob).toHaveBeenCalledWith(
+        expect.objectContaining({ metadata: { template: "Payslip", pageCount: 1 } }),
+      );
+      expect(query(component, "#successDetails").textContent).toBe("Payslip created with 1 page.");
+    });
+
+    it("previews a copy of the draft, so later edits cannot change a build in progress", async () => {
+      const component = await mountCreator();
+      await flush();
+      creatorMocks.createPdfFromDraft.mockClear();
+
+      await (component as any).refreshPreview();
+
+      const [usedDraft] = creatorMocks.createPdfFromDraft.mock.calls[0];
+      expect(usedDraft).toEqual((component as any).draft);
+      expect(usedDraft).not.toBe((component as any).draft);
+    });
+
+    it("frees the PDF a replaced preview finished opening after a re-render", async () => {
+      const component = await mountCreator();
+      await flush();
+      const slowLoad = deferred<void>();
+      previewMock.load.mockImplementationOnce(() => slowLoad.promise);
+
+      const pending = (component as any).refreshPreview();
+      await flush();
+      await switchTemplate(component, "invoice");
+      const destroyCallsAfterRerender = previewMock.destroy.mock.calls.length;
+
+      slowLoad.resolve();
+      await pending;
+
+      expect(previewMock.destroy.mock.calls.length).toBe(destroyCallsAfterRerender + 1);
+    });
+
+    it("rejects an uploaded logo whose bytes are not PNG or JPEG, whatever its label", async () => {
+      const dialog = document.getElementById("globalDialog") as any;
+      const originalFileReader = globalThis.FileReader;
+      let readerResult = "data:image/jpeg;base64,R0lGODlh";
+      class FakeFileReader {
+        result = readerResult;
+        error: Error | null = null;
+        onload: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        readAsDataURL() {
+          this.result = readerResult;
+          this.onload?.();
+        }
+      }
+      globalThis.FileReader = FakeFileReader as any;
+      try {
+        const component = await mountCreator();
+        const choose = async (name: string) => {
+          const input = query<HTMLInputElement>(component, "#logoInput");
+          Object.defineProperty(input, "files", {
+            configurable: true,
+            value: [new File(["x"], name, { type: "image/jpeg" })],
+          });
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+          await flush();
+        };
+
+        await choose("animation.jpg");
+        expect((component as any).draft.logoDataUrl).toBeNull();
+        expect(dialog.show).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            type: "error",
+            message:
+              '"animation.jpg" is not a PNG or JPEG image, whatever its name says. Save it as PNG or JPEG and try again.',
+          }),
+        );
+
+        // A PNG saved with a .jpg name is fine: its bytes are what count.
+        readerResult = "data:image/jpeg;base64,iVBORw0KGgo=";
+        await choose("logo.jpg");
+        expect((component as any).draft.logoDataUrl).toBe(readerResult);
+
+        // The payslip watermark image is checked the same way.
+        await switchTemplate(component, "payslip");
+        setInputValue(component, "#payslipWatermarkSource", "custom-image", "change");
+        readerResult = "data:image/png;base64,R0lGODlh";
+        const watermarkInput = query<HTMLInputElement>(component, "#watermarkImageInput");
+        Object.defineProperty(watermarkInput, "files", {
+          configurable: true,
+          value: [new File(["x"], "stamp.png", { type: "image/png" })],
+        });
+        watermarkInput.dispatchEvent(new Event("change", { bubbles: true }));
+        await flush();
+        expect((component as any).draft.payslip.watermark.customImageDataUrl).toBeNull();
+        expect(dialog.show).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            message: expect.stringContaining('"stamp.png" is not a PNG or JPEG'),
+          }),
+        );
+      } finally {
+        globalThis.FileReader = originalFileReader;
+      }
+    });
+
+    it.each([
+      {
+        template: "report",
+        buttons: "report",
+        noun: "section",
+        fields: { "report-section-heading": "Heading", "report-section-body": "Body" },
+      },
+      {
+        template: "letter",
+        buttons: "letter",
+        noun: "paragraph",
+        fields: { "letter-paragraph-text": "Paragraph text" },
+      },
+      {
+        template: "cv-modern",
+        buttons: "cv-experience",
+        noun: "role",
+        fields: {
+          "cv-experience-role": "Role Title",
+          "cv-experience-organization": "Organization",
+          "cv-experience-location": "Location",
+          "cv-experience-start": "Start Date",
+          "cv-experience-end": "End Date",
+          "cv-experience-achievements": "Achievements",
+        },
+      },
+      {
+        template: "cv-modern",
+        buttons: "cv-education",
+        noun: "education",
+        fields: {
+          "cv-education-qualification": "Qualification",
+          "cv-education-institution": "Institution",
+          "cv-education-location": "Location",
+          "cv-education-start": "Start Date",
+          "cv-education-end": "End Date",
+          "cv-education-details": "Details",
+        },
+      },
+      {
+        template: "cv-harvard",
+        buttons: "cv-section",
+        noun: "section",
+        fields: { "cv-section-title": "Section Title", "cv-section-body": "Content" },
+      },
+    ])("labels every $buttons field and names its buttons", async ({
+      template,
+      buttons,
+      noun,
+      fields,
+    }) => {
+      const component = await mountCreator();
+      await switchTemplate(component, template);
+
+      let rowId = "";
+      for (const [className, label] of Object.entries(fields)) {
+        const control = query<HTMLElement>(component, `.${className}`);
+        expect(control.id).toBeTruthy();
+        expect(component.querySelector(`label[for="${control.id}"]`)?.textContent).toBe(label);
+        rowId = control.dataset.id as string;
+      }
+      const rowButtons = component.querySelectorAll(`.action-btn[data-id="${rowId}"]`);
+      expect(Array.from(rowButtons, (button) => button.className.split(" ")[1])).toEqual([
+        `${buttons}-move-up`,
+        `${buttons}-move-down`,
+        `${buttons}-remove`,
+      ]);
+      expect(Array.from(rowButtons, (button) => button.getAttribute("aria-label"))).toEqual([
+        `Move ${noun} 1 up`,
+        `Move ${noun} 1 down`,
+        `Remove ${noun} 1`,
+      ]);
+    });
+
+    it.each([
+      { template: "invoice", fields: "invoice-item", noun: "item", rate: "Unit Price" },
+      { template: "payslip", fields: "payslip-item", noun: "earning", rate: "Rate" },
+      { template: "payslip", fields: "payslip-deduction", noun: "deduction", rate: "Rate" },
+    ])("labels every $noun field and names its icon buttons", async ({
+      template,
+      fields,
+      noun,
+      rate,
+    }) => {
+      const component = await mountCreator();
+      await switchTemplate(component, template);
+
+      for (const [part, label] of [
+        ["description", "Description"],
+        ["quantity", "Quantity"],
+        ["rate", rate],
+      ]) {
+        const control = component.querySelectorAll<HTMLElement>(`.${fields}-${part}`)[1];
+        expect(control.id).toBeTruthy();
+        expect(component.querySelector(`label[for="${control.id}"]`)?.textContent).toBe(label);
+      }
+      const buttons = component.querySelectorAll(
+        `[data-id="${component.querySelectorAll<HTMLElement>(`.${fields}-rate`)[1].dataset.id}"].action-btn`,
+      );
+      expect(Array.from(buttons, (button) => button.getAttribute("aria-label"))).toEqual([
+        `Move ${noun} 2 up`,
+        `Move ${noun} 2 down`,
+        `Remove ${noun} 2`,
+      ]);
+    });
+  });
+
+  describe("after the tool is closed", () => {
+    it("stops loading the saved draft and queues no preview", async () => {
+      const savedDraft = deferred<any>();
+      (persistence.get as any).mockImplementationOnce(() => savedDraft.promise);
+      const component = new PdfCreator();
+      document.body.appendChild(component);
+      const setTimeoutSpy = vi.spyOn(window, "setTimeout");
+      setTimeoutSpy.mockClear();
+
+      component.remove();
+      savedDraft.resolve({ template: "invoice", fileName: "late" });
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      expect((component as any).draft.template).toBe("report");
+      expect((component as any).previewTimer).toBeNull();
+      expect(creatorMocks.createPdfFromDraft).not.toHaveBeenCalled();
+      // Only the test's own wait was scheduled.
+      expect(setTimeoutSpy).toHaveBeenCalledTimes(1);
+      setTimeoutSpy.mockRestore();
+    });
+
+    it("also stops when loading the saved draft fails after the tool closed", async () => {
+      const savedDraft = deferred<any>();
+      (persistence.get as any).mockImplementationOnce(() => savedDraft.promise);
+      const component = new PdfCreator();
+      document.body.appendChild(component);
+
+      component.remove();
+      savedDraft.reject(new Error("storage closed"));
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      expect((component as any).previewTimer).toBeNull();
+      expect(creatorMocks.createPdfFromDraft).not.toHaveBeenCalled();
+    });
+
+    it("keeps a PDF finished after the tool closed in history, without touching the page", async () => {
+      const dialog = document.getElementById("globalDialog") as any;
+      const component = await mountCreator();
+      await flush();
+      const creation = deferred<any>();
+      creatorMocks.createPdfFromDraft.mockImplementationOnce(() => creation.promise);
+      previewMock.load.mockClear();
+
+      const pending = (component as any).startCreation();
+      component.remove();
+      creation.resolve({
+        bytes: new Uint8Array([3]),
+        pageCount: 1,
+        outputName: "late.pdf",
+        warnings: [],
+      });
+      await pending;
+
+      expect(persistence.addJob).toHaveBeenCalledWith(
+        expect.objectContaining({ fileName: "late.pdf" }),
+      );
+      expect(dialog.show).not.toHaveBeenCalled();
+      expect(previewMock.load).not.toHaveBeenCalled();
+      // The closed tool's preview state is left as it was (2 pages from the mount).
+      expect((component as any).previewPageCount).toBe(2);
+      expect((component as any).isCreating).toBe(false);
+    });
+
+    it("skips the success message when the tool closes while the result is shown", async () => {
+      const dialog = document.getElementById("globalDialog") as any;
+      const component = await mountCreator();
+      await flush();
+      const slowLoad = deferred<void>();
+      previewMock.load.mockClear();
+      previewMock.load.mockImplementationOnce(() => slowLoad.promise);
+
+      const pending = (component as any).startCreation();
+      await vi.waitFor(() => expect(previewMock.load).toHaveBeenCalled());
+      component.remove();
+      slowLoad.resolve();
+      await pending;
+
+      expect(persistence.addJob).toHaveBeenCalled();
+      expect(dialog.show).not.toHaveBeenCalled();
+    });
+
+    it("does not show an error dialog for a build that fails after the tool closed", async () => {
+      const dialog = document.getElementById("globalDialog") as any;
+      const component = await mountCreator();
+      await flush();
+      const creation = deferred<any>();
+      creatorMocks.createPdfFromDraft.mockImplementationOnce(() => creation.promise);
+
+      const pending = (component as any).startCreation();
+      component.remove();
+      creation.reject(new Error("worker gone"));
+      await pending;
+
+      expect(dialog.show).not.toHaveBeenCalled();
+    });
+
+    it("ignores a preview that finishes after the tool closed", async () => {
+      const component = await mountCreator();
+      await flush();
+      const build = deferred<any>();
+      creatorMocks.createPdfFromDraft.mockImplementationOnce(() => build.promise);
+      previewMock.load.mockClear();
+
+      const pending = (component as any).refreshPreview();
+      component.remove();
+      build.resolve({
+        bytes: new Uint8Array([8]),
+        pageCount: 5,
+        outputName: "x.pdf",
+        warnings: [],
+      });
+      await pending;
+
+      expect(previewMock.load).not.toHaveBeenCalled();
+      expect((component as any).previewPageCount).toBe(2);
+    });
+
+    it("leaves the preview as it was when the tool closes during a snapshot restore", async () => {
+      const component = await mountCreator();
+      await flush();
+      const previewState = query(component, "#previewState");
+      previewState.classList.remove("hidden");
+      const slowLoad = deferred<void>();
+      previewMock.load.mockImplementationOnce(() => slowLoad.promise);
+
+      const pending = (component as any).restorePreviewSnapshot();
+      component.remove();
+      slowLoad.resolve();
+      await pending;
+
+      expect(previewState.classList.contains("hidden")).toBe(false);
+    });
+
+    it("saves an edit that arrives after the tool closed right away, without a timer", async () => {
+      const component = await mountCreator();
+      await flush();
+      component.remove();
+      (persistence.set as any).mockClear();
+      const setTimeoutSpy = vi.spyOn(window, "setTimeout");
+      setTimeoutSpy.mockClear();
+
+      (component as any).draft.fileName = "uploaded-late";
+      (component as any).handleDraftMutation();
+
+      expect(persistence.set).toHaveBeenCalledWith(
+        "create-pdf",
+        expect.objectContaining({ fileName: "uploaded-late" }),
+      );
+      expect(setTimeoutSpy).not.toHaveBeenCalled();
+      setTimeoutSpy.mockRestore();
+    });
   });
 });
