@@ -11,6 +11,10 @@ const mockPdfProxy = {
 };
 
 vi.mock("../../utils/pdfConfig", () => ({
+  // pdfEngine loads markdownPdf (for toWinAnsi), which builds colours with rgb.
+  degrees: vi.fn((value: number) => ({ value })),
+  rgb: vi.fn((r: number, g: number, b: number) => ({ r, g, b })),
+  StandardFonts: {},
   pdfjsLib: {
     getDocument: vi.fn(() => ({
       promise: Promise.resolve(mockPdfProxy),

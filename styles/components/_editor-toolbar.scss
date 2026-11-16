@@ -66,3 +66,210 @@
 .cursor-crosshair {
   cursor: crosshair !important;
 }
+
+// ============================================
+// Formatting Toolbar (Word-like rich text bar)
+// ============================================
+
+.formatting-toolbar-container {
+  border-bottom: 1px solid $glass-border;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(8px);
+}
+
+.formatting-toolbar {
+  display: flex;
+  align-items: center;
+  padding: 0.4rem 1rem;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  min-height: 40px;
+
+  &.hidden {
+    display: none;
+  }
+}
+
+.fmt-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.fmt-separator {
+  width: 1px;
+  height: 24px;
+  background: $glass-border;
+  margin: 0 0.4rem;
+}
+
+.fmt-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: $text-muted;
+  border-radius: $radius-md;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: $text-primary;
+  }
+
+  &.active {
+    background: rgba(99, 102, 241, 0.2);
+    color: $color-primary;
+  }
+
+  &:active {
+    transform: scale(0.92);
+  }
+
+  svg {
+    pointer-events: none;
+  }
+}
+
+.fmt-font-select,
+.fmt-size-select {
+  height: 28px;
+  padding: 0 0.5rem;
+  border: 1px solid $glass-border;
+  border-radius: $radius-md;
+  background: rgba(0, 0, 0, 0.3);
+  color: $text-primary;
+  font-size: 0.75rem;
+  cursor: pointer;
+  outline: none;
+
+  &:focus {
+    border-color: $color-primary;
+  }
+
+  option {
+    background: #1e293b;
+    color: $text-primary;
+  }
+}
+
+.fmt-font-select {
+  width: 120px;
+}
+
+.fmt-size-select {
+  width: 55px;
+}
+
+.fmt-line-height-select,
+.fmt-para-spacing-select {
+  height: 28px;
+  padding: 0 0.4rem;
+  border: 1px solid $glass-border;
+  border-radius: $radius-md;
+  background: rgba(0, 0, 0, 0.3);
+  color: $text-primary;
+  font-size: 0.7rem;
+  cursor: pointer;
+  outline: none;
+
+  &:focus {
+    border-color: $color-primary;
+  }
+
+  option {
+    background: #1e293b;
+    color: $text-primary;
+  }
+}
+
+.fmt-line-height-select {
+  width: 52px;
+}
+
+.fmt-para-spacing-select {
+  width: 100px;
+}
+
+.fmt-font-group {
+  gap: 4px;
+}
+
+.fmt-color-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: $radius-md;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s ease;
+  color: $text-muted;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: $text-primary;
+  }
+
+  .fmt-color-input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+  }
+
+  .fmt-color-indicator {
+    position: absolute;
+    bottom: 2px;
+    left: 4px;
+    right: 4px;
+    height: 3px;
+    border-radius: 1px;
+  }
+}
+
+// ============================================
+// Text Block Annotation Styles
+// ============================================
+
+.annotation-textblock {
+  position: absolute;
+  cursor: default;
+
+  div[contenteditable] {
+    cursor: text;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+
+    &:focus {
+      cursor: text;
+    }
+
+    // Ensure list styles work within contenteditable
+    ul, ol {
+      margin: 0.25em 0;
+      padding-left: 1.5em;
+    }
+
+    li {
+      margin: 0.1em 0;
+    }
+  }
+
+  .ann-delete-btn {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+
+  &:hover .ann-delete-btn,
+  &:focus-within .ann-delete-btn {
+    opacity: 1;
+  }
+}

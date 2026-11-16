@@ -15,8 +15,9 @@ export class TextEditor extends BaseTool {
       const textContent = await page.getTextContent();
       const viewport = page.getViewport({ scale: 1.0 });
       const scale = 800 / viewport.width;
-      const pdfX = x / scale;
-      const pdfY = viewport.height - y / scale;
+      // The click on the page as shown, in PDF space: the viewport accounts
+      // for page rotation and a crop box that does not start at (0, 0).
+      const [pdfX, pdfY] = viewport.convertToPdfPoint(x / scale, y / scale);
 
       let minDistance = 50;
       let nearestItem: any = null;
@@ -34,7 +35,12 @@ export class TextEditor extends BaseTool {
       }
 
       if (nearestItem) {
-        fontSize = Math.round(nearestItem.transform[0]);
+        // The PDF reports size in PDF points; annotations live in editor
+        // pixels (scaled to the 800px page), like extracted text blocks. The
+        // text's height is its size, even for text turned in PDF space.
+        // A page's /UserUnit makes each PDF unit show that much larger.
+        const [, , c, d] = nearestItem.transform;
+        fontSize = Math.round(Math.hypot(c, d) * scale * (page.userUnit || 1));
         logger.info("Smart Match detected font size", { fontSize });
       }
     } catch (err) {

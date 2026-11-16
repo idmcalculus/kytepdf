@@ -2,7 +2,15 @@ import type { HistoryAction, HistoryManager } from "./HistoryManager";
 
 export interface Annotation {
   id: string;
-  type: "text" | "image" | "rectangle" | "freehand" | "highlight" | "strikethrough" | "underline";
+  type:
+    | "text"
+    | "textblock"
+    | "image"
+    | "rectangle"
+    | "freehand"
+    | "highlight"
+    | "strikethrough"
+    | "underline";
   pageIndex: number;
   x: number; // PDF coordinates
   y: number; // PDF coordinates
@@ -10,6 +18,8 @@ export interface Annotation {
   height?: number;
   points?: Array<{ x: number; y: number }>;
   content?: string; // For text or image data URL
+  richContent?: string; // HTML-formatted content for text blocks
+  extracted?: boolean; // Whether this was extracted from the original PDF
   style?: {
     color?: string;
     fontSize?: number;
@@ -17,12 +27,37 @@ export interface Annotation {
     opacity?: number;
     rotation?: number; // In degrees
     font?: string;
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
+    strikethrough?: boolean;
+    textAlign?: "left" | "center" | "right" | "justify";
+    lineHeight?: number;
+    /** Space above the box's first line, in editor pixels like fontSize. */
+    paragraphSpacing?: number;
+    letterSpacing?: number;
   };
+}
+
+/**
+ * Represents the original bounding box of an extracted PDF element.
+ * Recorded at extraction time and never removed, so the export can
+ * white-out all original content even after annotations are deleted.
+ */
+export interface ExtractedSource {
+  pageIndex: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** The annotation made from this region, so save can tell if it changed. */
+  annotationId?: string;
 }
 
 export class AnnotationManager {
   private annotations: Map<string, Annotation> = new Map();
   private historyManager: HistoryManager | null;
+  private extractedSources: ExtractedSource[] = [];
 
   constructor(historyManager: HistoryManager | null = null) {
     this.historyManager = historyManager;
@@ -138,9 +173,25 @@ export class AnnotationManager {
   }
 
   /**
-   * Clears all annotations
+   * Clears all annotations and extracted sources
    */
   clear(): void {
     this.annotations.clear();
+    this.extractedSources = [];
+  }
+
+  /**
+   * Records the original bounding box of an extracted PDF element.
+   * Called once at extraction time; never removed.
+   */
+  addExtractedSource(source: ExtractedSource): void {
+    this.extractedSources.push(source);
+  }
+
+  /**
+   * Returns all recorded extracted source regions.
+   */
+  getAllExtractedSources(): ExtractedSource[] {
+    return [...this.extractedSources];
   }
 }
