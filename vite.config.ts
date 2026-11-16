@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { defineConfig, type Plugin } from "vite";
 import { runtimeAssetVersion } from "./scripts/runtimeAssetVersion.ts";
@@ -38,12 +38,32 @@ function dropDuplicateWasmAssets(): Plugin {
   };
 }
 
+/**
+ * The Content-Security-Policy that Netlify sends in production, read from
+ * netlify.toml so `vite preview` serves exactly the deployed policy and the
+ * production-CSP end-to-end tests (tests/e2e/production_csp.spec.ts) run
+ * under it. Dev deliberately sends none: it needs the local auth URL and
+ * Vite's HMR socket, which the production policy blocks.
+ *
+ * A missing policy yields no header rather than a failed config load; the
+ * e2e spec checks that the preview's header matches netlify.toml.
+ */
+function productionCspHeaders(): Record<string, string> {
+  const netlifyToml = resolve(__dirname, "netlify.toml");
+  if (!existsSync(netlifyToml)) return {};
+  const match = readFileSync(netlifyToml, "utf8").match(/Content-Security-Policy\s*=\s*"([^"]+)"/);
+  return match ? { "Content-Security-Policy": match[1] } : {};
+}
+
 export default defineConfig({
   plugins: [dropDuplicateWasmAssets()],
   define: {
     // See scripts/runtimeAssetVersion.ts: ties the service worker's cache name
     // to the WASM/OCR files, so upgrades never serve stale binaries.
     __KYTE_ASSET_VERSION__: JSON.stringify(runtimeAssetVersion(resolve(__dirname, "public"))),
+  },
+  preview: {
+    headers: productionCspHeaders(),
   },
   css: {
     preprocessorOptions: {
