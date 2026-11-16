@@ -15,9 +15,10 @@ export class AboutModal extends HTMLElement {
           </div>
           <div class="about-content">
             <p class="about-copy">
-              KytePDF was born from a desire to make PDF tools fast, private, and accessible. 
-              We believe your documents should never leave your device unless you want them to. 
-              That's why everything happens locally in your browser.
+              KytePDF is a private document toolkit that runs entirely in your browser.
+              Your files never leave your device: text extraction, table detection, conversion,
+              and signing all run locally, powered by WebAssembly. No uploads, no servers, no
+              accounts required to work with documents.
             </p>
             
             <div class="about-contribute">

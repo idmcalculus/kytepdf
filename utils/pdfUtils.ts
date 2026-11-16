@@ -89,7 +89,10 @@ export function generateOutputFilename(
   suffix: string,
   extension = ".pdf",
 ): string {
-  return originalName.replace(/\.pdf$/i, "") + suffix + extension;
+  // Drop the source file's extension (".pdf", ".docx", ".csv", ...) so a
+  // converted file is not named "report.docx_extracted.md". Only a short run
+  // of letters and digits counts, so "notes v1.2 draft" keeps its name.
+  return originalName.replace(/\.[a-z0-9]{1,5}$/i, "") + suffix + extension;
 }
 /**
  * Calculate compression savings percentage

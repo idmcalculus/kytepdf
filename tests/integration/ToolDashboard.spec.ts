@@ -20,7 +20,6 @@ describe("ToolDashboard", () => {
     vi.mocked(persistence.clearAll).mockResolvedValue(undefined);
     document.body.innerHTML = '<div id="globalDialog"></div>';
     (document.getElementById("globalDialog") as any).show = vi.fn().mockResolvedValue(true);
-    (window as any).ensureCloudConsent = vi.fn().mockResolvedValue(true);
     (window as any).lucide = { createIcons: vi.fn() };
     (window as any).showAbout = vi.fn();
     URL.createObjectURL = vi.fn(() => "blob:history");
@@ -77,31 +76,16 @@ describe("ToolDashboard", () => {
       expect(icons.length).toBeGreaterThan(0);
     });
 
-    it("renders active cloud and hybrid badges when tools are enabled", () => {
-      (component as any).tools = [
-        {
-          active: true,
-          desc: "Cloud only",
-          icon: "cloud",
-          id: "cloud-tool",
-          isCloud: true,
-          name: "Cloud Tool",
-        },
-        {
-          active: true,
-          desc: "Hybrid",
-          icon: "cloud",
-          id: "hybrid-tool",
-          isCloud: true,
-          isHybrid: true,
-          name: "Hybrid Tool",
-        },
-      ];
+    it("describes Sign PDF as what the tool does, with no request-signature promise", () => {
+      const card = component.querySelector('.tool-card[data-id="sign"]');
+      expect(card?.textContent).toContain("Draw or type a signature and place it on your PDF.");
+      expect(component.textContent).not.toContain("request signatures");
+    });
 
+    it("does not render cloud badges", () => {
       component.render();
-
-      expect(component.querySelector(".cloud-badge")?.textContent).toContain("Cloud");
-      expect(component.querySelector(".hybrid-badge")?.textContent).toContain("Local + Cloud");
+      expect(component.querySelector(".cloud-badge")).toBeNull();
+      expect(component.querySelector(".hybrid-badge")).toBeNull();
       expect((window as any).lucide.createIcons).toHaveBeenCalled();
     });
   });
@@ -154,40 +138,35 @@ describe("ToolDashboard", () => {
       );
     });
 
-    it("requires cloud consent for active cloud-only tools", async () => {
-      (component as any).tools = [
-        {
-          active: true,
-          desc: "Cloud only",
-          icon: "cloud",
-          id: "cloud-tool",
-          isCloud: true,
-          isHybrid: false,
-          name: "Cloud Tool",
-        },
-      ];
-      component.render();
+    it("emits tool-select for newly activated local conversion tools", async () => {
       const dispatchSpy = vi.spyOn(component, "dispatchEvent");
-      (window as any).ensureCloudConsent.mockResolvedValueOnce(false);
-
-      (component.querySelector('.tool-card[data-id="cloud-tool"]') as HTMLElement).click();
+      const wordCard = component.querySelector('.tool-card[data-id="pdf-to-word"]') as HTMLElement;
+      expect(wordCard.classList.contains("coming-soon")).toBe(false);
+      wordCard.click();
       await new Promise((resolve) => setTimeout(resolve, 0));
-
-      expect((window as any).ensureCloudConsent).toHaveBeenCalled();
-      expect(dispatchSpy).not.toHaveBeenCalledWith(
-        expect.objectContaining({ type: "tool-select" }),
-      );
-
-      (window as any).ensureCloudConsent.mockResolvedValueOnce(true);
-      (component.querySelector('.tool-card[data-id="cloud-tool"]') as HTMLElement).click();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-
       expect(dispatchSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          detail: { toolId: "cloud-tool" },
+          detail: { toolId: "pdf-to-word" },
           type: "tool-select",
         }),
       );
+    });
+
+    it("opens the account modal from the header and tolerates missing actions", () => {
+      const showAccountModal = vi.fn();
+      (window as any).showAccountModal = showAccountModal;
+
+      (component.querySelector("#userAccountBtn") as HTMLButtonElement).click();
+      expect(showAccountModal).toHaveBeenCalledTimes(1);
+
+      delete (window as any).showAccountModal;
+      delete (window as any).showAbout;
+      expect(() =>
+        (component.querySelector("#userAccountBtn") as HTMLButtonElement).click(),
+      ).not.toThrow();
+      expect(() =>
+        (component.querySelector("#aboutBtn") as HTMLButtonElement).click(),
+      ).not.toThrow();
     });
 
     it("calls the about callback from the header", () => {
@@ -272,6 +251,48 @@ describe("ToolDashboard", () => {
       (component.querySelector("#clearHistoryBtn") as HTMLButtonElement).click();
       await new Promise((resolve) => setTimeout(resolve, 0));
       expect(persistence.clearAll).toHaveBeenCalled();
+    });
+
+    it("downloads each saved result with its own file type", async () => {
+      const blobs: Blob[] = [];
+      URL.createObjectURL = vi.fn((blob: Blob) => {
+        blobs.push(blob);
+        return "blob:history";
+      }) as any;
+      const job = (fields: Record<string, unknown>) =>
+        ({ data: new Uint8Array([1]), fileSize: 1, timestamp: 0, tool: "Other", ...fields }) as any;
+
+      component.downloadJob(job({ id: 1, fileName: "notes.txt", mimeType: "text/markdown" }));
+      component.downloadJob(job({ id: 2, fileName: "report.docx" }));
+      component.downloadJob(job({ id: 3, fileName: "scan.PDF", mimeType: 42 }));
+      component.downloadJob(job({ id: 4 }));
+
+      expect(blobs.map((blob) => blob.type)).toEqual([
+        "text/markdown",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/pdf",
+        "application/octet-stream",
+      ]);
+    });
+
+    it("renders hostile and missing file names as plain text", async () => {
+      vi.mocked(persistence.getJobs).mockResolvedValueOnce([
+        {
+          id: 1,
+          tool: "Other",
+          fileName: '<img src=x onerror="alert(1)">',
+          fileSize: 1,
+          timestamp: 0,
+        },
+        { id: 2, tool: "Other", fileSize: 1, timestamp: 0 } as any,
+      ]);
+
+      await component.loadHistory();
+
+      const names = component.querySelectorAll(".job-filename");
+      expect(component.querySelector("#historyGrid img")).toBeNull();
+      expect(names[0].textContent).toBe('<img src=x onerror="alert(1)">');
+      expect(names[1].textContent).toBe("");
     });
 
     it("hides history when the jobs list is missing", () => {

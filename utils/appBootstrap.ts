@@ -28,7 +28,10 @@ export const TOOL_ROUTES: ToolRoute[] = [
   { toolId: "pdf-to-word", markup: '<pdf-to-office format="docx"></pdf-to-office>' },
   { toolId: "pdf-to-pp", markup: '<pdf-to-office format="pptx"></pdf-to-office>' },
   { toolId: "pdf-to-excel", markup: '<pdf-to-office format="xlsx"></pdf-to-office>' },
-  { toolId: "word-to-pdf", markup: "<office-to-pdf></office-to-pdf>" },
+  { toolId: "pdf-to-text", markup: "<pdf-to-text></pdf-to-text>" },
+  { toolId: "office-to-markdown", markup: "<office-to-markdown></office-to-markdown>" },
+  // Legacy alias kept so old deep-links still open the local Markdown extractor.
+  { toolId: "word-to-pdf", markup: "<office-to-markdown></office-to-markdown>" },
   { toolId: "protect", markup: '<pdf-security mode="protect"></pdf-security>' },
   { toolId: "unprotect", markup: '<pdf-security mode="unprotect"></pdf-security>' },
   { toolId: "create-pdf", markup: "<pdf-creator></pdf-creator>" },
@@ -56,25 +59,11 @@ export function showDashboard(mainContainer: HTMLElement | null) {
 
 export function installGlobalActions({
   document: doc = document,
-  sessionStorage: storage = sessionStorage,
   window: win = window,
-}: Pick<BootstrapOptions, "document" | "sessionStorage" | "window"> = {}) {
+}: Pick<BootstrapOptions, "document" | "window"> = {}) {
   (win as any).showAbout = () => {
     const aboutModal = doc.getElementById("aboutModal") as any;
     if (aboutModal) aboutModal.show();
-  };
-
-  (win as any).ensureCloudConsent = async () => {
-    const modal = doc.getElementById("cloudConsentModal") as any;
-    if (!modal) return false;
-
-    const confirmed = await modal.show();
-    if (confirmed) {
-      // Informational only. Upload authorization depends on this user action,
-      // never on a pre-set sessionStorage value.
-      storage.setItem("kyte_cloud_consent", "true");
-    }
-    return confirmed;
   };
 
   (win as any).showAccountModal = (options?: { view?: string; token?: string }) => {

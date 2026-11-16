@@ -19,10 +19,6 @@ interface AppMetadata {
   version: string;
 }
 
-interface CloudConfig {
-  apiEndpoint: string;
-}
-
 interface AuthConfig {
   /**
    * Base URL for the auth API.
@@ -43,7 +39,6 @@ interface KyteConfig {
   isDev: boolean;
   logging: LoggingConfig;
   pdf: PdfConfig;
-  cloud: CloudConfig;
   auth: AuthConfig;
   app: AppMetadata;
 }
@@ -92,15 +87,7 @@ export const config: KyteConfig = {
     workerSrc: "/pdf.worker.min.js",
   },
 
-  // Cloud Conversion Gateway
-  // NOTE: API key is NOT embedded in the client bundle for security.
-  // Requests should be proxied through a backend-for-frontend (BFF)
-  // or use short-lived tokens issued by a server-side auth endpoint.
-  cloud: {
-    apiEndpoint: import.meta.env.VITE_CLOUD_GATEWAY_URL || "",
-  },
-
-  // Auth service
+  // Auth service (remote account only; document processing is local)
   auth: {
     apiUrl: authApiUrl,
     available: authApiUrl !== null,

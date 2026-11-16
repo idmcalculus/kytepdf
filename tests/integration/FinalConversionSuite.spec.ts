@@ -17,7 +17,7 @@ describe("Final Conversion Suite E2E (Integration)", () => {
     register("image-to-pdf", ImageToPdf);
     register("pdf-creator", PdfCreator);
     register("pdf-to-office", PdfToOffice);
-    register("office-to-pdf", OfficeToPdf);
+    register("office-to-markdown", OfficeToPdf);
     register("pdf-security", PdfSecurity);
 
     document.body.innerHTML = '<div id="main-container"></div><div id="globalDialog"></div>';
@@ -48,10 +48,10 @@ describe("Final Conversion Suite E2E (Integration)", () => {
     expect(el.innerHTML).toContain("PDF to PowerPoint");
   });
 
-  it("should render OfficeToPdf", async () => {
+  it("should render OfficeToPdf as Office to Markdown", async () => {
     const el = new OfficeToPdf();
     document.getElementById("main-container")?.appendChild(el);
-    expect(el.innerHTML).toContain("Office to PDF");
+    expect(el.innerHTML).toContain("Office to Markdown");
   });
 
   it("should render PdfSecurity", async () => {

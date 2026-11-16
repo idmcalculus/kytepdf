@@ -1,4 +1,5 @@
 import { logger } from "../utils/logger.ts";
+import { mimeFromFilename } from "../utils/mime.ts";
 import { type Job, persistence } from "../utils/persistence.ts";
 
 interface Tool {
@@ -7,8 +8,6 @@ interface Tool {
   desc: string;
   icon: string;
   active: boolean;
-  isCloud?: boolean;
-  isHybrid?: boolean;
 }
 
 export class ToolDashboard extends HTMLElement {
@@ -42,7 +41,7 @@ export class ToolDashboard extends HTMLElement {
       {
         id: "sign",
         name: "Sign PDF",
-        desc: "Sign yourself or request signatures from others.",
+        desc: "Draw or type a signature and place it on your PDF.",
         icon: "pen-tool",
         active: true,
       },
@@ -56,7 +55,7 @@ export class ToolDashboard extends HTMLElement {
       {
         id: "pdf-to-img",
         name: "PDF to Image",
-        desc: "Convert PDF pages into high-quality images.",
+        desc: "Export PDF pages as PNG or JPG images.",
         icon: "image",
         active: true,
       },
@@ -70,28 +69,23 @@ export class ToolDashboard extends HTMLElement {
       {
         id: "pdf-to-word",
         name: "PDF to Word",
-        desc: "Convert PDF documents into editable Word files.",
+        desc: "Extract text and structure into an editable Word document.",
         icon: "file-text",
-        active: false,
-        isCloud: true,
-        isHybrid: true,
+        active: true,
       },
       {
-        id: "word-to-pdf",
-        name: "Word to PDF",
-        desc: "Transform DOCX files into professional PDFs.",
+        id: "office-to-markdown",
+        name: "Office to Markdown",
+        desc: "Extract Markdown from Word, Excel, PowerPoint, OpenDocument, RTF, EPUB, and CSV.",
         icon: "file-up",
-        active: false,
-        isCloud: true,
+        active: true,
       },
       {
         id: "pdf-to-excel",
         name: "PDF to Sheets",
-        desc: "Extract PDF tables into Excel or Google Sheets.",
+        desc: "Extract detected tables into an Excel spreadsheet.",
         icon: "file-spreadsheet",
-        active: false,
-        isCloud: true,
-        isHybrid: true,
+        active: true,
       },
       {
         id: "pdf-to-pp",
@@ -99,8 +93,13 @@ export class ToolDashboard extends HTMLElement {
         desc: "Convert PDF pages into PowerPoint slides.",
         icon: "presentation",
         active: false,
-        isCloud: true,
-        isHybrid: true,
+      },
+      {
+        id: "pdf-to-text",
+        name: "PDF to Text",
+        desc: "Extract text as Markdown or plain text, in your browser.",
+        icon: "file-text",
+        active: true,
       },
       {
         id: "pdf-ai",
@@ -108,7 +107,6 @@ export class ToolDashboard extends HTMLElement {
         desc: "Chat with your PDF and extract insights using AI.",
         icon: "sparkles",
         active: false,
-        isCloud: true,
       },
       {
         id: "create-pdf",
@@ -173,32 +171,14 @@ export class ToolDashboard extends HTMLElement {
             </button>
           </div>
         </div>
-        <p style="color: var(--text-muted); margin-bottom: 2rem; font-size: 1.1rem; padding-left: 0.25rem;">The ultimate lightweight & private PDF toolkit.</p>
+        <p style="color: var(--text-muted); margin-bottom: 2rem; font-size: 1.1rem; padding-left: 0.25rem;">The private PDF toolkit that runs in your browser.</p>
         
         <div class="dashboard-grid">
           ${visibleTools
             .map(
               (tool) => `
             <div class="tool-card ${tool.active ? "" : "coming-soon"}" data-id="${tool.id}" ${tool.active ? "" : 'aria-disabled="true"'}>
-              ${
-                !tool.active
-                  ? '<span class="badge coming-soon">Coming Soon</span>'
-                  : tool.isHybrid
-                    ? `
-                <span class="badge hybrid-badge">
-                  <i data-lucide="cloud" style="width: 12px; height: 12px;"></i>
-                  Local + Cloud
-                </span>
-              `
-                    : tool.isCloud
-                      ? `
-                <span class="badge cloud-badge">
-                  <i data-lucide="cloud" style="width: 12px; height: 12px;"></i>
-                  Cloud
-                </span>
-              `
-                      : ""
-              }
+              ${!tool.active ? '<span class="badge coming-soon">Coming Soon</span>' : ""}
               <div class="icon-wrapper">
                 <i data-lucide="${tool.icon}"></i>
               </div>
@@ -245,12 +225,6 @@ export class ToolDashboard extends HTMLElement {
         const toolId = card.getAttribute("data-id");
         const tool = this.tools.find((t) => t.id === toolId);
         if (tool?.active) {
-          // Check for cloud consent if necessary
-          if (tool.isCloud && !tool.isHybrid) {
-            const consented = await (window as any).ensureCloudConsent();
-            if (!consented) return;
-          }
-
           this.dispatchEvent(
             new CustomEvent("tool-select", {
               detail: { toolId },
@@ -332,7 +306,9 @@ export class ToolDashboard extends HTMLElement {
   }
 
   downloadJob(job: Job) {
-    const blob = new Blob([job.data], { type: "application/pdf" });
+    const mime =
+      (typeof job.mimeType === "string" && job.mimeType) || mimeFromFilename(job.fileName || "");
+    const blob = new Blob([job.data], { type: mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;

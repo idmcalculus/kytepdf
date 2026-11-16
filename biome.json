@@ -37,6 +37,7 @@
       "!!**/node_modules",
       "!!**/playwright-report",
       "!!**/test-results",
+      "!!tmp",
       "!!**/bun.lock",
       "!!**/public"
     ]

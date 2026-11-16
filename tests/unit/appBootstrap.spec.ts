@@ -29,11 +29,9 @@ describe("appBootstrap", () => {
       <div id="main-container"></div>
       <div id="globalDialog"></div>
       <div id="aboutModal"></div>
-      <div id="cloudConsentModal"></div>
     `;
     (document.getElementById("globalDialog") as any).show = vi.fn();
     (document.getElementById("aboutModal") as any).show = vi.fn();
-    (document.getElementById("cloudConsentModal") as any).show = vi.fn().mockResolvedValue(true);
     sessionStorage.clear();
   });
 
@@ -53,22 +51,12 @@ describe("appBootstrap", () => {
     expect(main.innerHTML).toBe(TOOL_ROUTES.at(-1)?.markup);
   });
 
-  it("installs global about and cloud consent actions", async () => {
+  it("installs global about action", () => {
     installGlobalActions();
 
     (window as any).showAbout();
     expect((document.getElementById("aboutModal") as any).show).toHaveBeenCalled();
-
-    await expect((window as any).ensureCloudConsent()).resolves.toBe(true);
-    expect(sessionStorage.getItem("kyte_cloud_consent")).toBe("true");
-
-    (document.getElementById("cloudConsentModal") as any).show.mockClear();
-    await expect((window as any).ensureCloudConsent()).resolves.toBe(true);
-    expect((document.getElementById("cloudConsentModal") as any).show).toHaveBeenCalled();
-
-    sessionStorage.clear();
-    document.getElementById("cloudConsentModal")?.remove();
-    await expect((window as any).ensureCloudConsent()).resolves.toBe(false);
+    expect((window as any).ensureCloudConsent).toBeUndefined();
   });
 
   it("installs runtime and promise rejection error handlers", () => {
@@ -379,5 +367,182 @@ describe("appBootstrap", () => {
 
     expect(logger.info).toHaveBeenCalledWith("KytePDF Application Starting");
     expect(result).toBeNull(); // Because getElementById("bg-canvas") returns null
+  });
+
+  describe("service worker update prompts", () => {
+    it("keeps the page when the user declines the reload or a worker is still installing", async () => {
+      const controllerCallbacks: Array<() => void> = [];
+      const loadCallbacks: Array<() => void> = [];
+      const installing = {
+        state: "installing",
+        addEventListener: vi.fn((_event: string, cb: () => void) => cb()),
+        postMessage: vi.fn(),
+      };
+      const appNavigator = {
+        serviceWorker: {
+          addEventListener: vi.fn((_event: string, cb: () => void) => controllerCallbacks.push(cb)),
+          controller: {},
+          register: vi.fn().mockResolvedValue({
+            addEventListener: vi.fn((_event: string, cb: () => void) => cb()),
+            installing,
+            update: vi.fn(),
+          }),
+        },
+      } as unknown as Navigator;
+      const dialog = { show: vi.fn().mockResolvedValue(false) };
+      const win = {
+        addEventListener: vi.fn((_event: string, cb: () => void) => loadCallbacks.push(cb)),
+        location: { reload: vi.fn() },
+        document: { getElementById: vi.fn(() => dialog) },
+      } as unknown as Window;
+
+      installServiceWorkerRegistration({
+        logger: createLogger(),
+        navigator: appNavigator,
+        prod: true,
+        window: win,
+      });
+      loadCallbacks[0]();
+      await Promise.resolve();
+      expect(installing.postMessage).not.toHaveBeenCalled();
+
+      controllerCallbacks[0]();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(dialog.show).toHaveBeenCalledTimes(1);
+      expect(win.location.reload).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("account deep links", () => {
+    const fakeWindow = (href: string) => ({ location: { href } }) as unknown as Window;
+
+    it.each([
+      ["/verify-email", "verify-email"],
+      ["/reset-password", "reset-password"],
+    ])("opens the account modal for %s links that carry a token", (path, view) => {
+      const accountModal = { show: vi.fn() };
+      const doc = {
+        getElementById: vi.fn((id: string) => (id === "accountModal" ? accountModal : null)),
+      } as unknown as Document;
+
+      installGlobalActions({
+        document: doc,
+        window: fakeWindow(`https://kyte.test${path}?token=abc`),
+      });
+
+      expect(accountModal.show).toHaveBeenCalledWith({ view, token: "abc" });
+    });
+
+    it("ignores account links without a token and other paths", () => {
+      const accountModal = { show: vi.fn() };
+      const doc = { getElementById: vi.fn(() => accountModal) } as unknown as Document;
+
+      installGlobalActions({ document: doc, window: fakeWindow("https://kyte.test/verify-email") });
+      installGlobalActions({ document: doc, window: fakeWindow("https://kyte.test/?token=abc") });
+
+      expect(accountModal.show).not.toHaveBeenCalled();
+    });
+
+    it("does nothing when the about or account modal is missing", () => {
+      const win = fakeWindow("https://kyte.test/");
+      const doc = { getElementById: vi.fn(() => null) } as unknown as Document;
+      installGlobalActions({ document: doc, window: win });
+
+      expect(() => (win as any).showAbout()).not.toThrow();
+      expect(() => (win as any).showAccountModal({ view: "login" })).not.toThrow();
+    });
+  });
+
+  describe("error handler fallbacks", () => {
+    it("maps the message when no error object is given and skips a missing dialog", () => {
+      const logger = createLogger();
+      const dialog = document.getElementById("globalDialog") as any;
+      installErrorHandlers({ logger });
+
+      window.onerror?.("Script error.", "", 0, 0, undefined);
+      expect(logger.error).toHaveBeenCalledWith(
+        "Unhandled runtime error",
+        expect.objectContaining({ message: "Script error.", error: undefined }),
+      );
+      expect(dialog.show).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Something went wrong", type: "error" }),
+      );
+
+      dialog.remove();
+      dialog.show.mockClear();
+      expect(window.onerror?.("boom", "", 0, 0, new Error("boom"))).toBe(false);
+      window.onunhandledrejection?.({ reason: "nope" } as PromiseRejectionEvent);
+      expect(dialog.show).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("background", () => {
+    it("wraps particles that leave the left or top edge", () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 200;
+      canvas.height = 100;
+      const particle = new BackgroundParticle(canvas, { x: null, y: null }, () => 0.5);
+
+      particle.x = 1;
+      particle.y = 1;
+      particle.speedX = -5;
+      particle.speedY = -5;
+      particle.update();
+
+      expect(particle.x).toBe(200);
+      expect(particle.y).toBe(100);
+
+      particle.speedX = 0;
+      particle.speedY = 5;
+      particle.update();
+      expect(particle.y).toBe(0);
+    });
+
+    it("leaves particles alone when the mouse is far away", () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1000;
+      canvas.height = 1000;
+      const particle = new BackgroundParticle(canvas, { x: 900, y: 900 }, () => 0.5);
+      particle.x = 10;
+      particle.y = 10;
+      particle.speedX = 0;
+      particle.speedY = 0;
+
+      particle.update();
+
+      expect(particle).toMatchObject({ x: 10, y: 10 });
+    });
+
+    it("skips drawing when the canvas has no 2D context", () => {
+      const canvas = document.createElement("canvas");
+      canvas.getContext = vi.fn(() => null) as any;
+      const requestFrame = vi.fn(() => 1);
+
+      createBackgroundAnimator({ canvas, requestAnimationFrame: requestFrame, window }).start();
+
+      expect(requestFrame).not.toHaveBeenCalled();
+    });
+
+    it("starts the animator on the page's background canvas", () => {
+      const canvas = document.getElementById("bg-canvas") as HTMLCanvasElement;
+      const ctx = {
+        arc: vi.fn(),
+        beginPath: vi.fn(),
+        clearRect: vi.fn(),
+        fill: vi.fn(),
+        lineTo: vi.fn(),
+        moveTo: vi.fn(),
+        stroke: vi.fn(),
+      };
+      canvas.getContext = vi.fn(() => ctx) as any;
+      const requestFrame = vi.fn(() => 1);
+
+      const animator = installBackground({ requestAnimationFrame: requestFrame });
+
+      expect(animator?.particles).toHaveLength(80);
+      expect(ctx.clearRect).toHaveBeenCalledWith(0, 0, canvas.width, canvas.height);
+      expect(requestFrame).toHaveBeenCalledWith(animator?.animate);
+    });
   });
 });

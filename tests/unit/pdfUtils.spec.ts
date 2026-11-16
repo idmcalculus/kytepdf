@@ -108,6 +108,26 @@ describe("pdfUtils", () => {
     it("should handle uppercase extension", () => {
       expect(generateOutputFilename("document.PDF", "_split")).toBe("document_split.pdf");
     });
+
+    it("replaces the extension of a non-PDF source", () => {
+      expect(generateOutputFilename("report.docx", "_extracted", ".md")).toBe(
+        "report_extracted.md",
+      );
+      expect(generateOutputFilename("data.csv", "", ".md")).toBe("data.md");
+    });
+
+    it("removes only the last extension", () => {
+      expect(generateOutputFilename("q3.report.pdf", "_compressed")).toBe(
+        "q3.report_compressed.pdf",
+      );
+    });
+
+    it("leaves names without an extension alone", () => {
+      expect(generateOutputFilename("notes v1.2 draft", "_extracted", ".md")).toBe(
+        "notes v1.2 draft_extracted.md",
+      );
+      expect(generateOutputFilename("scan", "_compressed")).toBe("scan_compressed.pdf");
+    });
   });
 
   describe("calculateSavingsPercent", () => {

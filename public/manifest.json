@@ -1,7 +1,7 @@
 {
   "name": "KytePDF",
   "short_name": "KytePDF",
-  "description": "All-in-one local PDF suite with optional cloud conversions.",
+  "description": "All-in-one private PDF toolkit that runs in your browser.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

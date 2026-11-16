@@ -1,13 +1,15 @@
 # Testing Strategy
 
-KytePDF uses a hard coverage gate for the browser app and cloud gateway.
+KytePDF uses a hard coverage gate for the browser app. Document conversion runs
+entirely in the browser (pdf-inspector, anydoc, tesseract); there is no cloud
+conversion gateway quality gate.
 
 For the browser app, CI enforces the 95% target on executable source coverage:
 
 - Lines: 95%
 - Statements: 95%
 - Functions: 95%
-- Branches: 76% ratchet baseline
+- Branches: 77% ratchet baseline
 
 The gate is enforced by `bun run test:coverage` and by GitHub Actions in `.github/workflows/ci.yml`.
 
@@ -21,7 +23,7 @@ On April 24, 2026, the root app suite passed functionally and now meets the 95% 
 - Statements: 95%+
 - Functions: 95%+
 - Lines: 95%+
-- Branches: 76%+
+- Branches: 77%+
 
 The largest remaining branch-heavy areas are stateful Web Component tools and conversion adapters:
 
@@ -31,6 +33,14 @@ The largest remaining branch-heavy areas are stateful Web Component tools and co
 - `utils/pdfCreator.ts`
 - `components/BaseComponent.ts`
 - `utils/pdfEngine.ts`
+
+## Local document engines
+
+PDF text/office extraction uses `@firecrawl/pdf-inspector-wasm` in a module worker.
+Non-PDF office extraction uses `@firecrawl/anydoc-wasm`. Optional OCR uses
+`tesseract.js`. Production builds must emit bundled JavaScript workers (asserted
+by `scripts/assert-worker-artifacts.ts`). Auth remains a separate remote service
+under `auth-server/` and `infrastructure/oci-auth/`.
 
 ## Architecture Recommendation
 

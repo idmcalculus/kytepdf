@@ -28,8 +28,8 @@ describe("AboutModal", () => {
   });
 
   it("should contain the project copy", () => {
-    expect(modal.textContent).toContain("KytePDF was born from a desire");
-    expect(modal.textContent).toContain("locally in your browser");
+    expect(modal.textContent).toContain("runs entirely in your browser");
+    expect(modal.textContent).toContain("WebAssembly");
   });
 
   it("should contain credits and social links", () => {

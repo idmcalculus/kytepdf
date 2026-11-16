@@ -29,8 +29,8 @@ Fixes # (issue)
 
 - [ ] **App Frontend** (styles, index.html, `/components`, `/public`)
 - [ ] **Service Worker / Offline PWA** (`sw.ts` or cache handlers)
-- [ ] **PDF Utilities & Engines** (`/utils`, pdf-lib, pdfjs-dist integration)
-- [ ] **Cloud Conversion Gateway** (Hono web service in `/cloud-gateway`, docker setups)
+- [ ] **PDF Utilities & Engines** (`/utils`, pdf-lib, pdfjs-dist, pdf-inspector, anydoc, tesseract)
+- [ ] **Auth Server / OCI Auth** (`auth-server/`, `infrastructure/oci-auth/`)
 - [ ] **CI & Test Suites** (Github Actions workflows, Vitest setup, Playwright spec files)
 
 ---
@@ -47,8 +47,8 @@ Include details about local, manual, or automated test configurations.
 - [ ] Biome checks pass locally (`bun run lint`)
 - [ ] TypeScript compilation passes cleanly (`bun run typecheck`)
 - [ ] App Unit/Integration tests pass (`bun run test:unit`)
-- [ ] Cloud Gateway tests pass (`bun run test` in `cloud-gateway/`)
 - [ ] Playwright End-to-End tests pass (`bun run test:e2e`)
+- [ ] Production build emits bundled JS workers (`bun run build`)
 
 ### 🖐️ Manual Verification Steps
 1. 

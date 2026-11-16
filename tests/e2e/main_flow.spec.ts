@@ -7,7 +7,7 @@ test.describe("KytePDF E2E", () => {
 
   test("should display the dashboard and tools", async ({ page }) => {
     await expect(page.getByRole("heading", { name: "Kyte" })).toBeVisible();
-    await expect(page.locator(".tool-card")).toHaveCount(16);
+    await expect(page.locator(".tool-card")).toHaveCount(17);
   });
 
   test("should navigate to Compress tool", async ({ page }) => {

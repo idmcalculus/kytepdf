@@ -1,24 +1,27 @@
-import { type ConversionFormat, cloudConversionService } from "../utils/CloudConversionService.ts";
-import { describeFailure } from "../utils/errorMapper.ts";
+import { describeFailure, UserFacingError } from "../utils/errorMapper.ts";
 import {
   type ConversionQuality,
   type ConversionResult,
   localConverter,
 } from "../utils/LocalConverter.ts";
 import { logger } from "../utils/logger.ts";
+import { OcrError, ocrEngine } from "../utils/ocrEngine.ts";
+import { PdfInspectorError, pdfInspectorEngine } from "../utils/pdfInspectorEngine.ts";
+import type { AnalysisEnvelope } from "../utils/pdfInspectorTypes.ts";
 import { getPdfPreviewErrorMessage, PdfPreviewController } from "../utils/pdfPreview.ts";
 import { generateOutputFilename } from "../utils/pdfUtils.ts";
 import { persistence } from "../utils/persistence.ts";
 import { BaseComponent } from "./BaseComponent.ts";
 
-type ConversionMode = "local" | "cloud";
+export type ConversionFormat = "docx" | "pptx" | "xlsx" | "pdf";
 
 export class PdfToOffice extends BaseComponent {
   protected toolKey = "pdf-to-office";
   private targetFormat: ConversionFormat = "docx";
-  private ocrEnabled = false;
-  private conversionMode: ConversionMode = "local";
+  private ocrEnabled = true;
   private lastLocalQuality: ConversionQuality | null = null;
+  /** Whether OCR was on for the conversion that set lastLocalQuality. */
+  private lastQualityUsedOcr = false;
   private previewController: PdfPreviewController | null = null;
   private cachedPdfBytes: Uint8Array | null = null;
   private cachedPdfFile: File | null = null;
@@ -35,7 +38,6 @@ export class PdfToOffice extends BaseComponent {
       this.targetFormat = attrFormat;
       this.toolKey = `pdf-to-${attrFormat}`;
     }
-    this.conversionMode = this.supportsLocal ? "local" : "cloud";
     super.connectedCallback();
   }
 
@@ -62,7 +64,7 @@ export class PdfToOffice extends BaseComponent {
         ${this.getBackButton()}
 
         <h1>PDF to ${this.formatLabel}</h1>
-        <p class="subtitle">Convert your PDF into an editable ${this.formatLabel} document.</p>
+        <p class="subtitle">Extract text and structure from your PDF into an editable ${this.formatLabel} document. Runs locally; results preserve content and detectable tables, not the original page layout.</p>
 
         ${this.getDropZone(`your PDF`, "file-up")}
 
@@ -94,24 +96,9 @@ export class PdfToOffice extends BaseComponent {
           <div class="layout-right">
             <div class="controls">
               <div class="control-group">
-                <label>Conversion Mode</label>
-                <div class="presets-grid" id="modeToggle">
-                  <button id="modeLocalBtn" class="preset-btn">
-                    <span class="preset-name">Local</span>
-                    <span class="preset-desc">Runs in your browser</span>
-                  </button>
-                  <button id="modeCloudBtn" class="preset-btn">
-                    <span class="preset-name">Cloud</span>
-                    <span class="preset-desc">Best quality</span>
-                  </button>
-                </div>
-                <div id="localWarning" class="warning hidden">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
-                  <span>Local conversion is best-effort and may miss complex layouts. Try cloud mode for higher fidelity.</span>
-                </div>
-                <div id="qualityWarning" class="warning hidden" style="align-items: center; justify-content: space-between;">
-                  <span>Local results look limited. For higher fidelity, switch to cloud conversion.</span>
-                  <button id="tryCloudBtn" class="btn btn-secondary btn-sm" style="width: auto;">Try Cloud</button>
+                <div class="warning" style="border-color: var(--primary-glow); background: rgba(6, 182, 212, 0.05);">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  <span>Local export reconstructs content and detectable tables from text, not the original visual layout. Scanned pages need OCR before they contribute text.</span>
                 </div>
               </div>
 
@@ -119,24 +106,28 @@ export class PdfToOffice extends BaseComponent {
                 <label>Options</label>
                 <div class="preset-btn active" style="flex-direction: row; justify-content: space-between; align-items: center; padding: 1rem; cursor: default;">
                   <div>
-                    <span class="preset-name">OCR (Text Recognition)</span>
-                    <span class="preset-desc">Recommended for scanned documents</span>
+                    <span class="preset-name" id="ocrToggleLabel">OCR (Text Recognition)</span>
+                    <span class="preset-desc" id="ocrToggleDesc">Runs locally on pages that need it</span>
                   </div>
-                  <input type="checkbox" id="ocrToggle" style="width: 20px; height: 20px; cursor: pointer;" />
+                  <input type="checkbox" id="ocrToggle" aria-labelledby="ocrToggleLabel" aria-describedby="ocrToggleDesc" checked style="width: 20px; height: 20px; cursor: pointer;" />
                 </div>
               </div>
 
+              <div id="qualityWarning" class="warning hidden">
+                <span id="qualityWarningText">This PDF yielded limited extractable text. Try enabling OCR for scanned content.</span>
+              </div>
+
               <div class="actions-row">
-                <button id="convertBtn" class="btn btn-primary">
+                <button id="convertBtn" class="btn btn-primary" ${this.supportsLocal ? "" : "disabled"}>
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a3.5 3.5 0 0 0 .5-6.91V11a5 5 0 0 0-10 0v1.09a3.5 3.5 0 0 0 .5 6.91Z"/><path d="M12 13v4"/><path d="m10 15 2 2 2-2"/></svg>
-                  <span id="convertLabel">Start Conversion</span>
+                  <span id="convertLabel">${this.supportsLocal ? "Start Local Conversion" : "Not available locally"}</span>
                 </button>
               </div>
 
-              ${this.getProgressSection("Uploading to cloud...")}
+              ${this.getProgressSection("Converting locally...")}
 
               <div id="successMessage" class="success-message hidden">
-                <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">🎉 Conversion Complete!</p>
+                <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">Conversion Complete!</p>
                 <button id="downloadLink" class="btn btn-primary">Download ${this.formatLabel} File</button>
               </div>
             </div>
@@ -153,23 +144,17 @@ export class PdfToOffice extends BaseComponent {
 
     const convertBtn = this.querySelector("#convertBtn") as HTMLButtonElement;
     const ocrToggle = this.querySelector("#ocrToggle") as HTMLInputElement;
-    const modeLocalBtn = this.querySelector("#modeLocalBtn") as HTMLButtonElement;
-    const modeCloudBtn = this.querySelector("#modeCloudBtn") as HTMLButtonElement;
-    const tryCloudBtn = this.querySelector("#tryCloudBtn") as HTMLButtonElement;
 
     ocrToggle.onchange = () => {
       this.ocrEnabled = ocrToggle.checked;
     };
 
     convertBtn.onclick = () => this.handleConvert();
-    modeLocalBtn.onclick = () => this.setConversionMode("local");
-    modeCloudBtn.onclick = () => this.setConversionMode("cloud");
-    tryCloudBtn.onclick = () => this.setConversionMode("cloud");
 
     this.previewController = this.createPreviewController();
 
     this.checkExistingSession();
-    this.updateModeUI();
+    this.updateQualityUI();
   }
 
   async handleFiles(files: FileList) {
@@ -177,6 +162,9 @@ export class PdfToOffice extends BaseComponent {
     if (!(await this.validateFile(file))) return;
 
     this.selectedFile = file;
+    // The last result and its quality note belong to the previous file.
+    this.lastLocalQuality = null;
+    this.clearResult();
     if (this.cachedPdfFile !== file) {
       this.cachedPdfFile = file;
       this.cachedPdfBytes = null;
@@ -200,7 +188,7 @@ export class PdfToOffice extends BaseComponent {
       this.showErrorDialog(getPdfPreviewErrorMessage("preview"));
     }
 
-    this.updateModeUI();
+    this.updateQualityUI();
   }
 
   private createPreviewController() {
@@ -223,57 +211,25 @@ export class PdfToOffice extends BaseComponent {
     return controller;
   }
 
-  private setConversionMode(mode: ConversionMode) {
-    if (mode === "local" && !this.supportsLocal) {
-      this.showErrorDialog("Local conversion is not available for PPT yet.");
-      return;
-    }
-    this.conversionMode = mode;
-    if (mode === "local") {
-      this.ocrEnabled = false;
-    }
-    this.lastLocalQuality = null;
-    this.updateModeUI();
+  /** Hides a finished result so its download can't be taken for another file. */
+  private clearResult() {
+    const successMsg = this.querySelector("#successMessage") as HTMLElement | null;
+    const downloadLink = this.querySelector("#downloadLink") as HTMLElement | null;
+    successMsg?.classList.add("hidden");
+    if (downloadLink) downloadLink.onclick = null;
   }
 
-  private updateModeUI() {
-    const modeLocalBtn = this.querySelector("#modeLocalBtn") as HTMLButtonElement | null;
-    const modeCloudBtn = this.querySelector("#modeCloudBtn") as HTMLButtonElement | null;
-    const localWarning = this.querySelector("#localWarning") as HTMLElement | null;
+  private updateQualityUI() {
     const qualityWarning = this.querySelector("#qualityWarning") as HTMLElement | null;
-    const convertLabel = this.querySelector("#convertLabel") as HTMLElement | null;
-    const ocrToggle = this.querySelector("#ocrToggle") as HTMLInputElement | null;
-
-    if (modeLocalBtn) {
-      modeLocalBtn.disabled = !this.supportsLocal;
-      modeLocalBtn.classList.toggle("active", this.conversionMode === "local");
-      if (!this.supportsLocal) {
-        modeLocalBtn.title = "Local mode is not available for this format.";
-      } else {
-        modeLocalBtn.title = "";
-      }
-    }
-    if (modeCloudBtn) {
-      modeCloudBtn.classList.toggle("active", this.conversionMode === "cloud");
-    }
-    if (localWarning) {
-      localWarning.classList.toggle("hidden", this.conversionMode !== "local");
+    const text = this.querySelector("#qualityWarningText") as HTMLElement | null;
+    if (text) {
+      // Suggesting OCR only makes sense when it was off for that conversion.
+      text.textContent = this.lastQualityUsedOcr
+        ? "Some pages could not be read reliably. Check the output against the original."
+        : "This PDF yielded limited extractable text. Try enabling OCR for scanned content.";
     }
     if (qualityWarning) {
-      qualityWarning.classList.toggle(
-        "hidden",
-        this.conversionMode !== "local" || this.lastLocalQuality !== "poor",
-      );
-    }
-    if (convertLabel) {
-      convertLabel.textContent =
-        this.conversionMode === "local" ? "Start Local Conversion" : "Start Cloud Conversion";
-    }
-    if (ocrToggle) {
-      ocrToggle.disabled = this.conversionMode === "local";
-      if (this.conversionMode === "local") {
-        ocrToggle.checked = false;
-      }
+      qualityWarning.classList.toggle("hidden", this.lastLocalQuality !== "poor");
     }
   }
 
@@ -285,10 +241,25 @@ export class PdfToOffice extends BaseComponent {
         const resumeBtn = this.querySelector("#resumeBtn");
         if (resumeContainer && resumeBtn) {
           resumeContainer.classList.remove("hidden");
-          resumeBtn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
-            Resume ${saved.name}
-          `;
+          resumeBtn.innerHTML = "";
+
+          // Static trusted icon
+          const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          icon.setAttribute("width", "14");
+          icon.setAttribute("height", "14");
+          icon.setAttribute("viewBox", "0 0 24 24");
+          icon.setAttribute("fill", "none");
+          icon.setAttribute("stroke", "currentColor");
+          icon.setAttribute("stroke-width", "2");
+          icon.setAttribute("stroke-linecap", "round");
+          icon.setAttribute("stroke-linejoin", "round");
+          icon.style.marginRight = "4px";
+          icon.innerHTML = `<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/>`;
+          resumeBtn.appendChild(icon);
+
+          // User-controlled text via textContent (safe)
+          const label = document.createTextNode(`Resume ${this.sanitize(saved.name)}`);
+          resumeBtn.appendChild(label);
         }
       }
     } catch (err) {
@@ -304,7 +275,16 @@ export class PdfToOffice extends BaseComponent {
   }
 
   async handleConvert() {
-    if (!this.selectedFile) return;
+    // Read the file once: the user can pick another while this runs, and the
+    // output must be named after the file it came from.
+    const file = this.selectedFile;
+    if (!file) return;
+    if (!this.supportsLocal) {
+      this.showErrorDialog(
+        `Local ${this.formatLabel} export is not available yet. Only Word and Excel are supported in the browser.`,
+      );
+      return;
+    }
 
     const convertBtn = this.querySelector("#convertBtn") as HTMLButtonElement;
     const progressSection = this.querySelector("#progressSection") as HTMLElement;
@@ -314,11 +294,7 @@ export class PdfToOffice extends BaseComponent {
       convertBtn.disabled = true;
       progressSection.classList.remove("hidden");
       successMsg.classList.add("hidden");
-      if (this.conversionMode === "local") {
-        await this.handleLocalConvert();
-      } else {
-        await this.handleCloudConvert();
-      }
+      await this.handleLocalConvert(file);
     } catch (err: any) {
       logger.error("Conversion failed", err);
       this.showErrorDialog(describeFailure("Conversion failed.", err));
@@ -328,57 +304,80 @@ export class PdfToOffice extends BaseComponent {
     }
   }
 
-  private async handleCloudConvert() {
-    if ((window as any).ensureCloudConsent) {
-      const consented = await (window as any).ensureCloudConsent();
-      if (!consented) return;
-    }
-
-    this.lastLocalQuality = null;
-    this.updateModeUI();
-    this.updateProgress(20, "Uploading to secure cloud...");
-
-    const resultBytes = await cloudConversionService.convertFile(
-      this.selectedFile as File,
-      this.targetFormat,
-      { ocr: this.ocrEnabled },
-    );
-
-    this.updateProgress(100, "Conversion complete!");
-
-    const ext = `.${this.targetFormat}`;
-    const outputName = generateOutputFilename(
-      this.selectedFile?.name || "document.pdf",
-      "_converted",
-      ext,
-    );
-
-    this.showSuccess(resultBytes, outputName, "", ext);
-    this.showSuccessDialog(`Your ${this.formatLabel} file is ready.`);
-
-    await this.recordJob(`PDF to ${this.formatLabel}`, outputName, resultBytes, {
-      ocr: this.ocrEnabled,
-      format: this.targetFormat,
-      mode: "cloud",
-    });
-  }
-
-  private async handleLocalConvert() {
-    if (!this.supportsLocal) {
-      this.showErrorDialog("Local conversion is not available for this format.");
-      return;
-    }
-
+  private async handleLocalConvert(file: File) {
+    const ocrEnabled = this.ocrEnabled;
     this.updateProgress(10, "Preparing local conversion...");
-    const pdfBytes = await this.getCachedPdfBytes();
+    const pdfBytes = await this.getCachedPdfBytes(file);
+
+    const analysis = await this.analyzeForExport(pdfBytes, this.targetFormat);
+    for (const w of analysis.warnings) logger.info(`pdf-inspector: ${w}`);
+    if (analysis.surfaceAsError) {
+      // Written for the user, so the error mapper must not replace it.
+      throw new UserFacingError(analysis.surfaceAsError);
+    }
+
+    let ocrAppliedPages: number[] = [];
+    let ocrAttempted = false;
+    if (ocrEnabled && analysis.envelope && analysis.envelope.pagesNeedingOcr.length > 0) {
+      this.updateProgress(
+        25,
+        `Running OCR on ${analysis.envelope.pagesNeedingOcr.length} page${analysis.envelope.pagesNeedingOcr.length === 1 ? "" : "s"}...`,
+      );
+      try {
+        const { markdown, ocr } = await ocrEngine.enrichMarkdownWithOcr(
+          pdfBytes,
+          analysis.envelope.markdown ?? "",
+          analysis.envelope.pagesNeedingOcr,
+          analysis.envelope.pageCount,
+        );
+        ocrAttempted = true;
+        ocrAppliedPages = ocr.pages.map((p) => p.page);
+        const resolved = new Set(ocrAppliedPages);
+        const remaining = analysis.envelope.pagesNeedingOcr.filter((p) => !resolved.has(p));
+        // Matches both the pdf-inspector envelope's own "needs OCR on page…"
+        // warning and analyzeForExport's "will not include text from page…
+        // until OCR is performed" message. `analysis.warnings` starts as a
+        // *copy* of `envelope.warnings` (see analyzeForExport), so both the
+        // envelope and the top-level analysis warnings need to be re-filtered
+        // here — otherwise the stale pre-OCR warning survives in job
+        // metadata alongside "OCR applied", contradicting the actual result.
+        const stalePreOcrWarning = /needs OCR on page|will not include text from page/i;
+        analysis.envelope = {
+          ...analysis.envelope,
+          markdown,
+          pagesNeedingOcr: remaining,
+          warnings: (analysis.envelope.warnings ?? []).filter((w) => !stalePreOcrWarning.test(w)),
+        };
+        analysis.warnings = analysis.warnings.filter((w) => !stalePreOcrWarning.test(w));
+        if (remaining.length > 0) {
+          analysis.warnings.push(
+            `Local export still will not include text from page${remaining.length === 1 ? "" : "s"} ${remaining.join(", ")} — OCR was unable to recognize them.`,
+          );
+        }
+        analysis.warnings.push(...ocr.warnings);
+        if (ocrAppliedPages.length > 0) {
+          analysis.warnings.push(
+            `OCR applied to page${ocrAppliedPages.length === 1 ? "" : "s"} ${ocrAppliedPages.join(", ")}.`,
+          );
+        }
+      } catch (err) {
+        const msg = err instanceof OcrError ? err.message : "OCR failed";
+        analysis.warnings.push(`OCR skipped: ${msg}`);
+        logger.warn("Local OCR failed; continuing with native text", err);
+      }
+    }
 
     let result: ConversionResult;
     if (this.targetFormat === "docx") {
       this.updateProgress(30, "Extracting text locally...");
-      result = await localConverter.pdfToWord(pdfBytes);
+      result = analysis.envelope
+        ? await localConverter.pdfToWordFromEnvelope(pdfBytes, analysis.envelope)
+        : await localConverter.pdfToWord(pdfBytes);
     } else if (this.targetFormat === "xlsx") {
       this.updateProgress(30, "Extracting tables locally...");
-      result = await localConverter.pdfToExcel(pdfBytes);
+      result = analysis.envelope
+        ? await localConverter.pdfToExcelFromEnvelope(pdfBytes, analysis.envelope)
+        : await localConverter.pdfToExcel(pdfBytes);
     } else {
       throw new Error("Local conversion is only available for Word or Excel.");
     }
@@ -387,42 +386,136 @@ export class PdfToOffice extends BaseComponent {
       throw new Error("Local conversion failed.");
     }
 
-    this.lastLocalQuality = result.quality;
-    this.updateModeUI();
     this.updateProgress(100, "Conversion complete!");
 
     const ext = `.${this.targetFormat}`;
-    const outputName = generateOutputFilename(
-      this.selectedFile?.name || "document.pdf",
-      "_converted",
-      ext,
-    );
+    const outputName = generateOutputFilename(file.name, "_converted", ext);
 
-    this.showSuccess(result.data, outputName, "", ext);
-    this.showSuccessDialog(`Your ${this.formatLabel} file is ready.`);
+    // A result for a file that is no longer selected goes to history only.
+    if (this.selectedFile === file) {
+      this.lastLocalQuality = result.quality;
+      this.lastQualityUsedOcr = ocrEnabled;
+      this.updateQualityUI();
+      this.showSuccess(result.data, outputName, "", ext);
+
+      const diagnosis = analysis.envelope
+        ? this.formatOfficeDiagnosis(analysis.envelope, ocrAppliedPages, ocrAttempted)
+        : "";
+      this.showSuccessDialog(
+        `Your ${this.formatLabel} file is ready.${diagnosis ? ` ${diagnosis}` : ""}`,
+      );
+    }
 
     await this.recordJob(`PDF to ${this.formatLabel}`, outputName, result.data, {
-      ocr: false,
+      ocr: ocrEnabled,
       format: this.targetFormat,
       mode: "local",
       quality: result.quality,
-      warnings: result.warnings,
+      warnings: [...result.warnings, ...analysis.warnings],
+      ...(analysis.envelope
+        ? {
+            engine: analysis.envelope.engine,
+            pdfType: analysis.envelope.pdfType,
+            confidence: analysis.envelope.confidence,
+            pagesNeedingOcr: analysis.envelope.pagesNeedingOcr,
+            ocrPages: ocrAppliedPages,
+          }
+        : {}),
     });
   }
 
-  private async getCachedPdfBytes() {
-    if (!this.selectedFile) {
-      throw new Error("No file selected for conversion.");
+  /**
+   * One sentence per finding. The dialog shows its message as one paragraph,
+   * so each item must read on its own.
+   */
+  private formatOfficeDiagnosis(
+    envelope: AnalysisEnvelope,
+    ocrPages: number[] = [],
+    ocrAttempted = false,
+  ): string {
+    const plural = (count: number) => (count === 1 ? "" : "s");
+    const parts: string[] = [];
+    if (envelope.pdfType && envelope.pdfType !== "Unknown") {
+      parts.push(
+        `Source type: ${envelope.pdfType} (${Math.round(envelope.confidence * 100)}% confidence).`,
+      );
+    }
+    if (ocrPages.length > 0) {
+      parts.push(`OCR applied to page${plural(ocrPages.length)} ${ocrPages.join(", ")}.`);
+    }
+    const missing = envelope.pagesNeedingOcr;
+    if (missing.length > 0) {
+      parts.push(
+        ocrAttempted
+          ? `Text missing from page${plural(missing.length)} ${missing.join(", ")} (OCR could not read ${missing.length === 1 ? "it" : "them"}).`
+          : `Needs OCR on page${plural(missing.length)} ${missing.join(", ")}.`,
+      );
+    }
+    const tables = envelope.layout.pagesWithTables;
+    if (tables.length > 0) {
+      parts.push(`Tables detected on page${plural(tables.length)} ${tables.join(", ")}.`);
+    }
+    if (envelope.hasEncodingIssues) {
+      parts.push("Encoding issues detected in the source PDF.");
+    }
+    return parts.join(" ");
+  }
+
+  private async analyzeForExport(
+    pdfBytes: Uint8Array,
+    targetFormat: ConversionFormat,
+  ): Promise<{ envelope?: AnalysisEnvelope; warnings: string[]; surfaceAsError?: string }> {
+    let envelope: AnalysisEnvelope | undefined;
+    try {
+      envelope = await pdfInspectorEngine.analyze(pdfBytes, { profile: "compact" });
+    } catch (err) {
+      if (
+        err instanceof PdfInspectorError &&
+        (err.reason === "encrypted" || err.reason === "password-required")
+      ) {
+        // This tool has no password field, so point to the tool that has one.
+        return {
+          warnings: [],
+          surfaceAsError:
+            "This PDF is password-protected. Remove the password with the Unlock PDF tool, then try again.",
+        };
+      }
+      logger.warn("pdf-inspector analysis unavailable; relying on legacy export", err);
+      return { warnings: [] };
     }
 
-    if (this.cachedPdfBytes && this.cachedPdfFile === this.selectedFile) {
+    const warnings: string[] = [...(envelope.warnings ?? [])];
+
+    if (envelope.pdfType === "Scanned" || envelope.pdfType === "Mixed") {
+      warnings.push(
+        `This document is ${envelope.pdfType.toLowerCase()} — local export will not include text from page${envelope.pagesNeedingOcr.length === 1 ? "" : "s"} ${envelope.pagesNeedingOcr.join(", ") || "(OCR-needed)"} until OCR is performed.`,
+      );
+    }
+
+    if (targetFormat === "xlsx") {
+      const hasTables = envelope.layout.pagesWithTables.length > 0;
+      if (!hasTables) {
+        warnings.push(
+          "No tables were confidently detected. The spreadsheet may contain only flat text rows.",
+        );
+      } else {
+        warnings.push(
+          `Tables detected on page${envelope.layout.pagesWithTables.length === 1 ? "" : "s"} ${envelope.layout.pagesWithTables.join(", ")}.`,
+        );
+      }
+    }
+
+    return { envelope, warnings };
+  }
+
+  private async getCachedPdfBytes(file: File) {
+    if (this.cachedPdfBytes && this.cachedPdfFile === file) {
       return this.cachedPdfBytes;
     }
 
-    const arrayBuffer = await (this.selectedFile as File).arrayBuffer();
-    const pdfBytes = new Uint8Array(arrayBuffer);
+    const pdfBytes = new Uint8Array(await file.arrayBuffer());
     this.cachedPdfBytes = pdfBytes;
-    this.cachedPdfFile = this.selectedFile as File;
+    this.cachedPdfFile = file;
     return pdfBytes;
   }
 }

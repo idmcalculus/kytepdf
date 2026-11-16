@@ -1,3 +1,0 @@
-name: kytepdf-infra
-runtime: nodejs
-description: KytePDF cloud conversion gateway on ECS EC2 (free-tier friendly).
