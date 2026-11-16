@@ -14,6 +14,7 @@
     "test": "vitest",
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:coverage:assert": "bun run scripts/assert-coverage-report.ts",
     "test:e2e": "playwright test",
     "prepare": "husky",
     "auth-server:install": "npm install --prefix auth-server",
