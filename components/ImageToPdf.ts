@@ -7,6 +7,7 @@ import { BaseComponent } from "./BaseComponent.ts";
 export class ImageToPdf extends BaseComponent {
   protected files: File[] = [];
   protected toolKey = "image-to-pdf";
+  protected recentFileTypes = ["image/png", "image/jpeg"];
 
   render() {
     this.innerHTML = `
@@ -148,7 +149,7 @@ export class ImageToPdf extends BaseComponent {
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>
         </div>
         <div class="file-item-details">
-          <span class="file-name" title="${file.name}">${file.name}</span>
+          <span class="file-name" title="${this.sanitize(file.name)}">${this.sanitize(file.name)}</span>
           <span class="file-size">${this.formatBytes(file.size)}</span>
         </div>
         <div class="file-item-actions">

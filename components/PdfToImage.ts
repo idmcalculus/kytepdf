@@ -1,7 +1,7 @@
 import JSZip from "jszip";
-import { describeFailure } from "../utils/errorMapper.ts";
+import { describeFailure, UserFacingError } from "../utils/errorMapper.ts";
 import { logger } from "../utils/logger.ts";
-import { convertPdfToImages } from "../utils/pdfEngine.ts";
+import { renderPdfPagesToImages } from "../utils/pdfEngine.ts";
 import {
   clearPreviewLoadingState,
   getPdfPreviewErrorMessage,
@@ -28,7 +28,7 @@ export class PdfToImage extends BaseComponent {
         ${this.getBackButton()}
 
         <h1>PDF to Image</h1>
-        <p class="subtitle">Convert PDF pages into high-quality PNG or JPG images.</p>
+        <p class="subtitle">Export PDF pages as PNG or JPG images.</p>
 
         ${this.getDropZone("your PDF", "file-up")}
 
@@ -188,10 +188,28 @@ export class PdfToImage extends BaseComponent {
         const resumeBtn = this.querySelector("#resumeBtn");
         if (resumeContainer && resumeBtn) {
           resumeContainer.classList.remove("hidden");
-          resumeBtn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
-            Resume ${savedFile.name} (${this.formatBytes(savedFile.size)})
-          `;
+          resumeBtn.innerHTML = "";
+
+          // Static trusted icon
+          const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          icon.setAttribute("width", "14");
+          icon.setAttribute("height", "14");
+          icon.setAttribute("viewBox", "0 0 24 24");
+          icon.setAttribute("fill", "none");
+          icon.setAttribute("stroke", "currentColor");
+          icon.setAttribute("stroke-width", "2");
+          icon.setAttribute("stroke-linecap", "round");
+          icon.setAttribute("stroke-linejoin", "round");
+          icon.style.marginRight = "4px";
+          icon.innerHTML = `<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/>`;
+          resumeBtn.appendChild(icon);
+
+          // User-controlled text via textContent (safe)
+          resumeBtn.appendChild(
+            document.createTextNode(
+              `Resume ${savedFile.name} (${this.formatBytes(savedFile.size)})`,
+            ),
+          );
         }
       }
     } catch (err) {
@@ -206,10 +224,30 @@ export class PdfToImage extends BaseComponent {
     }
   }
 
+  disconnectedCallback() {
+    this.releaseDocument();
+  }
+
+  /** Frees the thumbnail grid and the open pdf.js document (and its worker). */
+  private releaseDocument() {
+    this.thumbnailController?.destroy();
+    this.thumbnailController = null;
+    const doc = this.currentPdfDoc;
+    this.currentPdfDoc = null;
+    try {
+      void Promise.resolve(doc?.destroy?.()).catch(() => undefined);
+    } catch {
+      // A document that fails to close is dropped anyway.
+    }
+  }
+
   async handleFiles(files: FileList) {
     const file = files[0];
     if (!(await this.validateFile(file))) return;
 
+    // Page numbers chosen in the previous document mean nothing in this one.
+    this.selectedPages.clear();
+    this.checkSelectionWarning();
     this.selectedFile = file;
     await persistence.set(this.toolKey, file);
 
@@ -228,8 +266,8 @@ export class PdfToImage extends BaseComponent {
     setPreviewLoadingState(thumbnailGrid);
 
     try {
+      this.releaseDocument();
       this.currentPdfDoc = await loadPdfDocument(this.selectedFile);
-      this.thumbnailController?.destroy();
       this.thumbnailController = new PdfThumbnailGridController({
         container: thumbnailGrid,
         pdfDoc: this.currentPdfDoc,
@@ -276,6 +314,21 @@ export class PdfToImage extends BaseComponent {
     }
   }
 
+  private countLabel(count: number, noun: string) {
+    return `${count} ${noun}${count === 1 ? "" : "s"}`;
+  }
+
+  /** "page 4" or "pages 2, 5 and 7"; capitalised to start a sentence. */
+  private describePages(pageNumbers: number[], capitalise = false) {
+    const word = pageNumbers.length === 1 ? "page" : "pages";
+    const list =
+      pageNumbers.length === 1
+        ? String(pageNumbers[0])
+        : `${pageNumbers.slice(0, -1).join(", ")} and ${pageNumbers[pageNumbers.length - 1]}`;
+    const text = `${word} ${list}`;
+    return capitalise ? `${text[0].toUpperCase()}${text.slice(1)}` : text;
+  }
+
   async handleConvert() {
     if (!this.selectedFile) return;
 
@@ -296,35 +349,44 @@ export class PdfToImage extends BaseComponent {
 
     try {
       const pdfData = new Uint8Array(await this.selectedFile.arrayBuffer());
-      const allImages = await convertPdfToImages(pdfData, {
+      const pages = await renderPdfPagesToImages(pdfData, {
         format: this.format,
         scale: this.scale,
+        // Selected mode renders only the chosen pages, in page order.
+        pages: isSelectedMode ? Array.from(this.selectedPages).sort((a, b) => a - b) : undefined,
       });
 
-      const indicesToExport = isSelectedMode
-        ? Array.from(this.selectedPages)
-            .map((p) => p - 1)
-            .sort((a, b) => a - b)
-        : allImages.map((_, i) => i);
-
-      const imagesToExport = indicesToExport.map((i) => allImages[i]);
+      // Each image keeps its own page number, so a page that failed to encode
+      // never shifts the names of the pages after it.
+      const imagesToExport = pages.flatMap(({ pageNumber, blob }) =>
+        blob ? [{ pageNumber, blob }] : [],
+      );
+      const failedPages = pages.filter(({ blob }) => !blob).map(({ pageNumber }) => pageNumber);
 
       if (imagesToExport.length === 0) {
+        if (failedPages.length > 0) {
+          throw new UserFacingError(
+            `Your browser could not create an image of ${this.describePages(failedPages)}.`,
+          );
+        }
         throw new Error("No pages found for export");
       }
 
+      const failureNote =
+        failedPages.length > 0
+          ? ` ${this.describePages(failedPages, true)} could not be converted and ${failedPages.length === 1 ? "was" : "were"} left out.`
+          : "";
+      const baseName = this.selectedFile.name.replace(/\.pdf$/i, "");
+      const ext = this.format === "jpeg" ? "jpg" : "png";
       const isZip = this.downloadMode.endsWith("zip");
 
       if (isZip) {
         this.updateProgress(80, "Creating ZIP file...");
         const zip = new JSZip();
-        const baseName = this.selectedFile.name.replace(".pdf", "");
 
-        imagesToExport.forEach((blob, i) => {
-          const pageNum = indicesToExport[i] + 1;
-          const ext = this.format === "jpeg" ? "jpg" : "png";
-          zip.file(`${baseName}_page_${pageNum}.${ext}`, blob);
-        });
+        for (const { pageNumber, blob } of imagesToExport) {
+          zip.file(`${baseName}_page_${pageNumber}.${ext}`, blob);
+        }
 
         const zipBlob = await zip.generateAsync({ type: "blob" });
         const outputName = generateOutputFilename(
@@ -336,23 +398,22 @@ export class PdfToImage extends BaseComponent {
 
         this.updateProgress(100, "Done!");
         this.showSuccess(zipData, outputName, "", ".zip");
-        this.showSuccessDialog(`Successfully converted ${imagesToExport.length} pages to ZIP.`);
+        this.showSuccessDialog(
+          `Successfully converted ${this.countLabel(imagesToExport.length, "page")} to ZIP.${failureNote}`,
+        );
 
         await this.recordJob("PDF to Image", outputName, zipData, {
           pageCount: imagesToExport.length,
           format: this.format,
           mode: this.downloadMode,
+          failedPages,
         });
       } else {
         // Individual Files
         this.updateProgress(80, "Downloading files...");
-        const baseName = this.selectedFile.name.replace(".pdf", "");
-        const ext = this.format === "jpeg" ? "jpg" : "png";
 
-        for (let i = 0; i < imagesToExport.length; i++) {
-          const pageNum = indicesToExport[i] + 1;
-          const blob = imagesToExport[i];
-          const fileName = `${baseName}_page_${pageNum}${ext}`;
+        for (const { pageNumber, blob } of imagesToExport) {
+          const fileName = `${baseName}_page_${pageNumber}.${ext}`;
 
           const url = URL.createObjectURL(blob);
           const link = document.createElement("a");
@@ -369,7 +430,7 @@ export class PdfToImage extends BaseComponent {
 
         this.updateProgress(100, "Done!");
         this.showSuccessDialog(
-          `Successfully triggered download for ${imagesToExport.length} images.`,
+          `Successfully triggered download for ${this.countLabel(imagesToExport.length, "image")}.${failureNote}`,
         );
       }
     } catch (err: any) {

@@ -1,9 +1,10 @@
+import JSZip from "jszip";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   clearPreviewLoadingState: vi.fn(),
   convertImagesToPdf: vi.fn(),
-  convertPdfToImages: vi.fn(),
+  renderPdfPagesToImages: vi.fn(),
   destroyThumbnails: vi.fn().mockResolvedValue(undefined),
   getPdfPreviewErrorMessage: vi.fn(() => "Preview failed"),
   loadPdfDocument: vi.fn(),
@@ -22,7 +23,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../../utils/pdfEngine.ts", () => ({
   convertImagesToPdf: mocks.convertImagesToPdf,
-  convertPdfToImages: mocks.convertPdfToImages,
+  renderPdfPagesToImages: mocks.renderPdfPagesToImages,
 }));
 
 vi.mock("../../utils/pdfPreview.ts", () => ({
@@ -54,10 +55,13 @@ describe("image conversion components", () => {
     mocks.persistence.getJobs.mockResolvedValue([]);
     mocks.persistence.getStorageUsage.mockResolvedValue({ quota: 1000, usage: 0 });
     mocks.convertImagesToPdf.mockResolvedValue(new Uint8Array([1, 2, 3]));
-    mocks.convertPdfToImages.mockResolvedValue([
-      new Blob(["page-1"], { type: "image/png" }),
-      new Blob(["page-2"], { type: "image/png" }),
-    ]);
+    mocks.renderPdfPagesToImages.mockImplementation(
+      async (_data: Uint8Array, { pages }: { pages?: number[] }) =>
+        (pages ?? [1, 2]).map((pageNumber) => ({
+          pageNumber,
+          blob: new Blob([`page-${pageNumber}`], { type: "image/png" }),
+        })),
+    );
     mocks.loadPdfDocument.mockResolvedValue({ numPages: 2 });
 
     document.body.innerHTML = '<div id="globalDialog"></div>';
@@ -258,6 +262,127 @@ describe("image conversion components", () => {
     });
   });
 
+  describe("ImageToPdf inputs and list controls", () => {
+    it("offers only saved images, not PDFs or other results, under Reuse a recent file", async () => {
+      mocks.persistence.getJobs.mockResolvedValue([
+        { id: 1, fileName: "converted_images.pdf", data: new Uint8Array([1]) },
+        { id: 2, fileName: "scan.png", data: new Uint8Array([2]) },
+        { id: 3, fileName: "notes.md", data: new Uint8Array([3]) },
+        { id: 4, fileName: "photo", mimeType: "image/jpeg", data: new Uint8Array([4]) },
+      ]);
+
+      const component = await mountImageToPdf();
+
+      const chips = Array.from(
+        component.querySelectorAll<HTMLButtonElement>(".recent-file-chip"),
+        (chip) => chip.textContent?.trim(),
+      );
+      expect(chips).toEqual(["scan.png", "photo"]);
+    });
+
+    it("hides Reuse a recent file when history holds only PDFs", async () => {
+      mocks.persistence.getJobs.mockResolvedValue([
+        { id: 1, fileName: "merged_document.pdf", data: new Uint8Array([1]) },
+      ]);
+
+      const component = await mountImageToPdf();
+
+      expect(component.querySelector("#recentFilesContainer")?.classList.contains("hidden")).toBe(
+        true,
+      );
+      expect(component.querySelectorAll(".recent-file-chip")).toHaveLength(0);
+    });
+
+    it("shows a hostile image name as text instead of markup", async () => {
+      const component = await mountImageToPdf();
+      const name = '<img src=x onerror="alert(1)">.png';
+
+      await component.handleFiles(asFileList([new File(["a"], name, { type: "image/png" })]));
+
+      const fileName = component.querySelector("#fileList .file-name") as HTMLElement;
+      expect(component.querySelector("#fileList img")).toBeNull();
+      expect(fileName.textContent).toBe(name);
+      expect(fileName.getAttribute("title")).toBe(name);
+    });
+
+    it("reorders and removes images from the list buttons", async () => {
+      const component = await mountImageToPdf();
+      await component.handleFiles(
+        asFileList([
+          new File(["a"], "a.png", { type: "image/png" }),
+          new File(["b"], "b.png", { type: "image/png" }),
+          new File(["c"], "c.png", { type: "image/png" }),
+        ]),
+      );
+      const names = () => (component as any).files.map((file: File) => file.name);
+      const button = (selector: string, index: number) =>
+        component.querySelectorAll<HTMLButtonElement>(selector)[index];
+
+      button(".move-up", 1).click();
+      expect(names()).toEqual(["b.png", "a.png", "c.png"]);
+
+      button(".move-down", 0).click();
+      expect(names()).toEqual(["a.png", "b.png", "c.png"]);
+
+      button(".remove", 1).click();
+      expect(names()).toEqual(["a.png", "c.png"]);
+      expect(component.querySelectorAll(".file-list-item")).toHaveLength(2);
+    });
+
+    it("ignores moves past either end and drops onto the same item", async () => {
+      const component = await mountImageToPdf();
+      await component.handleFiles(
+        asFileList([
+          new File(["a"], "a.png", { type: "image/png" }),
+          new File(["b"], "b.png", { type: "image/png" }),
+        ]),
+      );
+      mocks.persistence.set.mockClear();
+
+      component.moveFile(0, -1);
+      component.moveFile(1, 1);
+
+      const items = component.querySelectorAll<HTMLElement>(".file-list-item");
+      const selfDrop = new Event("drop", { bubbles: true, cancelable: true });
+      Object.defineProperty(selfDrop, "dataTransfer", { value: { getData: () => "1" } });
+      items[1].dispatchEvent(selfDrop);
+
+      // A drop without transfer data is read as coming from the first item.
+      const bareDrop = new Event("drop", { bubbles: true, cancelable: true });
+      items[0].dispatchEvent(bareDrop);
+
+      expect((component as any).files.map((file: File) => file.name)).toEqual(["a.png", "b.png"]);
+      expect(mocks.persistence.set).not.toHaveBeenCalled();
+    });
+
+    it("stays on the drop zone when nothing valid is added or nothing is saved", async () => {
+      const component = await mountImageToPdf();
+
+      await component.handleFiles(
+        asFileList([new File(["%PDF-"], "doc.pdf", { type: "application/pdf" })]),
+      );
+      await component.restoreSession();
+
+      expect((component as any).files).toEqual([]);
+      expect(component.querySelector("#dropZone")?.classList.contains("hidden")).toBe(false);
+      expect(mocks.persistence.set).not.toHaveBeenCalled();
+    });
+
+    it("tolerates resume markup being absent", async () => {
+      mocks.persistence.get.mockResolvedValue([new File(["a"], "a.png", { type: "image/png" })]);
+      const component = new ImageToPdf();
+      component.render = function (this: ImageToPdf) {
+        ImageToPdf.prototype.render.call(this);
+        this.querySelector("#resumeContainer")?.remove();
+      };
+      document.body.appendChild(component);
+      await flush();
+
+      await expect(component.checkExistingSession()).resolves.toBeUndefined();
+      expect(component.querySelector("#resumeBtn")).toBeNull();
+    });
+  });
+
   describe("PdfToImage", () => {
     it("loads a PDF, renders thumbnails, and toggles page selection", async () => {
       const component = await mountPdfToImage();
@@ -308,7 +433,7 @@ describe("image conversion components", () => {
       expect((document.getElementById("globalDialog") as any).show).toHaveBeenCalledWith(
         expect.objectContaining({ type: "error" }),
       );
-      expect(mocks.convertPdfToImages).not.toHaveBeenCalled();
+      expect(mocks.renderPdfPagesToImages).not.toHaveBeenCalled();
     });
 
     it("exports all pages as a ZIP and records the job", async () => {
@@ -319,7 +444,7 @@ describe("image conversion components", () => {
 
       await component.handleConvert();
 
-      expect(mocks.convertPdfToImages).toHaveBeenCalledWith(expect.any(Uint8Array), {
+      expect(mocks.renderPdfPagesToImages).toHaveBeenCalledWith(expect.any(Uint8Array), {
         format: "png",
         scale: 2,
       });
@@ -331,6 +456,229 @@ describe("image conversion components", () => {
         }),
       );
       expect(component.querySelector("#successMessage")?.classList.contains("hidden")).toBe(false);
+    });
+
+    it("exports chosen pages in page order as a JPEG ZIP named after the selection", async () => {
+      mocks.loadPdfDocument.mockResolvedValue({ numPages: 3 });
+      const zipFile = vi.spyOn(JSZip.prototype, "file");
+      const component = await mountPdfToImage();
+      await component.handleFiles(
+        asFileList([new File(["pdf"], "sample.pdf", { type: "application/pdf" })]),
+      );
+
+      (component.querySelector("#jpgBtn") as HTMLButtonElement).click();
+      const pages = component.querySelectorAll<HTMLElement>(".page-item");
+      pages[2].click();
+      pages[0].click();
+      const mode = component.querySelector(
+        'input[name="downloadMode"][value="selected-zip"]',
+      ) as HTMLInputElement;
+      mode.checked = true;
+      mode.dispatchEvent(new Event("change", { bubbles: true }));
+
+      try {
+        await component.handleConvert();
+
+        expect(zipFile.mock.calls.map(([name]) => name)).toEqual([
+          "sample_page_1.jpg",
+          "sample_page_3.jpg",
+        ]);
+        // Only the chosen pages are rendered, in page order.
+        expect(mocks.renderPdfPagesToImages).toHaveBeenCalledWith(expect.any(Uint8Array), {
+          format: "jpeg",
+          scale: 2,
+          pages: [1, 3],
+        });
+        expect(mocks.persistence.addJob).toHaveBeenCalledWith(
+          expect.objectContaining({ fileName: "sample_selected_images.zip" }),
+        );
+      } finally {
+        zipFile.mockRestore();
+      }
+    });
+
+    it("forgets the page selection when another PDF is loaded", async () => {
+      const component = await mountPdfToImage();
+      await component.handleFiles(
+        asFileList([new File(["pdf"], "a.pdf", { type: "application/pdf" })]),
+      );
+      const mode = component.querySelector(
+        'input[name="downloadMode"][value="selected-zip"]',
+      ) as HTMLInputElement;
+      mode.checked = true;
+      mode.dispatchEvent(new Event("change", { bubbles: true }));
+      component.querySelectorAll<HTMLElement>(".page-item")[1].click();
+
+      await component.handleFiles(
+        asFileList([new File(["pdf"], "other.pdf", { type: "application/pdf" })]),
+      );
+      expect(component.querySelector("#selectionWarning")?.classList.contains("hidden")).toBe(
+        false,
+      );
+
+      await component.handleConvert();
+      // Page 2 was chosen in a.pdf, not in other.pdf, so nothing is exported.
+      expect(mocks.renderPdfPagesToImages).not.toHaveBeenCalled();
+      expect((document.getElementById("globalDialog") as any).show).toHaveBeenCalledWith(
+        expect.objectContaining({ message: "Please select at least one page from the gallery." }),
+      );
+    });
+
+    it("closes the previous document when another PDF is loaded and when the tool closes", async () => {
+      // A document that fails to close must not stop the next one loading.
+      const first = { numPages: 2, destroy: vi.fn().mockRejectedValue(new Error("worker gone")) };
+      const second = { numPages: 2, destroy: vi.fn().mockResolvedValue(undefined) };
+      mocks.loadPdfDocument.mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+      const component = await mountPdfToImage();
+
+      await component.handleFiles(
+        asFileList([new File(["pdf"], "a.pdf", { type: "application/pdf" })]),
+      );
+      await flush();
+      await component.handleFiles(
+        asFileList([new File(["pdf"], "b.pdf", { type: "application/pdf" })]),
+      );
+      await flush();
+      expect(first.destroy).toHaveBeenCalledTimes(1);
+      expect(second.destroy).not.toHaveBeenCalled();
+
+      mocks.destroyThumbnails.mockClear();
+      component.remove();
+      expect(second.destroy).toHaveBeenCalledTimes(1);
+      expect(mocks.destroyThumbnails).toHaveBeenCalledTimes(1);
+    });
+
+    it("drops an upper-case .PDF extension from image names", async () => {
+      const zipFile = vi.spyOn(JSZip.prototype, "file");
+      const component = await mountPdfToImage();
+      await component.handleFiles(
+        asFileList([new File(["pdf"], "Scan.PDF", { type: "application/pdf" })]),
+      );
+
+      try {
+        await component.handleConvert();
+        expect(zipFile.mock.calls.map(([name]) => name)).toEqual([
+          "Scan_page_1.png",
+          "Scan_page_2.png",
+        ]);
+      } finally {
+        zipFile.mockRestore();
+      }
+    });
+
+    it("names each image by its own page and reports pages that failed", async () => {
+      mocks.loadPdfDocument.mockResolvedValue({ numPages: 3 });
+      mocks.renderPdfPagesToImages.mockResolvedValueOnce([
+        { pageNumber: 1, blob: new Blob(["p1"]) },
+        { pageNumber: 2, blob: null },
+        { pageNumber: 3, blob: new Blob(["p3"]) },
+      ]);
+      const zipFile = vi.spyOn(JSZip.prototype, "file");
+      const component = await mountPdfToImage();
+      await component.handleFiles(
+        asFileList([new File(["pdf"], "sample.pdf", { type: "application/pdf" })]),
+      );
+
+      try {
+        await component.handleConvert();
+
+        expect(zipFile.mock.calls.map(([name]) => name)).toEqual([
+          "sample_page_1.png",
+          "sample_page_3.png",
+        ]);
+        expect((document.getElementById("globalDialog") as any).show).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: "success",
+            message:
+              "Successfully converted 2 pages to ZIP. Page 2 could not be converted and was left out.",
+          }),
+        );
+        expect(mocks.persistence.addJob).toHaveBeenCalledWith(
+          expect.objectContaining({
+            metadata: expect.objectContaining({ pageCount: 2, failedPages: [2] }),
+          }),
+        );
+      } finally {
+        zipFile.mockRestore();
+      }
+    });
+
+    it("downloads individual images with a proper extension and lists failed pages", async () => {
+      mocks.loadPdfDocument.mockResolvedValue({ numPages: 4 });
+      mocks.renderPdfPagesToImages.mockResolvedValueOnce([
+        { pageNumber: 1, blob: null },
+        { pageNumber: 2, blob: new Blob(["p2"]) },
+        { pageNumber: 3, blob: null },
+        { pageNumber: 4, blob: null },
+      ]);
+      const names: string[] = [];
+      HTMLAnchorElement.prototype.click = vi.fn(function (this: HTMLAnchorElement) {
+        names.push(this.download);
+      });
+      const component = await mountPdfToImage();
+      await component.handleFiles(
+        asFileList([new File(["pdf"], "sample.pdf", { type: "application/pdf" })]),
+      );
+      const mode = component.querySelector(
+        'input[name="downloadMode"][value="all-individual"]',
+      ) as HTMLInputElement;
+      mode.checked = true;
+      mode.dispatchEvent(new Event("change", { bubbles: true }));
+
+      await component.handleConvert();
+
+      expect(names).toEqual(["sample_page_2.png"]);
+      expect((document.getElementById("globalDialog") as any).show).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message:
+            "Successfully triggered download for 1 image. Pages 1, 3 and 4 could not be converted and were left out.",
+        }),
+      );
+    });
+
+    it("explains which pages failed when none could be converted", async () => {
+      mocks.renderPdfPagesToImages.mockResolvedValueOnce([
+        { pageNumber: 1, blob: null },
+        { pageNumber: 2, blob: null },
+      ]);
+      const component = await mountPdfToImage();
+      await component.handleFiles(
+        asFileList([new File(["pdf"], "sample.pdf", { type: "application/pdf" })]),
+      );
+
+      await component.handleConvert();
+
+      expect((document.getElementById("globalDialog") as any).show).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "error",
+          message: "Conversion failed. Your browser could not create an image of pages 1 and 2.",
+        }),
+      );
+      expect(mocks.persistence.addJob).not.toHaveBeenCalled();
+    });
+
+    it("falls back to scale 2 for an unreadable scale and ignores bad input", async () => {
+      const component = await mountPdfToImage();
+      const scaleInput = component.querySelector("#scaleInput") as HTMLInputElement;
+      scaleInput.value = "";
+      scaleInput.dispatchEvent(new Event("change"));
+
+      await component.handleConvert();
+      expect(mocks.renderPdfPagesToImages).not.toHaveBeenCalled();
+
+      await component.handleFiles(
+        asFileList([new File(["x"], "notes.txt", { type: "text/plain" })]),
+      );
+      expect(mocks.persistence.set).not.toHaveBeenCalled();
+
+      await component.handleFiles(
+        asFileList([new File(["pdf"], "sample.pdf", { type: "application/pdf" })]),
+      );
+      await component.handleConvert();
+      expect(mocks.renderPdfPagesToImages).toHaveBeenCalledWith(expect.any(Uint8Array), {
+        format: "png",
+        scale: 2,
+      });
     });
 
     it("exports selected pages as individual JPEG files", async () => {
@@ -381,7 +729,7 @@ describe("image conversion components", () => {
 
       await component.handleConvert();
 
-      expect(mocks.convertPdfToImages).toHaveBeenCalledWith(expect.any(Uint8Array), {
+      expect(mocks.renderPdfPagesToImages).toHaveBeenCalledWith(expect.any(Uint8Array), {
         format: "png",
         scale: 3,
       });
@@ -400,12 +748,12 @@ describe("image conversion components", () => {
       await expect(component.renderThumbnails()).resolves.toBeUndefined();
       (component as any).selectedFile = file;
 
-      mocks.convertPdfToImages.mockRejectedValueOnce(new Error("button failure"));
+      mocks.renderPdfPagesToImages.mockRejectedValueOnce(new Error("button failure"));
       (component.querySelector("#convertBtn") as HTMLButtonElement).click();
       await flush();
-      expect(mocks.convertPdfToImages).toHaveBeenCalled();
+      expect(mocks.renderPdfPagesToImages).toHaveBeenCalled();
 
-      mocks.convertPdfToImages.mockResolvedValueOnce([]);
+      mocks.renderPdfPagesToImages.mockResolvedValueOnce([]);
       await component.handleConvert();
       expect((document.getElementById("globalDialog") as any).show).toHaveBeenCalledWith(
         expect.objectContaining({ title: "Error", type: "error" }),
@@ -423,6 +771,24 @@ describe("image conversion components", () => {
       (component.querySelector("#resumeBtn") as HTMLButtonElement).click();
       await flush();
       expect(component.querySelector("#fileName")?.textContent).toBe("saved.pdf");
+    });
+
+    it("does not execute HTML/JS embedded in a resumed filename (stored XSS regression)", async () => {
+      const maliciousName = "<img src=x onerror=window.__resumeXss=1>.pdf";
+      const saved = new File(["pdf"], maliciousName, { type: "application/pdf" });
+      mocks.persistence.get.mockResolvedValue(saved);
+      const component = await mountPdfToImage();
+      (window as any).__resumeXss = undefined;
+
+      await component.checkExistingSession();
+
+      const resumeBtn = component.querySelector("#resumeBtn") as HTMLElement;
+      expect(resumeBtn.querySelector("img")).toBeNull();
+      expect((window as any).__resumeXss).toBeUndefined();
+      // Shown as typed: not run as markup and not escaped twice.
+      expect(resumeBtn.textContent?.trim()).toBe(
+        `Resume ${maliciousName} (${component.formatBytes(saved.size)})`,
+      );
     });
 
     it("tolerates PDF-to-image session lookup failures", async () => {
@@ -443,7 +809,7 @@ describe("image conversion components", () => {
         expect.objectContaining({ message: "Preview failed", type: "error" }),
       );
 
-      mocks.convertPdfToImages.mockRejectedValueOnce(new Error("render failed"));
+      mocks.renderPdfPagesToImages.mockRejectedValueOnce(new Error("render failed"));
       await component.handleConvert();
       expect((document.getElementById("globalDialog") as any).show).toHaveBeenCalledWith(
         expect.objectContaining({
