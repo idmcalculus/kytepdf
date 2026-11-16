@@ -8,7 +8,7 @@
 import * as oci from "@pulumi/oci";
 import * as pulumi from "@pulumi/pulumi";
 import type { AuthVmArgs } from "./cloudinit";
-import { buildCloudInit } from "./cloudinit";
+import { assertMetadataWithinLimit, buildCloudInit, encodeUserData } from "./cloudinit";
 
 export class AuthVmComponent extends pulumi.ComponentResource {
   public readonly reservedIp: pulumi.Output<string>;
@@ -37,8 +37,13 @@ export class AuthVmComponent extends pulumi.ComponentResource {
 
     // ── Cloud-init user-data ───────────────────────────────────────────────
     // buildCloudInit resolves all secret Outputs via pulumi.all() and renders
-    // the full cloud-init YAML. We base64-encode it for the instance metadata.
-    const userData = buildCloudInit(args);
+    // the full cloud-init YAML. encodeUserData gzips and base64-encodes it, and
+    // the size check fails the deploy here rather than at OCI's LaunchInstance.
+    const userData = buildCloudInit(args).apply((yaml) => {
+      const encoded = encodeUserData(yaml);
+      assertMetadataWithinLimit({ ssh_authorized_keys: args.sshPublicKey, user_data: encoded });
+      return encoded;
+    });
 
     // ── A1.Flex instance ───────────────────────────────────────────────────
     // assignPublicIp: false — we assign the reserved IP separately below.
@@ -65,7 +70,7 @@ export class AuthVmComponent extends pulumi.ComponentResource {
         },
         metadata: {
           ssh_authorized_keys: args.sshPublicKey,
-          user_data: userData.apply((ud) => Buffer.from(ud).toString("base64")),
+          user_data: userData,
         },
         displayName: `${name}-instance`,
       },

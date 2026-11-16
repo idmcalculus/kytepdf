@@ -30,9 +30,9 @@ bun run auth-server:dev       # start in watch mode
 | `CSRF_COOKIE_SAMESITE` | `none` | Match `COOKIE_SAMESITE` |
 | `BASE_URL` | `https://kytepdf.com` | Frontend URL for email links |
 | `CORS_ORIGINS` | `https://kytepdf.com` | Comma-separated allowed origins |
-| `EMAIL_PROVIDER` | `ses` | `ses` for AWS SES, `console` for dev logging |
-| `SES_REGION` | `us-east-1` | Required when `EMAIL_PROVIDER=ses` |
-| `SES_FROM_ADDRESS` | `noreply@kytepdf.com` | Sender address for emails |
+| `EMAIL_PROVIDER` | `resend` | `resend` for production email, `console` for dev logging |
+| `RESEND_API_KEY` | `re_...` | Required when `EMAIL_PROVIDER=resend` |
+| `EMAIL_FROM_ADDRESS` | `noreply@kytepdf.com` | Sender address for emails (required when `EMAIL_PROVIDER=resend`) |
 
 ### OAuth (Optional)
 

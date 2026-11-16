@@ -13,11 +13,12 @@ containers (Caddy, auth, Postgres) with automatic TLS via Let's Encrypt.
 1. [Prerequisites](#prerequisites)
 2. [Setup](#setup)
 3. [Deployment](#deployment)
-4. [DNS Setup](#dns-setup)
-5. [Verifying the Deployment](#verifying-the-deployment)
-6. [Backup and Restore](#backup-and-restore)
-7. [Troubleshooting](#troubleshooting)
-8. [Config Reference](#config-reference)
+4. [Environment Files](#environment-files)
+5. [DNS Setup](#dns-setup)
+6. [Verifying the Deployment](#verifying-the-deployment)
+7. [Backup and Restore](#backup-and-restore)
+8. [Troubleshooting](#troubleshooting)
+9. [Config Reference](#config-reference)
 
 ---
 
@@ -64,7 +65,7 @@ Replace `prod` with any name you prefer (e.g. `dev`, `staging`).
 
 ### 3. Set required config values
 
-These three values are **required** — the stack will fail before creating any resources if they
+These four values are **required** — the stack will fail before creating any resources if they
 are missing.
 
 ```bash
@@ -76,6 +77,9 @@ pulumi config set sshPublicKey "ssh-ed25519 AAAA... user@host"
 
 # Comma-separated list of allowed CORS origins for the auth API
 pulumi config set corsOrigins "https://kytepdf.com,https://www.kytepdf.com"
+
+# Frontend app URL used for email links and OAuth success redirects
+pulumi config set frontendUrl https://kytepdf.com
 ```
 
 ### 4. Set optional config values
@@ -90,23 +94,27 @@ pulumi config set oci:region us-phoenix-1
 # Custom domain (default: auth.kytepdf.com)
 pulumi config set domain auth.example.com
 
-# Restrict SSH access to specific IPs (default: 0.0.0.0/0 — open)
+# SSH access: set adminCidrs, tailscaleAuthKey, or both. With neither, the stack refuses to
+# deploy. 0.0.0.0/0 is rejected.
 pulumi config set adminCidrs "203.0.113.10/32,198.51.100.0/24"
+# Or use Tailscale SSH (port 22 stays closed). Use a single-use auth key.
+pulumi config set --secret tailscaleAuthKey tskey-auth-...
 
 # VM sizing (defaults: 1 OCPU, 6 GB RAM)
 pulumi config set ocpu 2
 pulumi config set memoryGb 12
 
-# Block volume size in GB (default: 50, max: 200)
+# Block volume size in GB (default: 50, max: 150)
 pulumi config set blockVolumeSizeGb 100
 
 # Availability domain index to use (default: 0 — change on capacity errors)
 pulumi config set availabilityDomainIndex 1
 
-# Email provider: ses or resend (default: ses)
-pulumi config set emailProvider ses
-pulumi config set sesRegion us-east-1
-pulumi config set sesFromAddress noreply@example.com
+# Email provider: console or resend (default: console).
+# With resend, resendApiKey and resendFromAddress are also required.
+pulumi config set emailProvider resend
+pulumi config set --secret resendApiKey re_YOUR_RESEND_API_KEY
+pulumi config set resendFromAddress noreply@kytepdf.com
 ```
 
 ### 5. Enable OAuth providers (optional)
@@ -162,14 +170,30 @@ Pulumi will show a preview of all resources to be created. Type `yes` to confirm
 **What happens on first boot (cloud-init):**
 
 1. Installs `docker.io`, `docker-compose-plugin`, `curl`, `gnupg`
-2. Writes `/opt/auth/secrets.env` (mode `0600`, root-only) with Postgres password, backup passphrase, and OAuth secrets
-3. Writes `/opt/auth/app.env` (mode `0644`) with non-secret config (BASE_URL, CORS_ORIGINS, etc.)
-4. Writes `/opt/auth/docker-compose.yml`, `/opt/auth/Caddyfile`, `/opt/auth/backup.sh`, and the `auth-stack` systemd unit
-5. Formats and mounts the block volume at `/mnt/data` (skipped if device is absent)
-6. Enables and starts the `auth-stack` systemd service (Docker Compose: postgres → auth → caddy)
-7. Installs a daily cron job at `02:00 UTC` for encrypted Postgres backups
+2. Writes four env files under `/opt/auth/` (see [Environment Files](#environment-files) below)
+3. Writes `/opt/auth/docker-compose.yml`, `/opt/auth/Caddyfile`, `/opt/auth/backup.sh`, and the `auth-stack` systemd unit
+4. Formats and mounts the block volume at `/mnt/data` (skipped if device is absent)
+5. Enables and starts the `auth-stack` systemd service (Docker Compose: postgres → auth → caddy)
+6. Installs a daily cron job at `02:00 UTC` for encrypted Postgres backups
 
 **Expected duration:** 5–10 minutes for the full `pulumi up` (instance creation + cloud-init).
+
+---
+
+## Environment Files
+
+Cloud-init writes four env files under `/opt/auth/`. Each file is owned by `root:root`.
+
+| Path | Mode | Contains | Consumed by |
+|---|---|---|---|
+| `/opt/auth/postgres-secrets.env` | `0600` (secrets) | `POSTGRES_PASSWORD` | Postgres container |
+| `/opt/auth/auth-secrets.env` | `0600` (secrets) | `POSTGRES_PASSWORD`, `DATABASE_URL`, OAuth client secrets, `RESEND_API_KEY` | auth container |
+| `/opt/auth/backup-secrets.env` | `0600` (secrets) | `BACKUP_PASSPHRASE` | backup script (`/opt/auth/backup.sh`) |
+| `/opt/auth/app.env` | `0644` (non-secret config) | `BASE_URL`, `CORS_ORIGINS`, `EMAIL_PROVIDER`, `EMAIL_FROM_ADDRESS`, OAuth client IDs, redirect URIs, `TRUSTED_PROXY_HOP_COUNT`, cookie/CSRF settings | auth container |
+
+Secrets are split across separate files so each component only has access to the credentials it
+needs. The Postgres container never sees OAuth secrets; the backup script never sees the database
+URL; the auth container env files never contain the backup passphrase.
 
 ---
 
@@ -477,16 +501,16 @@ All values are set with `pulumi config set [--secret] KEY VALUE`.
 | `compartmentOcid` | string | **required** | no | OCID of the compartment to deploy into |
 | `sshPublicKey` | string | **required** | no | SSH public key for VM access |
 | `corsOrigins` | string | **required** | no | Comma-separated CORS origins, e.g. `https://kytepdf.com` |
-| `adminCidrs` | string | `0.0.0.0/0` | no | Comma-separated CIDRs allowed SSH (port 22). Restrict in production. |
-| `domain` | string | `auth.kytepdf.com` | no | FQDN for Caddy TLS and auth `BASE_URL` |
+| `adminCidrs` | string | — | no | Comma-separated IPv4 CIDRs allowed SSH (port 22), e.g. `203.0.113.10/32,198.51.100.0/24`. `0.0.0.0/0` is rejected. Set this, `tailscaleAuthKey`, or both. |
+| `domain` | string | `auth.kytepdf.com` | no | FQDN for Caddy TLS and OAuth callback URLs |
+| `frontendUrl` | string | **required** | no | Frontend app URL used for email links and OAuth success redirects |
 | `ocpu` | number | `1` | no | OCPU count for `VM.Standard.A1.Flex` (1–4) |
 | `memoryGb` | number | `6` | no | RAM in GB for `VM.Standard.A1.Flex` (6–24) |
 | `availabilityDomainIndex` | number | `0` | no | Index into the compartment's availability domains (0-based). Change on capacity errors. |
 | `imageOcid` | string | *(auto-detect)* | no | Override ARM64 image OCID. If unset, the latest Ubuntu 24.04 ARM64 image for `VM.Standard.A1.Flex` is used. |
-| `appVersion` | string | `0.1.14` | no | `@fortressauth/server` npm version to install |
-| `emailProvider` | string | `ses` | no | Email provider: `ses` or `resend` |
-| `sesRegion` | string | `us-east-1` | no | AWS SES region (used when `emailProvider=ses`) |
-| `sesFromAddress` | string | — | no | SES sender address (required when `emailProvider=ses`) |
+| `emailProvider` | string | `console` | no | Email provider: `console` or `resend` |
+| `resendApiKey` | string | — | **yes** | Resend API key. Required when `emailProvider` is `resend`. |
+| `resendFromAddress` | string | — | no | Sender address, e.g. `noreply@kytepdf.com`. Required when `emailProvider` is `resend`; must be a valid email address. |
 | `enableGoogle` | boolean | `false` | no | Enable Google OAuth. Requires `googleClientId` and `googleClientSecret`. |
 | `googleClientId` | string | — | no | Google OAuth client ID |
 | `googleClientSecret` | string | — | **yes** | Google OAuth client secret |
@@ -494,7 +518,11 @@ All values are set with `pulumi config set [--secret] KEY VALUE`.
 | `githubClientId` | string | — | no | GitHub OAuth client ID |
 | `githubClientSecret` | string | — | **yes** | GitHub OAuth client secret |
 | `enableBlockVolume` | boolean | `true` | no | Attach an extra block volume for Postgres data |
-| `blockVolumeSizeGb` | number | `50` | no | Block volume size in GB (1–200, within OCI Always Free 200 GB total limit) |
+| `blockVolumeSizeGb` | number | `50` | no | Block volume size in GB (1–150; with the 50 GB boot volume this stays within the OCI Always Free 200 GB total) |
+| `trustedProxyHopCount` | number | `1` | no | Reverse-proxy hops in front of the auth container (Caddy is one). 0–8. |
+| `tailscaleAuthKey` | string | — | **yes** | Tailscale auth key. When set, the VM joins your tailnet with Tailscale SSH. Use a single-use key: it sits in the instance metadata. |
+| `tailscaleHostname` | string | `kytepdf-auth` | no | Tailscale hostname for the VM. One DNS label: letters, digits and hyphens, 1–63 chars. |
+| `tailscaleTag` | string | — | no | Tailscale ACL tag in the form `tag:<name>`, e.g. `tag:server`. Must exist in your tailnet's ACL policy. |
 | `postgresPassword` | string | *(auto-generated, 32 chars)* | **yes** | Postgres password. Auto-generated via `@pulumi/random` if not set. |
 | `backupPassphrase` | string | *(auto-generated, 48 chars)* | **yes** | GPG passphrase for backup encryption. Auto-generated via `@pulumi/random` if not set. |
 
@@ -506,13 +534,25 @@ All values are set with `pulumi config set [--secret] KEY VALUE`.
 | `instanceId` | The OCI instance OCID |
 | `dnsInstruction` | Ready-made DNS instruction string, e.g. `Create DNS A record: auth.kytepdf.com → 1.2.3.4` |
 
-> **Security note:** `postgresPassword`, `backupPassphrase`, `googleClientSecret`, and
-> `githubClientSecret` are intentionally **not** exported as stack outputs. Retrieve them with
+> **Security note:** `postgresPassword`, `backupPassphrase`, `googleClientSecret`,
+> `githubClientSecret`, `resendApiKey`, and `tailscaleAuthKey` are intentionally **not** exported
+> as stack outputs. Retrieve them with
 > `pulumi config get --show-secrets KEY` when needed.
 
 ---
 
 ## Architecture Overview
+
+The auth service is the `auth-server/` deployable unit run as-is. The OCI deployment embeds
+`auth-server/package.json` and `auth-server/package-lock.json` verbatim into the VM via
+cloud-init, then runs `npm ci` (resolving versions solely from the lockfile) followed by `npm start`
+(the `auth-server/` start script). The `@fortressauth/server` version that runs in production is
+determined solely by the pin in `auth-server/package.json` — the OCI deployment does not name or
+pin that version independently.
+
+The cloud-init user data is gzipped, then base64-encoded, into the instance metadata. OCI allows at
+most 32,000 bytes of metadata, and the embedded lockfile alone is about 53 KB before compression,
+so `pulumi up` checks the encoded size and stops before creating the instance if it is too large.
 
 ```
 Internet

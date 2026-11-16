@@ -1,7 +1,55 @@
 // cloudinit.ts
 // Renders the cloud-init user-data YAML for the OCI auth VM.
 // Secrets are injected via pulumi.all() and written to root-only env files.
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { gzipSync } from "node:zlib";
 import * as pulumi from "@pulumi/pulumi";
+// No ".js" on these imports. Pulumi loads this file through ts-node as CommonJS,
+// and CommonJS does not map "./x.js" to "./x.ts" (tests/pulumi.loader.test.ts).
+import { parseEnvContract } from "./parity/envContract";
+import { ENV_VAR_EXEMPTIONS } from "./parity/exemptions";
+import { AUTH_SERVER_DIR } from "./parity/paths";
+
+/**
+ * OCI rejects a launch when the instance's `metadata` and `extendedMetadata`
+ * together exceed 32,000 bytes (see `metadata` in @pulumi/oci core/instance.d.ts).
+ */
+export const OCI_METADATA_MAX_BYTES = 32_000;
+
+/**
+ * Encode cloud-init YAML for the instance metadata `user_data` key: gzip, then base64.
+ *
+ * The YAML embeds auth-server/package-lock.json, so plain base64 is about three
+ * times the metadata limit. OCI's cloud-init datasource base64-decodes `user_data`
+ * and cloud-init unpacks gzip content itself, so the VM still sees the same YAML.
+ */
+export function encodeUserData(cloudInitYaml: string): string {
+  const gz = gzipSync(Buffer.from(cloudInitYaml, "utf8"), { level: 9 });
+  // Byte 9 of the gzip header names the OS that wrote it, and Node sets it per
+  // platform (0x13 on macOS, 0x03 on Linux). gunzip ignores it. Fix it to 0x03 so
+  // every machine produces the same user_data; OCI cannot change user_data on a
+  // running instance, so a one-byte difference between laptop and CI would matter.
+  gz[9] = 0x03;
+  return gz.toString("base64");
+}
+
+/**
+ * Throw if instance metadata would exceed OCI's limit. Size is measured on the
+ * JSON form (keys, values and quotes), which is at least what OCI counts.
+ * Returns the measured size in bytes.
+ */
+export function assertMetadataWithinLimit(metadata: Record<string, string>): number {
+  const size = Buffer.byteLength(JSON.stringify(metadata), "utf8");
+  if (size > OCI_METADATA_MAX_BYTES) {
+    throw new Error(
+      `OCI instance metadata is ${size} bytes, over the ${OCI_METADATA_MAX_BYTES}-byte limit. ` +
+        "Shrink the cloud-init user_data (it embeds auth-server/package.json and package-lock.json) " +
+        "or the SSH public key.",
+    );
+  }
+  return size;
+}
 
 // AuthVmArgs is defined here so cloudinit.ts has no circular dependency on vm.ts.
 // vm.ts imports this interface via: import type { AuthVmArgs } from "./cloudinit";
@@ -21,17 +69,12 @@ export interface AuthVmArgs {
   googleClientSecret?: pulumi.Output<string>;
   githubClientSecret?: pulumi.Output<string>;
   resendApiKey?: pulumi.Output<string>;
-  sesAccessKeyId?: pulumi.Output<string>;
-  sesSecretAccessKey?: pulumi.Output<string>;
   // Non-secret config
   domain: string;
   /** Frontend app URL (e.g. https://kytepdf.com). Used as BASE_URL for email links
    *  and OAuth redirects — must NOT be the auth API domain. */
   frontendUrl: string;
-  appVersion: string;
   emailProvider: string;
-  sesRegion?: string;
-  sesFromAddress?: string;
   resendFromAddress?: string;
   googleClientId?: string;
   githubClientId?: string;
@@ -52,14 +95,9 @@ export interface RenderArgs {
   googleSecret: string;
   githubSecret: string;
   resendApiKey: string;
-  sesAccessKeyId: string;
-  sesSecretAccessKey: string;
   domain: string;
   frontendUrl: string;
-  appVersion: string;
   emailProvider: string;
-  sesRegion: string;
-  sesFromAddress: string;
   resendFromAddress: string;
   googleClientId: string;
   githubClientId: string;
@@ -69,14 +107,52 @@ export interface RenderArgs {
   tailscaleAuthKey: string;
   tailscaleHostname: string;
   tailscaleTag: string;
+  /** Verbatim contents of auth-server/package.json (the Deployable_Unit manifest). */
+  authPackageJson: string;
+  /** Verbatim contents of auth-server/package-lock.json (the Deployable_Unit lockfile). */
+  authPackageLock: string;
+}
+
+/**
+ * Render-time guard (R4.5): given the env-file lines the deployment generated
+ * and the set of required contract names, throw before the auth container can
+ * start if any required, non-exempt name is absent or assigned an empty value.
+ *
+ * Distinct from — and run at a different time than — the name-only
+ * Env_Var_Contract Parity_Check (R5). This validator inspects VALUES; the
+ * Parity_Check inspects NAMES only. The two never share logic.
+ */
+export function validateRequiredEnv(args: {
+  generatedEnv: Record<string, string>; // name -> value, parsed from app.env + auth-secrets.env
+  requiredContractNames: string[]; // active names from .env.example
+}): void {
+  const exemptNames = new Set(ENV_VAR_EXEMPTIONS.map((e) => e.name));
+
+  for (const name of args.requiredContractNames) {
+    if (exemptNames.has(name)) continue;
+
+    const value = args.generatedEnv[name];
+    if (value === undefined || value.trim() === "") {
+      throw new Error(
+        `Required environment variable '${name}' is absent or empty in the generated deployment files. ` +
+          `Fix the OCI deployment configuration before auth container startup.`,
+      );
+    }
+  }
 }
 
 /**
  * Build the cloud-init user-data YAML for the auth VM.
  * Uses pulumi.all() to resolve all secret Outputs before rendering.
- * Returns a pulumi.Output<string> suitable for base64-encoding into instance metadata.
+ * Returns the plain YAML as a pulumi.Output<string>; pass it through
+ * encodeUserData() before putting it in instance metadata.
  */
 export function buildCloudInit(args: AuthVmArgs): pulumi.Output<string> {
+  // Read the canonical Deployable_Unit manifest and lockfile from disk at render time.
+  // These are embedded verbatim into the cloud-init write_files (Embedded_Deployable_Unit).
+  const authPackageJson = readFileSync(resolve(AUTH_SERVER_DIR, "package.json"), "utf8");
+  const authPackageLock = readFileSync(resolve(AUTH_SERVER_DIR, "package-lock.json"), "utf8");
+
   return pulumi
     .all([
       args.postgresPassword,
@@ -84,46 +160,49 @@ export function buildCloudInit(args: AuthVmArgs): pulumi.Output<string> {
       args.googleClientSecret ?? pulumi.output(""),
       args.githubClientSecret ?? pulumi.output(""),
       args.resendApiKey ?? pulumi.output(""),
-      args.sesAccessKeyId ?? pulumi.output(""),
-      args.sesSecretAccessKey ?? pulumi.output(""),
       args.tailscaleAuthKey ?? pulumi.output(""),
     ])
-    .apply(
-      ([
+    .apply(([pgPass, backupPass, googleSecret, githubSecret, resendApiKey, tailscaleAuthKey]) =>
+      renderCloudInit({
         pgPass,
         backupPass,
         googleSecret,
         githubSecret,
         resendApiKey,
-        sesAccessKeyId,
-        sesSecretAccessKey,
+        domain: args.domain,
+        frontendUrl: args.frontendUrl,
+        emailProvider: args.emailProvider,
+        resendFromAddress: args.resendFromAddress ?? "",
+        googleClientId: args.googleClientId ?? "",
+        githubClientId: args.githubClientId ?? "",
+        corsOrigins: args.corsOrigins,
+        enableBlockVolume: args.enableBlockVolume,
+        trustedProxyHopCount: args.trustedProxyHopCount,
         tailscaleAuthKey,
-      ]) =>
-        renderCloudInit({
-          pgPass,
-          backupPass,
-          googleSecret,
-          githubSecret,
-          resendApiKey,
-          sesAccessKeyId,
-          sesSecretAccessKey,
-          domain: args.domain,
-          frontendUrl: args.frontendUrl,
-          appVersion: args.appVersion,
-          emailProvider: args.emailProvider,
-          sesRegion: args.sesRegion ?? "us-east-1",
-          sesFromAddress: args.sesFromAddress ?? "",
-          resendFromAddress: args.resendFromAddress ?? "",
-          googleClientId: args.googleClientId ?? "",
-          githubClientId: args.githubClientId ?? "",
-          corsOrigins: args.corsOrigins,
-          enableBlockVolume: args.enableBlockVolume,
-          trustedProxyHopCount: args.trustedProxyHopCount,
-          tailscaleAuthKey,
-          tailscaleHostname: args.tailscaleHostname ?? "kytepdf-auth",
-          tailscaleTag: args.tailscaleTag ?? "",
-        }),
+        tailscaleHostname: args.tailscaleHostname ?? "kytepdf-auth",
+        tailscaleTag: args.tailscaleTag ?? "",
+        authPackageJson,
+        authPackageLock,
+      }),
     );
+}
+
+/**
+ * Parse env-file text (lines of KEY=VALUE) into a name→value record.
+ * Used by validateRequiredEnv to parse the generated app.env + auth-secrets.env.
+ */
+function parseEnvFileLines(text: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const rawLine of text.split("\n")) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const eqIdx = line.indexOf("=");
+    if (eqIdx === -1) continue;
+    const name = line.slice(0, eqIdx).trim();
+    const value = line.slice(eqIdx + 1).trim();
+    if (name) result[name] = value;
+  }
+  return result;
 }
 
 /**
@@ -131,7 +210,7 @@ export function buildCloudInit(args: AuthVmArgs): pulumi.Output<string> {
  * This function is exported for unit testing without Pulumi runtime.
  */
 export function renderCloudInit(r: RenderArgs): string {
-  const dockerCompose = buildDockerCompose(r.appVersion, r.enableBlockVolume);
+  const dockerCompose = buildDockerCompose(r.enableBlockVolume);
   const caddyfile = buildCaddyfile(r.domain);
   const backupScript = buildBackupScript(r.enableBlockVolume);
   const systemdUnit = buildSystemdUnit(r.enableBlockVolume);
@@ -141,12 +220,88 @@ export function renderCloudInit(r: RenderArgs): string {
   const backupSecrets = buildBackupSecrets(r);
   const appEnv = buildAppEnv(r);
 
+  // ── Render-time required-value validation (R4.5) ──────────────────────────
+  // Parse .env.example to get the contract, then validate generated env values.
+  const envExampleText = readFileSync(resolve(AUTH_SERVER_DIR, ".env.example"), "utf8");
+  const contractEntries = parseEnvContract(envExampleText);
+  const requiredContractNames = contractEntries.filter((e) => e.required).map((e) => e.name);
+
+  // Merge app.env + auth-secrets.env into a single name→value map for validation.
+  // The compose environment: block supplies PORT and HOST (exempt), so they are
+  // not in the generated env files — but they are in the Exemption_List.
+  const generatedEnv = {
+    ...parseEnvFileLines(appEnv),
+    ...parseEnvFileLines(authSecrets),
+  };
+
+  validateRequiredEnv({ generatedEnv, requiredContractNames });
+
   // Indent each file content for YAML block scalar (4 spaces under `content: |`)
   const indent = (text: string, spaces = 6): string =>
     text
       .split("\n")
       .map((line) => (line.length > 0 ? " ".repeat(spaces) + line : line))
       .join("\n");
+  const ensureTrailingNewline = (text: string): string =>
+    text.endsWith("\n") ? text : `${text}\n`;
+  const contentKey = (text: string, preserveTrailingBytes = false): string => {
+    const chomp = preserveTrailingBytes ? (text.endsWith("\n") ? "+" : "-") : "";
+    return `content: |${chomp}\n${indent(text)}`;
+  };
+  const writeFiles = [
+    `  # postgres-secrets.env — root:root 0600 — only what Postgres needs
+  - path: /opt/auth/postgres-secrets.env
+    permissions: "0600"
+    owner: root:root
+    ${contentKey(postgresSecrets)}`,
+    `  # auth-secrets.env — root:root 0600 — only what the auth container needs
+  - path: /opt/auth/auth-secrets.env
+    permissions: "0600"
+    owner: root:root
+    ${contentKey(authSecrets)}`,
+    `  # backup-secrets.env — root:root 0600 — only what the backup script needs
+  - path: /opt/auth/backup-secrets.env
+    permissions: "0600"
+    owner: root:root
+    ${contentKey(backupSecrets)}`,
+    `  # Non-secret app config — no passwords or secrets
+  - path: /opt/auth/app.env
+    permissions: "0644"
+    owner: root:root
+    ${contentKey(appEnv)}`,
+    `  # Deployable_Unit manifest — verbatim auth-server/package.json (Embedded_Deployable_Unit)
+  - path: /opt/auth/app/package.json
+    permissions: "0644"
+    owner: root:root
+    ${contentKey(r.authPackageJson, true)}`,
+    `  # Deployable_Unit lockfile — verbatim auth-server/package-lock.json (Embedded_Deployable_Unit)
+  - path: /opt/auth/app/package-lock.json
+    permissions: "0644"
+    owner: root:root
+    ${contentKey(r.authPackageLock, true)}`,
+    `  # Docker Compose stack definition
+  - path: /opt/auth/docker-compose.yml
+    permissions: "0644"
+    owner: root:root
+    ${contentKey(dockerCompose)}`,
+    `  # Caddy reverse proxy + TLS config
+  - path: /opt/auth/Caddyfile
+    permissions: "0644"
+    owner: root:root
+    ${contentKey(caddyfile)}`,
+    `  # Daily backup script
+  - path: /opt/auth/backup.sh
+    permissions: "0700"
+    owner: root:root
+    ${contentKey(backupScript)}`,
+    `  # systemd unit to manage the Docker Compose stack
+  - path: /etc/systemd/system/auth-stack.service
+    permissions: "0644"
+    owner: root:root
+    ${contentKey(systemdUnit)}`,
+  ]
+    .map(ensureTrailingNewline)
+    .join("");
 
   return `#cloud-config
 packages:
@@ -156,61 +311,7 @@ packages:
   - gnupg
 
 write_files:
-  # postgres-secrets.env — root:root 0600 — only what Postgres needs
-  - path: /opt/auth/postgres-secrets.env
-    permissions: "0600"
-    owner: root:root
-    content: |
-${indent(postgresSecrets)}
-
-  # auth-secrets.env — root:root 0600 — only what the auth container needs
-  - path: /opt/auth/auth-secrets.env
-    permissions: "0600"
-    owner: root:root
-    content: |
-${indent(authSecrets)}
-
-  # backup-secrets.env — root:root 0600 — only what the backup script needs
-  - path: /opt/auth/backup-secrets.env
-    permissions: "0600"
-    owner: root:root
-    content: |
-${indent(backupSecrets)}
-
-  # Non-secret app config — no passwords or secrets
-  - path: /opt/auth/app.env
-    permissions: "0644"
-    owner: root:root
-    content: |
-${indent(appEnv)}
-
-  # Docker Compose stack definition
-  - path: /opt/auth/docker-compose.yml
-    permissions: "0644"
-    owner: root:root
-    content: |
-${indent(dockerCompose)}
-
-  # Caddy reverse proxy + TLS config
-  - path: /opt/auth/Caddyfile
-    permissions: "0644"
-    owner: root:root
-    content: |
-${indent(caddyfile)}
-
-  # Daily backup script
-  - path: /opt/auth/backup.sh
-    permissions: "0700"
-    owner: root:root
-    content: |
-${indent(backupScript)}
-
-  # systemd unit to manage the Docker Compose stack
-  - path: /etc/systemd/system/auth-stack.service
-    permissions: "0644"
-    owner: root:root
-    content: |
-${indent(systemdUnit)}
+${writeFiles}
 ${
   r.tailscaleAuthKey
     ? `
@@ -255,10 +356,6 @@ function buildAuthSecrets(r: RenderArgs): string {
   if (r.emailProvider === "resend" && r.resendApiKey) {
     lines.push(`RESEND_API_KEY=${r.resendApiKey}`);
   }
-  if (r.emailProvider === "ses" && r.sesAccessKeyId && r.sesSecretAccessKey) {
-    lines.push(`SES_ACCESS_KEY_ID=${r.sesAccessKeyId}`);
-    lines.push(`SES_SECRET_ACCESS_KEY=${r.sesSecretAccessKey}`);
-  }
   return lines.join("\n");
 }
 
@@ -278,10 +375,8 @@ function buildAppEnv(r: RenderArgs): string {
     `BASE_URL=${r.frontendUrl}`,
     `CORS_ORIGINS=${r.corsOrigins}`,
     `EMAIL_PROVIDER=${r.emailProvider}`,
-    `SES_REGION=${r.sesRegion}`,
-    `SES_FROM_ADDRESS=${r.sesFromAddress}`,
-    // Resend uses EMAIL_FROM_ADDRESS (separate from SES_FROM_ADDRESS)
-    `EMAIL_FROM_ADDRESS=${r.resendFromAddress || r.sesFromAddress}`,
+    // EMAIL_FROM_ADDRESS sourced solely from resendFromAddress — no SES fallback.
+    `EMAIL_FROM_ADDRESS=${r.resendFromAddress}`,
     `GOOGLE_CLIENT_ID=${r.googleClientId}`,
     `GOOGLE_REDIRECT_URI=https://${r.domain}/auth/oauth/google/callback`,
     `GITHUB_CLIENT_ID=${r.githubClientId}`,
@@ -294,7 +389,7 @@ function buildAppEnv(r: RenderArgs): string {
   return lines.join("\n");
 }
 
-function buildDockerCompose(appVersion: string, enableBlockVolume: boolean): string {
+function buildDockerCompose(enableBlockVolume: boolean): string {
   // pg-data volume: bind-mount to block volume path when available, otherwise
   // fall back to a Docker-managed volume so the stack still starts.
   const pgDataVolume = enableBlockVolume
@@ -338,9 +433,10 @@ services:
     restart: unless-stopped
     networks: [auth-net]
     working_dir: /app
+    volumes:
+      - /opt/auth/app:/app
     command: >
-      sh -c "npm install @fortressauth/server@${appVersion} &&
-             node node_modules/@fortressauth/server/dist/index.js"
+      sh -c "npm ci --omit=dev || { echo 'ERROR: npm ci could not reproduce the version pinned in the Auth_Server lockfile (/opt/auth/app/package-lock.json) for the Deployable_Unit; refusing to start auth container' >&2; exit 1; }; npm start"
     env_file:
       - /opt/auth/app.env
       - /opt/auth/auth-secrets.env

@@ -129,14 +129,9 @@ function baseArgs(overrides: Partial<RenderArgs> = {}): RenderArgs {
     googleSecret: "",
     githubSecret: "",
     resendApiKey: "",
-    sesAccessKeyId: "",
-    sesSecretAccessKey: "",
     domain: "auth.example.com",
     frontendUrl: "https://example.com",
-    appVersion: "0.1.14",
-    emailProvider: "ses",
-    sesRegion: "us-east-1",
-    sesFromAddress: "noreply@example.com",
+    emailProvider: "console",
     resendFromAddress: "",
     googleClientId: "",
     githubClientId: "",
@@ -146,6 +141,8 @@ function baseArgs(overrides: Partial<RenderArgs> = {}): RenderArgs {
     tailscaleAuthKey: "",
     tailscaleHostname: "kytepdf-auth",
     tailscaleTag: "",
+    authPackageJson: '{"name":"auth-server","version":"1.0.0"}',
+    authPackageLock: '{"name":"auth-server","lockfileVersion":3,"requires":true,"packages":{}}',
     ...overrides,
   };
 }
@@ -331,22 +328,16 @@ describe("Property 7: Secrets File Isolation", () => {
     expect(appContent).toContain("EMAIL_FROM_ADDRESS=noreply@example.com");
   });
 
-  it("SES config includes explicit AWS credentials only in auth-secrets.env", () => {
-    const rendered = renderCloudInit(
-      baseArgs({
-        emailProvider: "ses",
-        sesAccessKeyId: "AKIA_TEST",
-        sesSecretAccessKey: "awsSecret",
-      }),
-    );
+  it("No SES configuration is rendered in any env file (SES is not supported)", () => {
+    const rendered = renderCloudInit(baseArgs({ emailProvider: "console" }));
 
     const authSecrets = extractFileContent(rendered, "/opt/auth/auth-secrets.env") ?? "";
     const appContent = extractFileContent(rendered, "/opt/auth/app.env") ?? "";
 
-    expect(authSecrets).toContain("SES_ACCESS_KEY_ID=AKIA_TEST");
-    expect(authSecrets).toContain("SES_SECRET_ACCESS_KEY=awsSecret");
-    expect(appContent).not.toContain("AKIA_TEST");
-    expect(appContent).not.toContain("awsSecret");
+    expect(authSecrets).not.toContain("SES_ACCESS_KEY_ID");
+    expect(authSecrets).not.toContain("SES_SECRET_ACCESS_KEY");
+    expect(appContent).not.toContain("SES_REGION");
+    expect(appContent).not.toContain("SES_FROM_ADDRESS");
   });
 });
 
@@ -364,28 +355,11 @@ describe("Property 2: Container Network Isolation", () => {
           fc.constantFrom("com", "io", "net"),
         )
         .map(([sub, d, tld]) => `${sub}.${d}.${tld}`),
-      appVersion: fc
-        .tuple(
-          fc.integer({
-            min: 0,
-            max: 5,
-          }),
-          fc.integer({
-            min: 0,
-            max: 20,
-          }),
-          fc.integer({
-            min: 0,
-            max: 99,
-          }),
-        )
-        .map(([a, b, c]) => `${a}.${b}.${c}`),
       enableBlockVolume: fc.boolean(),
     })
-    .map(({ domain, appVersion, enableBlockVolume }) =>
+    .map(({ domain, enableBlockVolume }) =>
       baseArgs({
         domain,
-        appVersion,
         enableBlockVolume,
       }),
     );

@@ -1,47 +1,25 @@
 // index.ts
 // Entry point for the oci-auth-hosting Pulumi stack.
-// Reads config,  validates inputs, auto-generates secrets, and wires up components.
+// Reads config, validates inputs, auto-generates secrets, and wires up components.
 
-import { isIP } from "node:net";
 import * as pulumi from "@pulumi/pulumi";
 import * as random from "@pulumi/random";
 import { NetworkComponent } from "./network";
 import { lookupUbuntu2404Arm64 } from "./utils";
+import {
+  isDnsLabel,
+  isDomainName,
+  isEmail,
+  isHttpUrl,
+  isIpv4Cidr,
+  isTailscaleTag,
+  parseCommaList,
+  requireInteger,
+  validateEmailProvider,
+} from "./validation";
 import { AuthVmComponent } from "./vm";
 
 const config = new pulumi.Config();
-
-function isHttpUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:";
-  } catch {
-    return false;
-  }
-}
-
-function isEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
-
-function isDomainName(value: string): boolean {
-  return /^(?=.{1, 253}$)(?!-)(?:[a-zA-Z0-9-]{1,63}\.)+[a-zA-Z]{2,63}$/.test(value);
-}
-
-function isIpv4Cidr(value: string): boolean {
-  const parts = value.split("/");
-  if (parts.length !== 2) return false;
-  const prefix = Number(parts[1]);
-  return isIP(parts[0]) === 4 && Number.isInteger(prefix) && prefix >= 0 && prefix <= 32;
-}
-
-function requireInteger(name: string, value: number, min: number, max: number): void {
-  if (!Number.isInteger(value) || value < min || value > max) {
-    throw new Error(
-      `Invalid '${name}' value: ${value}. Must be an integer between ${min} and ${max} (inclusive).`,
-    );
-  }
-}
 
 // ── Non-secret config ──────────────────────────────────────────────────────
 // Note: oci:region is read directly by the OCI provider from Pulumi config;
@@ -55,50 +33,39 @@ const corsOrigins = config.require("corsOrigins");
 
 // frontendUrl: the URL of the KytePDF frontend app (e.g. https://kytepdf.com).
 // FortressAuth uses this as BASE_URL for email verification/reset links and
-// OAuth success redirects — it must point to the frontend,  NOT the auth API.
+// OAuth success redirects — it must point to the frontend, NOT the auth API.
 const frontendUrl = config.require("frontendUrl");
 
 // adminCidrs: OPTIONAL — controls which IPs can SSH to the VM via the public IP.
-// When using Tailscale SSH (recommended),  this can be omitted — SSH is handled
+// When using Tailscale SSH (recommended), this can be omitted — SSH is handled
 // entirely over the Tailscale mesh and port 22 is not opened in the security list.
 const adminCidrsRaw = config.get("adminCidrs");
-const adminCidrs = adminCidrsRaw
-  ? adminCidrsRaw
-      .split(", ")
-      .map((s) => s.trim())
-      .filter(Boolean)
-  : [];
+const adminCidrs = adminCidrsRaw ? parseCommaList(adminCidrsRaw) : [];
 const domain = config.get("domain") ?? "auth.kytepdf.com";
 const ocpu = config.getNumber("ocpu") ?? 1;
 const memoryGb = config.getNumber("memoryGb") ?? 6;
 const availabilityDomainIndex = config.getNumber("availabilityDomainIndex") ?? 0;
-const appVersion = config.get("appVersion") ?? "0.1.14";
-// emailProvider: 'ses',  'resend', or 'console'.
+// emailProvider: 'console' or 'resend'.
 // 'console' logs emails to stdout — useful for initial bring-up before email is configured.
 const emailProvider = config.get("emailProvider") ?? "console";
 const enableGoogle = config.getBoolean("enableGoogle") ?? false;
 const enableGithub = config.getBoolean("enableGithub") ?? false;
 const enableBlockVol = config.getBoolean("enableBlockVolume") ?? true;
 // OCI Always Free: 200 GB total across ALL block volumes (boot + data).
-// Boot volume is fixed at 50 GB,  so the data volume cap is 150 GB.
+// Boot volume is fixed at 50 GB, so the data volume cap is 150 GB.
 const blockVolSizeGb = config.getNumber("blockVolumeSizeGb") ?? 50;
-const sesRegion = config.get("sesRegion") ?? "us-east-1";
-const sesFromAddress = config.get("sesFromAddress");
-// SES on OCI has no instance-role credentials — explicit keys are required.
-const sesAccessKeyId = config.getSecret("sesAccessKeyId");
-const sesSecretAccessKey = config.getSecret("sesSecretAccessKey");
 const resendApiKey = config.getSecret("resendApiKey");
 const resendFromAddress = config.get("resendFromAddress");
 const googleClientId = config.get("googleClientId");
 const githubClientId = config.get("githubClientId");
 // trustedProxyHopCount: number of reverse-proxy hops in front of the auth container.
-// Caddy is one hop,  so the default is 1. Increase if behind an additional load balancer.
+// Caddy is one hop, so the default is 1. Increase if behind an additional load balancer.
 const trustedProxyHopCount = config.getNumber("trustedProxyHopCount") ?? 1;
 
-// Tailscale: when set,  installs Tailscale on the VM and enables Tailscale SSH.
+// Tailscale: when set, installs Tailscale on the VM and enables Tailscale SSH.
 // This removes the need for port 22 in the security list entirely.
-// IMPORTANT: Use a single-use,  non-reusable auth key. The key is embedded in
-// OCI instance metadata (base64 user-data),  so a reusable key could be extracted
+// IMPORTANT: Use a single-use, non-reusable auth key. The key is embedded in
+// OCI instance metadata (gzipped, base64 user-data), so a reusable key could be extracted
 // and used to register additional nodes on your tailnet.
 const tailscaleAuthKey = config.getSecret("tailscaleAuthKey");
 // Tailscale hostname for the VM on your tailnet (default: kytepdf-auth)
@@ -124,10 +91,7 @@ if (!isHttpUrl(frontendUrl)) {
   throw new Error(`Invalid 'frontendUrl' value: ${frontendUrl}. Must be an http(s) URL.`);
 }
 
-const corsOriginList = corsOrigins
-  .split(", ")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+const corsOriginList = parseCommaList(corsOrigins);
 if (corsOriginList.length === 0 || corsOriginList.some((origin) => !isHttpUrl(origin))) {
   throw new Error("'corsOrigins' must contain one or more comma-separated http(s) origins.");
 }
@@ -149,7 +113,7 @@ if (adminCidrs.length > 0) {
 if (adminCidrs.length === 0 && !tailscaleAuthKey) {
   throw new Error(
     "Either 'adminCidrs' or 'tailscaleAuthKey' must be set. " +
-      "Without one of these,  you will have no way to SSH into the VM.",
+      "Without one of these, you will have no way to SSH into the VM.",
   );
 }
 
@@ -159,49 +123,23 @@ requireInteger("availabilityDomainIndex", availabilityDomainIndex, 0, 2);
 requireInteger("blockVolumeSizeGb", blockVolSizeGb, 1, 150);
 requireInteger("trustedProxyHopCount", trustedProxyHopCount, 0, 8);
 
-// Validate Tailscale hostname (DNS-safe: alphanumeric + hyphens,  max 63 chars)
-if (!/^[a-z0-9](?:[a-z0-9-]{0, 61}[a-z0-9])?$/i.test(tailscaleHostname)) {
+// Validate Tailscale hostname (DNS-safe: alphanumeric + hyphens, max 63 chars)
+if (!isDnsLabel(tailscaleHostname)) {
   throw new Error(
     `Invalid 'tailscaleHostname' value: ${tailscaleHostname}. ` +
-      `Must be DNS-safe (alphanumeric + hyphens,  1–63 chars, no leading/trailing hyphen).`,
+      `Must be DNS-safe (alphanumeric + hyphens, 1–63 chars, no leading/trailing hyphen).`,
   );
 }
 
 // Validate Tailscale tag format if provided
-if (tailscaleTag && !/^tag:[a-z0-9-]+$/.test(tailscaleTag)) {
+if (tailscaleTag && !isTailscaleTag(tailscaleTag)) {
   throw new Error(
     `Invalid 'tailscaleTag' value: ${tailscaleTag}. Must be in the format 'tag:<name>' (e.g. 'tag:server').`,
   );
 }
 
-if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(appVersion)) {
-  throw new Error(
-    `Invalid 'appVersion' value: ${appVersion}. Must be a semver version such as 0.1.14.`,
-  );
-}
+validateEmailProvider(emailProvider);
 
-if (!["console", "ses", "resend"].includes(emailProvider)) {
-  throw new Error("'emailProvider' must be one of: console,  ses, resend.");
-}
-
-// Validate email provider config
-if (emailProvider === "ses") {
-  if (!sesFromAddress) {
-    throw new Error(
-      "'sesFromAddress' is required when emailProvider is 'ses'. " +
-        "Set it to your verified SES sender address,  or set emailProvider to 'console' for initial bring-up.",
-    );
-  }
-  if (!isEmail(sesFromAddress)) {
-    throw new Error("'sesFromAddress' must be a valid email address.");
-  }
-  if (!sesAccessKeyId || !sesSecretAccessKey) {
-    throw new Error(
-      "'sesAccessKeyId' and 'sesSecretAccessKey' (secrets) are required when emailProvider is 'ses'. " +
-        "OCI does not provide AWS instance-role credentials; you must supply explicit IAM keys.",
-    );
-  }
-}
 if (emailProvider === "resend") {
   if (!resendApiKey) {
     throw new Error("'resendApiKey' (secret) is required when emailProvider is 'resend'.");
@@ -217,7 +155,7 @@ if (emailProvider === "resend") {
   }
 }
 
-// Validate OAuth client IDs when providers are enabled (Requirement 8.2,  8.3)
+// Validate OAuth client IDs when providers are enabled (Requirement 8.2, 8.3)
 if (enableGoogle && !googleClientId) {
   throw new Error("'googleClientId' is required when 'enableGoogle' is true.");
 }
@@ -246,7 +184,7 @@ const backupPassphrase: pulumi.Output<string> =
 
 // OAuth secrets — only required when the corresponding provider is enabled.
 // config.requireSecret() throws with a descriptive error if the key is missing.
-// (Requirement 8.2,  8.3)
+// (Requirement 8.2, 8.3)
 const googleClientSecret: pulumi.Output<string> | undefined = enableGoogle
   ? config.requireSecret("googleClientSecret")
   : undefined;
@@ -275,15 +213,10 @@ const vm = new AuthVmComponent("auth", {
   backupPassphrase,
   googleClientSecret,
   githubClientSecret,
-  sesAccessKeyId,
-  sesSecretAccessKey,
   resendApiKey,
   domain,
   frontendUrl,
-  appVersion,
   emailProvider,
-  sesRegion,
-  sesFromAddress,
   resendFromAddress,
   googleClientId,
   githubClientId,
@@ -295,7 +228,7 @@ const vm = new AuthVmComponent("auth", {
 });
 
 // ── Stack Outputs ──────────────────────────────────────────────────────────
-// IMPORTANT: postgresPassword,  backupPassphrase, googleClientSecret, and
+// IMPORTANT: postgresPassword, backupPassphrase, googleClientSecret, and
 // githubClientSecret are intentionally NOT exported. (Requirement 6.2)
 export const reservedIp = vm.reservedIp;
 export const instanceId = vm.instanceId;
