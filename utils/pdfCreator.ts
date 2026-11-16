@@ -2,6 +2,12 @@ import { UserFacingError } from "./errorMapper.ts";
 import { logger } from "./logger.ts";
 import { toWinAnsi } from "./markdownPdf.ts";
 import { degrees, PDFDocument, rgb, StandardFonts } from "./pdfConfig.ts";
+import {
+  createSignaturePen,
+  type SignatureColor,
+  type SignaturePen,
+  signatureFontHas,
+} from "./signatureImage.ts";
 
 export type PdfCreatorTemplate =
   | "report"
@@ -267,6 +273,8 @@ export interface CreatePdfResult {
 }
 
 type PdfFont = Awaited<ReturnType<PDFDocument["embedFont"]>>;
+/** Anything that can say how wide text is: an embedded font or the signature pen. */
+type TextMeasure = Pick<PdfFont, "widthOfTextAtSize">;
 type PdfPage = ReturnType<PDFDocument["addPage"]>;
 
 type DrawTextOptions = {
@@ -709,7 +717,7 @@ const formatCurrency = (value: number, currency: PdfCreatorCurrency) =>
     maximumFractionDigits: 2,
   }).format(value);
 
-const splitLongWord = (word: string, font: PdfFont, size: number, maxWidth: number) => {
+const splitLongWord = (word: string, font: TextMeasure, size: number, maxWidth: number) => {
   const chunks: string[] = [];
   let current = "";
 
@@ -730,7 +738,7 @@ const splitLongWord = (word: string, font: PdfFont, size: number, maxWidth: numb
   return chunks;
 };
 
-const wrapText = (text: string, font: PdfFont, size: number, maxWidth: number) => {
+const wrapText = (text: string, font: TextMeasure, size: number, maxWidth: number) => {
   const paragraphs = sanitizeText(text).split("\n");
   const lines: string[] = [];
 
@@ -819,42 +827,41 @@ const parseMultiline = (text: string) =>
     .map((line) => line.trim())
     .filter(Boolean);
 
-type SignatureFont = { font: PdfFont; isFallback: boolean };
+/**
+ * How an invoice signature is drawn: as pictures of the handwriting font (see
+ * signatureImage.ts) or, where that font cannot load, in Times Italic.
+ */
+type InvoiceSignature =
+  | { pen: SignaturePen; font?: undefined }
+  | { pen?: undefined; font: PdfFont };
 
-const embedInvoiceSignatureFont = async (
+const prepareInvoiceSignature = async (
   pdfDoc: PDFDocument,
   include: boolean,
-): Promise<SignatureFont | null> => {
+): Promise<InvoiceSignature | null> => {
   if (!include) return null;
 
-  try {
-    const [fontkitModule, fontUrlModule] = await Promise.all([
-      import("@pdf-lib/fontkit"),
-      import("@fontsource/great-vibes/files/great-vibes-latin-400-normal.woff?url"),
-    ]);
-    const response = await fetch(fontUrlModule.default);
-    if (!response.ok) throw new Error("Signature font could not be loaded.");
+  const pen = await createSignaturePen();
+  if (pen) return { pen };
+  logger.warn("Signature font could not be loaded; using Times Italic instead.");
+  return { font: await pdfDoc.embedFont(StandardFonts.TimesRomanItalic) };
+};
 
-    pdfDoc.registerFontkit(fontkitModule.default);
-    const font = await pdfDoc.embedFont(new Uint8Array(await response.arrayBuffer()), {
-      subset: true,
-    });
-    return { font, isFallback: false };
-  } catch (error) {
-    logger.warn("Signature font could not be loaded; using Times Italic instead.", error);
-    return { font: await pdfDoc.embedFont(StandardFonts.TimesRomanItalic), isFallback: true };
-  }
+/** Whether an embedded font has a character. */
+const fontHas = (font: PdfFont) => {
+  const supported = new Set(font.getCharacterSet());
+  return (codePoint: number) => supported.has(codePoint);
 };
 
 /**
  * Keeps only characters the signature font can draw. The standard fallback
- * font throws on anything else; the handwriting font (a Latin subset) would
- * draw empty boxes. Accents the font lacks are stripped, other characters dropped.
+ * font throws on anything else, and the handwriting font (a Latin subset)
+ * would hand them to another font. Accents the font lacks are stripped, other
+ * characters dropped.
  */
-const keepEncodableCharacters = (text: string, font: PdfFont) => {
-  const supported = new Set(font.getCharacterSet());
+const keepEncodableCharacters = (text: string, canDraw: (codePoint: number) => boolean) => {
   const canEncode = (value: string) =>
-    Array.from(value).every((char) => supported.has(char.codePointAt(0) as number));
+    Array.from(value).every((char) => canDraw(char.codePointAt(0) as number));
   let replaced = 0;
   let dropped = 0;
 
@@ -1122,6 +1129,11 @@ class DocumentComposer {
 
   get currentPage() {
     return this.page;
+  }
+
+  /** Embeds a PNG in the document, to draw on its pages. */
+  embedPng(bytes: Uint8Array) {
+    return this.pdfDoc.embedPng(bytes);
   }
 
   get currentY() {
@@ -1979,7 +1991,7 @@ const drawFinancialItemsTable = (
 const renderInvoice = async (
   composer: DocumentComposer,
   draft: PdfCreatorDraft,
-  fonts: { regular: PdfFont; bold: PdfFont; mono: PdfFont; signature?: SignatureFont | null },
+  fonts: { regular: PdfFont; bold: PdfFont; mono: PdfFont; signature?: InvoiceSignature | null },
   logo: Awaited<ReturnType<typeof PDFDocument.prototype.embedPng>> | null,
 ) => {
   const isPayslip = draft.template === "payslip";
@@ -2443,30 +2455,51 @@ const renderInvoice = async (
   }
 
   const signatureText = isPayslip ? "" : sanitizeText(invoice.signature);
-  const signature = fonts.signature
-    ? keepEncodableCharacters(signatureText, fonts.signature.font)
+  const signer = fonts.signature;
+  const signature = signer
+    ? keepEncodableCharacters(signatureText, signer.pen ? signatureFontHas : fontHas(signer.font))
     : signatureText;
   if (signature) {
-    const signatureFont = fonts.signature?.font ?? fonts.bold;
+    const signatureFont = signer?.font ?? fonts.bold;
     const signatureSize = 28;
     const signatureLineHeight = 34;
+    const signatureColor: SignatureColor = [0.04, 0.06, 0.09];
     const signatureMaxWidth = Math.min(320, composer.contentWidth * 0.62);
-    const signatureLines = wrapText(signature, signatureFont, signatureSize, signatureMaxWidth);
+    const signatureLines = wrapText(
+      signature,
+      signer?.pen ?? signatureFont,
+      signatureSize,
+      signatureMaxWidth,
+    );
     const signatureHeight = signatureLines.length * signatureLineHeight + 8;
     const signatureSpacingBefore = notes ? 15 : 75;
 
     composer.ensureSpace(signatureHeight + signatureSpacingBefore);
     composer.moveCursor(signatureSpacingBefore);
-    signatureLines.forEach((line) => {
-      composer.currentPage.drawText(line, {
-        x: composer.marginX,
-        y: composer.currentY,
-        size: signatureSize,
-        font: signatureFont,
-        color: rgb(0.04, 0.06, 0.09),
-      });
+    for (const line of signatureLines) {
+      if (signer?.pen) {
+        if (line) {
+          const ink = signer.pen.drawLine(line, signatureSize, signatureColor);
+          const image = await composer.embedPng(dataUrlToBytes(ink.dataUrl).bytes);
+          // The picture sits so its baseline falls where the text's would.
+          composer.currentPage.drawImage(image, {
+            x: composer.marginX - ink.left,
+            y: composer.currentY - ink.descent,
+            width: ink.width,
+            height: ink.height,
+          });
+        }
+      } else {
+        composer.currentPage.drawText(line, {
+          x: composer.marginX,
+          y: composer.currentY,
+          size: signatureSize,
+          font: signatureFont,
+          color: rgb(...signatureColor),
+        });
+      }
       composer.moveCursor(signatureLineHeight);
-    });
+    }
     composer.moveCursor(8);
   }
 };
@@ -3145,7 +3178,7 @@ export async function createPdfFromDraft(sourceDraft: PdfCreatorDraft): Promise<
     regular: await pdfDoc.embedFont(StandardFonts.Helvetica),
     bold: await pdfDoc.embedFont(StandardFonts.HelveticaBold),
     mono: await pdfDoc.embedFont(StandardFonts.Courier),
-    signature: await embedInvoiceSignatureFont(pdfDoc, Boolean(signatureText)),
+    signature: await prepareInvoiceSignature(pdfDoc, Boolean(signatureText)),
   };
 
   const pageSize = getPageDimensions(draft.pageSize, draft.orientation);

@@ -61,19 +61,17 @@ const vendor = (path: string) => new RegExp(`[\\\\/]node_modules[\\\\/]${path}`)
 /**
  * Splits the heavy vendor libraries into their own cacheable chunks, so users
  * only re-download the part that changed. Each group names its own packages
- * and has a priority: Rolldown otherwise pulls a group's dependencies into it
- * (pako landed in vendor-fontkit, and the page then preloaded that 756 kB chunk
- * although only typed signatures need it).
+ * and has a priority: Rolldown otherwise pulls a group's dependencies into
+ * whichever group claims them first, and a page can end up preloading a large
+ * chunk it never uses.
  */
 const VENDOR_CHUNKS = [
   { name: "vendor-pdfjs", test: vendor("pdfjs-dist[\\\\/]"), priority: 90 },
   {
     name: "vendor-pdflib",
-    test: vendor("(pdf-lib-with-encrypt|pako|@pdf-lib[\\\\/](?!fontkit[\\\\/]))"),
+    test: vendor("(pdf-lib-with-encrypt|pako|@pdf-lib[\\\\/])"),
     priority: 80,
   },
-  // Loaded on demand only when a document includes a typed signature.
-  { name: "vendor-fontkit", test: vendor("@pdf-lib[\\\\/]fontkit[\\\\/]"), priority: 70 },
   { name: "vendor-docx", test: vendor("docx[\\\\/]"), priority: 60 },
   { name: "vendor-xlsx", test: vendor("xlsx[\\\\/]"), priority: 50 },
   { name: "vendor-zip", test: vendor("jszip[\\\\/]"), priority: 40 },

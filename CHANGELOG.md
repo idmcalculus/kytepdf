@@ -27,6 +27,7 @@
 - pdf.js runs from its legacy build, so the app still works in browsers older than Chrome 147 and Safari 26.2. Dev and build copy its worker and image decoders from the installed package, instead of keeping a copy in git.
 - The app loads only the 17 icons it uses, which cuts the icon bundle from 457 kB to 6 kB.
 - PDF to Word keeps superscript, subscript, strikethrough and underlined text.
+- Create PDF draws invoice signatures as a picture of the bundled handwriting font, so the app no longer ships fontkit, a 711 kB library.
 - The OCI auth deployment moves to `@pulumi/oci` 5 and Vitest 5. Its build uses TypeScript 7, while Pulumi, which cannot run TypeScript 7 yet, loads TypeScript 6.
 
 ### Removed

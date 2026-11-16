@@ -23,7 +23,6 @@ const pdfMock = vi.hoisted(() => {
           (code) => code < 127 || code > 159,
         ),
     })),
-    registerFontkit: vi.fn(),
     embedPng: vi.fn(async (_bytes: Uint8Array): Promise<any> => ({ width: 120, height: 60 })),
     embedJpg: vi.fn(async (_bytes: Uint8Array): Promise<any> => ({ width: 120, height: 60 })),
     setTitle: vi.fn(),
@@ -58,6 +57,26 @@ vi.mock("../../utils/pdfConfig", () => ({
   },
   degrees: (angle: number) => ({ angle }),
   rgb: (r: number, g: number, b: number) => ({ r, g, b }),
+}));
+
+/** A stand-in for the canvas pen: jsdom has no FontFace or canvas text. */
+const signatureMock = vi.hoisted(() => {
+  const pen = {
+    widthOfTextAtSize: vi.fn((text: string, size: number) => text.length * size * 0.5),
+    drawLine: vi.fn((text: string, size: number) => ({
+      dataUrl: "data:image/png;base64,iVBORw0KGgo=",
+      width: text.length * size * 0.5 + 9,
+      height: size * 1.5,
+      left: 3,
+      descent: 11,
+    })),
+  };
+  return { pen, createSignaturePen: vi.fn(async (): Promise<typeof pen | null> => pen) };
+});
+
+vi.mock("../../utils/signatureImage", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../utils/signatureImage")>()),
+  createSignaturePen: signatureMock.createSignaturePen,
 }));
 
 import { logger } from "../../utils/logger";
@@ -143,6 +162,7 @@ const draftFor = (template: PdfCreatorDraft["template"]) => {
 describe("pdfCreator edge cases", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    signatureMock.createSignaturePen.mockResolvedValue(signatureMock.pen);
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({
@@ -525,18 +545,38 @@ describe("pdfCreator edge cases", () => {
       expect(result.warnings).toEqual([]);
     });
 
-    it("signs in the standard italic font when the handwriting font request fails", async () => {
-      vi.stubGlobal(
-        "fetch",
-        vi.fn(async () => ({ ok: false, arrayBuffer: async () => new ArrayBuffer(0) })),
-      );
+    it("signs in the standard italic font when the handwriting font cannot load", async () => {
+      signatureMock.createSignaturePen.mockResolvedValueOnce(null);
+      const warn = vi.spyOn(logger, "warn");
       const draft = draftFor("invoice");
       draft.invoice.signature = "Habeeb Tijani";
 
       await createPdfFromDraft(draft);
 
       expect(findText("Habeeb Tijani")?.font.source).toBe("TimesRomanItalic");
-      expect(pdfMock.doc.registerFontkit).not.toHaveBeenCalled();
+      expect(imageCalls()).toEqual([]);
+      expect(warn).toHaveBeenCalledWith(
+        "Signature font could not be loaded; using Times Italic instead.",
+      );
+    });
+
+    it("draws each line of a long signature as its own picture, a line apart", async () => {
+      const draft = draftFor("invoice");
+      // The pen measures 14 pt a character at 28 pt, and the line holds 310 pt.
+      draft.invoice.signature = "Habeeb Adewale Tijani Okonkwo\n\nJr";
+
+      await createPdfFromDraft(draft);
+
+      expect(signatureMock.pen.drawLine.mock.calls.map(([text]) => text)).toEqual([
+        "Habeeb Adewale Tijani",
+        "Okonkwo",
+        "Jr",
+      ]);
+      const [first, second, third] = imageCalls();
+      expect(first.y - second.y).toBe(34);
+      // The blank line draws nothing but still takes its space.
+      expect(second.y - third.y).toBe(68);
+      expect([first.x, second.x, third.x]).toEqual([53, 53, 53]);
     });
 
     it("does not load the handwriting font for unsigned invoices or other templates", async () => {
@@ -548,17 +588,13 @@ describe("pdfCreator edge cases", () => {
       payslip.invoice.signature = "Habeeb Tijani";
       await createPdfFromDraft(payslip);
 
-      expect(fetch).not.toHaveBeenCalled();
+      expect(signatureMock.createSignaturePen).not.toHaveBeenCalled();
+      expect(signatureMock.pen.drawLine).not.toHaveBeenCalled();
       expect(texts()).not.toContain("Habeeb Tijani");
     });
 
     it("turns signature characters the fallback font lacks into near matches, and says so", async () => {
-      vi.stubGlobal(
-        "fetch",
-        vi.fn(async () => {
-          throw new Error("offline");
-        }),
-      );
+      signatureMock.createSignaturePen.mockResolvedValueOnce(null);
       const draft = draftFor("invoice");
       draft.invoice.signature = "José Łukasz Dvořák 李";
 
@@ -575,13 +611,17 @@ describe("pdfCreator edge cases", () => {
     it("never asks the handwriting font for letters its Latin subset lacks", async () => {
       const warn = vi.spyOn(logger, "warn");
       const draft = draftFor("invoice");
-      // Š and Œ are in WinAnsi but not in the handwriting font's Latin subset:
-      // Š can lose its accent, Œ has no near match and is left out.
-      draft.invoice.signature = "Šárka Œuvre";
+      // Š and ƒ are in WinAnsi but not in the handwriting font's Latin subset:
+      // Š can lose its accent, ƒ has no near match and is left out. Œ is in it.
+      draft.invoice.signature = "Šárka Œuvre ƒ";
 
       await createPdfFromDraft(draft);
 
-      expect(findText("Sárka uvre")?.font.source).toBeInstanceOf(Uint8Array);
+      expect(signatureMock.pen.drawLine).toHaveBeenCalledWith(
+        "Sárka Œuvre",
+        28,
+        [0.04, 0.06, 0.09],
+      );
       expect(warn).toHaveBeenCalledWith(
         "The signature font cannot show every character in the signature.",
         { replaced: 1, dropped: 1 },

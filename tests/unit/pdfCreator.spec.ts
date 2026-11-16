@@ -24,7 +24,6 @@ const pdfCreatorMock = vi.hoisted(() => {
           (code) => code < 127 || code > 159,
         ),
     })),
-    registerFontkit: vi.fn(),
     embedPng: vi.fn(async () => ({ width: 120, height: 60 })),
     embedJpg: vi.fn(async () => ({ width: 120, height: 60 })),
     setTitle: vi.fn(),
@@ -69,6 +68,26 @@ vi.mock("../../utils/pdfConfig", () => ({
   rgb: (r: number, g: number, b: number) => ({ r, g, b }),
 }));
 
+/** A stand-in for the canvas pen: jsdom has no FontFace or canvas text. */
+const signatureMock = vi.hoisted(() => {
+  const pen = {
+    widthOfTextAtSize: vi.fn((text: string, size: number) => text.length * size * 0.5),
+    drawLine: vi.fn((text: string, size: number) => ({
+      dataUrl: "data:image/png;base64,iVBORw0KGgo=",
+      width: text.length * size * 0.5 + 9,
+      height: size * 1.5,
+      left: 3,
+      descent: 11,
+    })),
+  };
+  return { pen, createSignaturePen: vi.fn(async (): Promise<typeof pen | null> => pen) };
+});
+
+vi.mock("../../utils/signatureImage", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../utils/signatureImage")>()),
+  createSignaturePen: signatureMock.createSignaturePen,
+}));
+
 import {
   calculateInvoiceTotal,
   calculatePayslipTotals,
@@ -88,6 +107,7 @@ const getRenderedTexts = () =>
 describe("pdfCreator", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    signatureMock.createSignaturePen.mockResolvedValue(signatureMock.pen);
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({
@@ -569,17 +589,29 @@ describe("pdfCreator", () => {
     const referenceLabelIndex = texts.indexOf("Company Ref");
     const issueDateIndex = texts.indexOf("Issue Date");
     const notesIndex = texts.indexOf("Notes");
-    const signatureIndex = texts.indexOf("Habeeb Tijani");
-    const signatureCall = page.drawText.mock.calls[signatureIndex];
+    const notesY = page.drawText.mock.calls[notesIndex][1].y;
+    const [, signature] = page.drawImage.mock.calls.at(-1) as [
+      unknown,
+      { x: number; y: number; width: number; height: number },
+    ];
 
     expect(referenceLabelIndex).toBeGreaterThan(invoiceNumberIndex);
     expect(issueDateIndex).toBeGreaterThan(referenceLabelIndex);
     expect(texts).toContain("DEEL REF: 5099601");
-    expect(signatureIndex).toBeGreaterThan(notesIndex);
     expect(texts).not.toContain("Signature");
-    expect(signatureCall[1].size).toBe(28);
-    expect(signatureCall[1].font.source).toBeInstanceOf(Uint8Array);
-    expect(pdfCreatorMock.doc.registerFontkit).toHaveBeenCalledOnce();
+    // The signature is a picture of the handwriting font, not text.
+    expect(texts).not.toContain("Habeeb Tijani");
+    expect(signatureMock.pen.drawLine).toHaveBeenCalledWith(
+      "Habeeb Tijani",
+      28,
+      [0.04, 0.06, 0.09],
+    );
+    expect(pdfCreatorMock.doc.embedPng).toHaveBeenCalledWith(
+      new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    );
+    // Its left edge and baseline sit where the text's would: the margin, below the notes.
+    expect(signature).toEqual({ x: 56 - 3, y: expect.any(Number), width: 13 * 14 + 9, height: 42 });
+    expect(signature.y + 11).toBeLessThan(notesY);
     expect(texts).toContain("Ref: DEEL REF: 5099601");
   });
 
@@ -674,12 +706,7 @@ describe("pdfCreator", () => {
   );
 
   it("falls back to a standard italic font if the signature font cannot load", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => {
-        throw new Error("offline");
-      }),
-    );
+    signatureMock.createSignaturePen.mockResolvedValueOnce(null);
     const draft = createDefaultCreatorDraft();
     draft.template = "invoice";
     draft.invoice.signature = "Habeeb Tijani";
@@ -712,6 +739,8 @@ describe("pdfCreator", () => {
   });
 
   it("uses context-aware spacing before the invoice signature", async () => {
+    // The pen's pictures reach 11 pt below the baseline they were drawn on.
+    const signatureBaseline = () => pdfCreatorMock.pages[0].drawImage.mock.calls.at(-1)[1].y + 11;
     const withoutNotes = createDefaultCreatorDraft();
     withoutNotes.template = "invoice";
     withoutNotes.invoice.notes = "";
@@ -721,8 +750,7 @@ describe("pdfCreator", () => {
 
     const noNotesCalls = pdfCreatorMock.pages[0].drawText.mock.calls;
     const totalCall = noNotesCalls.filter(([text]: [string]) => text === "$2,720.00").at(-1);
-    const noNotesSignatureCall = noNotesCalls.find(([text]: [string]) => text === "Habeeb Tijani");
-    expect(totalCall[1].y - noNotesSignatureCall[1].y).toBeGreaterThanOrEqual(100);
+    expect(totalCall[1].y - signatureBaseline()).toBeGreaterThanOrEqual(100);
 
     const withNotes = createDefaultCreatorDraft();
     withNotes.template = "invoice";
@@ -733,8 +761,7 @@ describe("pdfCreator", () => {
 
     const notesCalls = pdfCreatorMock.pages[0].drawText.mock.calls;
     const noteCall = notesCalls.find(([text]: [string]) => text === "Payment received.");
-    const notesSignatureCall = notesCalls.find(([text]: [string]) => text === "Habeeb Tijani");
-    expect(noteCall[1].y - notesSignatureCall[1].y).toBeCloseTo(42, 5);
+    expect(noteCall[1].y - signatureBaseline()).toBeCloseTo(42, 5);
   });
 
   it("renders paid invoice status, paid date, and total paid labels", async () => {

@@ -162,19 +162,6 @@ export function checkDist(dist: string, pdfjsVersion = installedPdfjsVersion()):
     }
   }
 
-  // The handwriting-font chunk is large and only typed signatures need it, so
-  // the page must not preload it (Rolldown once bundled pako into it, which
-  // made every page load fetch it).
-  const indexPath = join(dist, "index.html");
-  if (existsSync(indexPath)) {
-    const preloaded = [
-      ...readFileSync(indexPath, "utf8").matchAll(/rel="modulepreload"[^>]*href="([^"]+)"/g),
-    ].map((match) => match[1]);
-    const fontkit = preloaded.find((href) => basename(href).startsWith("vendor-fontkit-"));
-    if (fontkit)
-      problems.push(`index.html preloads ${basename(fontkit)}, which only typed signatures need`);
-  }
-
   const swPath = join(dist, "sw.js");
   if (!existsSync(swPath)) {
     problems.push("dist/sw.js is missing");

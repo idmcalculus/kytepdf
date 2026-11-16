@@ -532,6 +532,45 @@ test.describe("Production Content-Security-Policy", () => {
     expect(collapse(boldItalic.join(""))).toBe("Quarterly report");
   });
 
+  test("Create PDF signs an invoice in the bundled handwriting font", async ({ page }) => {
+    const tool = await openTool(page, "create-pdf", "pdf-creator");
+    await tool.locator('[data-template="invoice"]').click();
+    await tool.locator("#invoiceSignature").fill("Ada Lovelace");
+
+    const saved = await downloadFrom(page, async () => {
+      await tool.locator("#createPdfBtn").click();
+      await expectSuccessDialog(page);
+      await tool.locator("#downloadLink").click();
+    });
+
+    // The page drew it in Great Vibes from dist/assets, not a system font.
+    const loaded = await page.evaluate(() =>
+      Array.from(document.fonts as unknown as Iterable<FontFace>).some(
+        (face) => face.family.replace(/["']/g, "") === "Kyte Signature" && face.status === "loaded",
+      ),
+    );
+    expect(loaded, "the bundled handwriting font loaded").toBe(true);
+
+    // The signature is a picture at 4 pixels to the point: 28 pt text, so
+    // well over 100 pixels high. The default invoice has no other image.
+    const pdf = saved.bytes.toString("latin1");
+    const images = [...pdf.matchAll(/\/Subtype\s*\/Image\b/g)].map((match) => {
+      const dict = pdf.slice(
+        pdf.lastIndexOf("<<", match.index),
+        pdf.indexOf("stream", match.index),
+      );
+      return {
+        width: Number(/\/Width\s+(\d+)/.exec(dict)?.[1]),
+        height: Number(/\/Height\s+(\d+)/.exec(dict)?.[1]),
+      };
+    });
+    expect(images.length).toBeGreaterThan(0);
+    for (const image of images) {
+      expect(image.width).toBeGreaterThan(300);
+      expect(image.height).toBeGreaterThan(100);
+    }
+  });
+
   test("PDF to Image draws CCITT fax and JPEG 2000 images", async ({ page }) => {
     const tool = await openTool(page, "pdf-to-img", "pdf-to-image");
     await tool.locator("#fileInput").setInputFiles({

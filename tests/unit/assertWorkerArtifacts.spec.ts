@@ -161,19 +161,6 @@ describe("checkDist", () => {
     );
   });
 
-  it("rejects a page that preloads the signature font chunk", () => {
-    put(
-      "index.html",
-      '<link rel="modulepreload" crossorigin href="/assets/vendor-pdflib-a1.js">' +
-        '<link rel="modulepreload" crossorigin href="/assets/vendor-fontkit-b2.js">',
-    );
-    expect(checkDist(dist, PDFJS)).toContain(
-      "index.html preloads vendor-fontkit-b2.js, which only typed signatures need",
-    );
-    put("index.html", '<link rel="modulepreload" crossorigin href="/assets/vendor-pdflib-a1.js">');
-    expect(checkDist(dist, PDFJS)).toEqual([]);
-  });
-
   it("requires the shipped pdf.js worker to match the library version", () => {
     put("pdf.worker.min.js", "const pdfjsVersion = 5.4.449;");
     expect(checkDist(dist, PDFJS)).toContain(
