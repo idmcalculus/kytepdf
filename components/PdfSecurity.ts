@@ -1,9 +1,12 @@
 import JSZip from "jszip";
+import { mapError } from "../utils/errorMapper.ts";
 import { logger } from "../utils/logger.ts";
 import {
   ALREADY_PROTECTED_ERROR,
   getPdfSecurityState,
   INCORRECT_PASSWORD_ERROR,
+  INVALID_PDF_ERROR,
+  isPdfStructureError,
   KNOWN_PASSWORD_REQUIRED_ERROR,
   NOT_PROTECTED_ERROR,
   type PdfProtectionPermissions,
@@ -11,24 +14,78 @@ import {
   protectPdf,
   unprotectPdf,
 } from "../utils/pdfSecurity.ts";
+import {
+  areAllFailuresSameMessage,
+  type BatchFailureResult,
+  type BatchSuccessResult,
+  buildBatchArchiveName,
+  buildBatchCompletionMessage,
+  buildBatchSuccessDetails,
+  countUnlockStates,
+  type DownloadMode,
+  getFileLabel,
+  getOppositeToolKey,
+  getProtectValidationMessage,
+  getSelectionPanelMeta,
+  getSingleSuccessDetail,
+  getSingleSuccessTitle,
+  getToolKey,
+  getUnlockActionLabel,
+  getUnlockHelpText,
+  getUnprotectValidationMessage,
+  initFileSelections,
+  initUnlockStates,
+  isActionReady,
+  makeUniqueArchiveNames,
+  removeFileAtIndex,
+  type SecurityMode,
+  setAllFileSelections,
+  shouldShowPasswordMismatch,
+  toggleFileSelection,
+  type UnlockInspectionState,
+} from "../utils/pdfSecurityWorkflow.ts";
 import { generateOutputFilename } from "../utils/pdfUtils.ts";
 import { persistence } from "../utils/persistence.ts";
 import { BaseComponent } from "./BaseComponent.ts";
 
-type SecurityMode = "protect" | "unprotect";
-type UnlockInspectionState = PdfSecurityState | "checking";
-type SecurityResultType = "protected" | "password-removed" | "restrictions-removed";
-
-interface BatchSuccessResult {
-  file: File;
-  outputName: string;
+/** A finished batch item: the workflow's result plus the bytes to save. */
+interface BatchOutput extends BatchSuccessResult {
   outputBytes: Uint8Array;
-  resultType: SecurityResultType;
 }
 
-interface BatchFailureResult {
+/** What a run does to one file, read once when the run starts. */
+interface RunEntry {
   file: File;
-  message: string;
+  state: UnlockInspectionState;
+}
+
+/** The passwords and permissions a run uses, read once when it starts. */
+interface RunSettings {
+  userPassword: string;
+  ownerPassword: string;
+  currentPassword: string;
+  permissions: PdfProtectionPermissions;
+}
+
+/** Messages this tool writes for the user, shown as they are. */
+const KNOWN_SECURITY_ERRORS = [
+  ALREADY_PROTECTED_ERROR,
+  NOT_PROTECTED_ERROR,
+  INCORRECT_PASSWORD_ERROR,
+  KNOWN_PASSWORD_REQUIRED_ERROR,
+  INVALID_PDF_ERROR,
+];
+
+/**
+ * The message for a file the tool could not process: its own security
+ * messages as they are, and a damaged file as INVALID_PDF_ERROR rather than
+ * the parser's text. Null for anything else.
+ */
+function getSecurityErrorMessage(error: unknown): string | null {
+  if (error instanceof Error && KNOWN_SECURITY_ERRORS.includes(error.message)) {
+    return error.message;
+  }
+  return isPdfStructureError(error) ? INVALID_PDF_ERROR : null;
 }
 
 const DEFAULT_PERMISSIONS: PdfProtectionPermissions = {
@@ -43,11 +100,15 @@ export class PdfSecurity extends BaseComponent {
   private mode: SecurityMode = "protect";
   private unlockStates: UnlockInspectionState[] = [];
   private fileSelections: boolean[] = [];
-  private downloadMode: "individual" | "zip" = "zip";
+  private downloadMode: DownloadMode = "zip";
+  /** Bumped whenever the file list is replaced, so an older inspection loop stops. */
+  private unlockRun = 0;
+  /** True while a protect or unlock run is in progress; the list is locked meanwhile. */
+  private isProcessing = false;
 
   render() {
     this.mode = this.getAttribute("mode") === "unprotect" ? "unprotect" : "protect";
-    this.toolKey = this.getToolKey(this.mode);
+    this.toolKey = getToolKey(this.mode);
 
     this.innerHTML = `
       <div class="tool-view">
@@ -224,9 +285,17 @@ export class PdfSecurity extends BaseComponent {
 
     this.querySelectorAll<HTMLInputElement>('input[name="securityMode"]').forEach((input) => {
       input.addEventListener("change", () => {
-        if (input.checked) {
-          void this.applyMode(input.value as SecurityMode);
+        if (!input.checked) return;
+        if (this.isProcessing) {
+          // The mode cannot change under a running batch; put the radio back.
+          input.checked = false;
+          const current = this.querySelector<HTMLInputElement>(
+            `input[name="securityMode"][value="${this.mode}"]`,
+          );
+          if (current) current.checked = true;
+          return;
         }
+        void this.applyMode(input.value as SecurityMode);
       });
     });
 
@@ -292,6 +361,7 @@ export class PdfSecurity extends BaseComponent {
   }
 
   resetState() {
+    this.unlockRun += 1;
     this.files = [];
     this.selectedFile = null;
     this.unlockStates = [];
@@ -343,10 +413,6 @@ export class PdfSecurity extends BaseComponent {
     await this.applySelectedFiles(Array.from(fileList), true);
   }
 
-  private getToolKey(mode: SecurityMode) {
-    return mode === "protect" ? "pdf-protect" : "pdf-unprotect";
-  }
-
   private getSelectedFiles() {
     return this.files;
   }
@@ -361,83 +427,8 @@ export class PdfSecurity extends BaseComponent {
       .filter(({ index }) => this.isFileSelected(index));
   }
 
-  private getFileLabel(fileCount: number, singular = "PDF", plural = "PDFs") {
-    return `${fileCount} ${fileCount === 1 ? singular : plural}`;
-  }
-
   private getTotalFileSize(files: File[]) {
     return files.reduce((total, file) => total + file.size, 0);
-  }
-
-  private getSelectionPanelMeta(totalCount: number, selectedCount: number) {
-    if (totalCount === 0) {
-      return "Upload one or more PDFs to begin.";
-    }
-
-    if (selectedCount === 0) {
-      return `Select at least one PDF from the ${this.getFileLabel(totalCount)} loaded in this batch.`;
-    }
-
-    if (this.mode === "protect") {
-      const baseMessage =
-        selectedCount === 1
-          ? "This PDF will be exported as a separately protected copy."
-          : this.downloadMode === "individual"
-            ? "Each PDF will be protected individually and downloaded as a separate file."
-            : "Each PDF will be protected individually and packaged together when the batch completes.";
-
-      return selectedCount === totalCount
-        ? baseMessage
-        : `${selectedCount} of ${totalCount} selected. ${baseMessage}`;
-    }
-
-    const counts = this.getUnlockCounts(true);
-    if (counts.checking > 0) {
-      return `Inspecting ${this.getFileLabel(selectedCount)} for passwords and owner restrictions.`;
-    }
-
-    const parts: string[] = [];
-
-    if (counts.passwordRequired > 0) {
-      parts.push(
-        `${this.getFileLabel(counts.passwordRequired)} ${counts.passwordRequired === 1 ? "needs" : "need"} the shared password`,
-      );
-    }
-
-    if (counts.restrictionOnly > 0) {
-      parts.push(
-        `${this.getFileLabel(counts.restrictionOnly)} ${counts.restrictionOnly === 1 ? "is" : "are"} restriction-only`,
-      );
-    }
-
-    if (counts.unprotected > 0) {
-      parts.push(
-        `${this.getFileLabel(counts.unprotected)} ${counts.unprotected === 1 ? "already opens" : "already open"}`,
-      );
-    }
-
-    if (parts.length === 0) {
-      const baseMessage =
-        selectedCount === 1
-          ? "This PDF does not currently need a password or restriction change."
-          : "These PDFs do not currently need a password or restriction change.";
-
-      return selectedCount === totalCount
-        ? baseMessage
-        : `${selectedCount} of ${totalCount} selected. ${baseMessage}`;
-    }
-
-    const summary = parts.join(" • ");
-    const delivery =
-      selectedCount > 1
-        ? this.downloadMode === "individual"
-          ? " • Separate downloads"
-          : " • One ZIP archive"
-        : "";
-
-    return selectedCount === totalCount
-      ? `${summary}${delivery}`
-      : `${selectedCount} of ${totalCount} selected • ${summary}${delivery}`;
   }
 
   private normalizeSavedFiles(saved: File | File[] | null | undefined) {
@@ -449,27 +440,11 @@ export class PdfSecurity extends BaseComponent {
     return this.unlockStates[index] ?? "checking";
   }
 
-  private getUnlockCounts(selectedOnly = false) {
-    const counts = {
-      checking: 0,
-      restrictionOnly: 0,
-      passwordRequired: 0,
-      unprotected: 0,
-    };
-
-    const entries = selectedOnly
-      ? this.getActiveFileEntries()
-      : this.getSelectedFiles().map((file, index) => ({ file, index }));
-
-    entries.forEach(({ index }) => {
-      const state = this.getUnlockState(index);
-      if (state === "checking") counts.checking += 1;
-      if (state === "restriction-only") counts.restrictionOnly += 1;
-      if (state === "password-required") counts.passwordRequired += 1;
-      if (state === "unprotected") counts.unprotected += 1;
-    });
-
-    return counts;
+  /** How many of the files ticked for processing are in each unlock state. */
+  private getUnlockCounts() {
+    return countUnlockStates(
+      this.getActiveFileEntries().map(({ index }) => this.getUnlockState(index)),
+    );
   }
 
   private getUnlockBadgeMarkup(index: number) {
@@ -495,11 +470,17 @@ export class PdfSecurity extends BaseComponent {
                 background: "rgba(245, 158, 11, 0.16)",
                 color: "#fcd34d",
               }
-            : {
-                label: "Already open",
-                background: "rgba(148, 163, 184, 0.12)",
-                color: "#cbd5e1",
-              };
+            : state === "invalid"
+              ? {
+                  label: "Invalid file",
+                  background: "rgba(239, 68, 68, 0.16)",
+                  color: "#fca5a5",
+                }
+              : {
+                  label: "Already open",
+                  background: "rgba(148, 163, 184, 0.12)",
+                  color: "#cbd5e1",
+                };
 
     return `
       <span style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.18rem 0.6rem; border-radius: 999px; background: ${meta.background}; color: ${meta.color}; font-size: 0.78rem; font-weight: 600;">
@@ -543,7 +524,7 @@ export class PdfSecurity extends BaseComponent {
       if (files.length === 1) {
         fileName.textContent = files[0].name;
       } else if (selectedCount === files.length) {
-        fileName.textContent = `${this.getFileLabel(files.length)} selected`;
+        fileName.textContent = `${getFileLabel(files.length)} selected`;
       } else {
         fileName.textContent = `${selectedCount} of ${files.length} PDFs selected`;
       }
@@ -570,7 +551,13 @@ export class PdfSecurity extends BaseComponent {
     }
 
     if (fileListMeta) {
-      fileListMeta.textContent = this.getSelectionPanelMeta(files.length, selectedCount);
+      fileListMeta.textContent = getSelectionPanelMeta(
+        this.mode,
+        files.length,
+        selectedCount,
+        this.downloadMode,
+        this.getUnlockCounts(),
+      );
     }
 
     this.updateDownloadModeUi();
@@ -622,6 +609,10 @@ export class PdfSecurity extends BaseComponent {
   }
 
   private async applySelectedFiles(incomingFiles: File[], append: boolean) {
+    if (this.isProcessing) {
+      logger.info("Ignoring new files while a PDF security run is in progress");
+      return;
+    }
     const validFiles: File[] = [];
     for (const file of incomingFiles) {
       if (await this.validateFile(file)) {
@@ -633,12 +624,8 @@ export class PdfSecurity extends BaseComponent {
     const nextFiles = append ? [...this.getSelectedFiles(), ...validFiles] : [...validFiles];
     this.files = nextFiles;
     this.selectedFile = nextFiles[0] ?? null;
-    this.unlockStates = nextFiles.map(() =>
-      this.mode === "unprotect" ? "checking" : "unprotected",
-    );
-    this.fileSelections = append
-      ? [...this.fileSelections, ...validFiles.map(() => true)]
-      : validFiles.map(() => true);
+    this.unlockStates = initUnlockStates(nextFiles.length, this.mode);
+    this.fileSelections = initFileSelections(this.fileSelections, validFiles.length, append);
 
     logger.info("Files loaded for PDF security", {
       count: validFiles.length,
@@ -659,11 +646,10 @@ export class PdfSecurity extends BaseComponent {
   }
 
   private async applyMode(mode: SecurityMode) {
+    this.unlockRun += 1;
     this.mode = mode;
-    this.toolKey = this.getToolKey(mode);
-    this.unlockStates = this.getSelectedFiles().map(() =>
-      mode === "unprotect" ? "checking" : "unprotected",
-    );
+    this.toolKey = getToolKey(mode);
+    this.unlockStates = initUnlockStates(this.getSelectedFiles().length, mode);
 
     const title = this.querySelector("#securityTitle") as HTMLElement | null;
     const subtitle = this.querySelector("#securitySubtitle") as HTMLElement | null;
@@ -776,7 +762,11 @@ export class PdfSecurity extends BaseComponent {
     const actionBtn = this.querySelector("#securityActionBtn") as HTMLButtonElement | null;
     const currentPasswordGroup = this.querySelector("#currentPasswordGroup") as HTMLElement | null;
     const unlockHelpText = this.querySelector("#unlockHelpText") as HTMLElement | null;
-    const counts = this.getUnlockCounts(true);
+    const counts = this.getUnlockCounts();
+
+    if (unlockHelpText) {
+      unlockHelpText.textContent = getUnlockHelpText(this.mode, fileCount, counts);
+    }
 
     if (this.mode !== "unprotect") {
       if (actionBtn) {
@@ -786,70 +776,16 @@ export class PdfSecurity extends BaseComponent {
         `;
       }
       currentPasswordGroup?.classList.remove("hidden");
-      if (unlockHelpText) {
-        unlockHelpText.textContent =
-          "Unlock removes a known password. If a PDF already opens without one, Kyte can also export an unrestricted copy without asking for a password.";
-      }
       return;
     }
 
-    if (fileCount === 0) {
-      currentPasswordGroup?.classList.add("hidden");
-      if (actionBtn) {
-        actionBtn.innerHTML = `
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
-          Unlock PDF
-        `;
-      }
-      if (unlockHelpText) {
-        unlockHelpText.textContent =
-          "Select one or more PDFs in the left pane to choose the files Kyte should unlock.";
-      }
-      return;
-    }
-
-    const needsKnownPassword = counts.passwordRequired > 0;
-    const hasRestrictionOnly = counts.restrictionOnly > 0;
-    currentPasswordGroup?.classList.toggle("hidden", !needsKnownPassword);
+    currentPasswordGroup?.classList.toggle("hidden", counts.passwordRequired === 0);
 
     if (actionBtn) {
-      const label = needsKnownPassword
-        ? fileCount > 1
-          ? "Unlock PDFs"
-          : "Remove Known Password"
-        : "Remove Restrictions";
-
       actionBtn.innerHTML = `
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
-        ${label}
+        ${getUnlockActionLabel(fileCount, counts)}
       `;
-    }
-
-    if (unlockHelpText) {
-      if (counts.checking > 0) {
-        unlockHelpText.textContent =
-          fileCount > 1
-            ? "Kyte is checking each selected PDF to see whether it needs the current password or only has owner restrictions."
-            : "Kyte is checking whether this PDF only has owner restrictions or requires its current password.";
-      } else if (needsKnownPassword && hasRestrictionOnly) {
-        unlockHelpText.textContent =
-          "Kyte will use the current password for files that need it, and it will also export unrestricted copies for files that already open without one.";
-      } else if (needsKnownPassword) {
-        unlockHelpText.textContent =
-          fileCount > 1
-            ? "Use one current password to unlock all selected PDFs that share it."
-            : "Unlock removes a known password from the selected PDF.";
-      } else if (hasRestrictionOnly) {
-        unlockHelpText.textContent =
-          fileCount > 1
-            ? "These PDFs already open without a password but still have owner restrictions. Kyte can export unrestricted copies with no password entry."
-            : "This PDF already opens without a password but still has owner restrictions. Kyte can export an unrestricted copy with no password entry.";
-      } else {
-        unlockHelpText.textContent =
-          fileCount > 1
-            ? "Kyte will skip PDFs that already open normally and only process the files that still carry passwords or owner restrictions."
-            : "This PDF does not currently need a password or owner-restriction removal.";
-      }
     }
   }
 
@@ -857,24 +793,32 @@ export class PdfSecurity extends BaseComponent {
     const files = [...this.getSelectedFiles()];
     if (files.length === 0 || this.mode !== "unprotect") return;
 
+    const run = ++this.unlockRun;
     this.unlockStates = files.map(() => "checking");
     this.updateFileList();
     this.updateUnlockUi();
     this.updateActionState();
 
-    for (let index = 0; index < files.length; index += 1) {
-      const file = files[index];
+    for (const file of files) {
+      // A file removed while an earlier one was being checked is skipped.
+      if (!this.files.includes(file)) continue;
 
+      let state: UnlockInspectionState;
       try {
-        this.unlockStates[index] = await getPdfSecurityState(file);
+        state = await getPdfSecurityState(file);
       } catch (error) {
+        // getPdfSecurityState reports every password case as a state, so
+        // anything it throws means the file itself could not be read.
         logger.error("Failed to inspect PDF security state", { error, fileName: file.name });
-        this.unlockStates[index] = "password-required";
+        state = "invalid";
       }
 
-      if (this.mode !== "unprotect") {
-        return;
-      }
+      // A newer list, a clear or a mode change has replaced this run.
+      if (run !== this.unlockRun) return;
+
+      // Write by identity: files may have been removed while this one was read.
+      const index = this.files.indexOf(file);
+      if (index !== -1) this.unlockStates[index] = state;
 
       this.updateFileList();
       this.updateUnlockUi();
@@ -884,99 +828,31 @@ export class PdfSecurity extends BaseComponent {
 
   private getValidationMessage() {
     const activeEntries = this.getActiveFileEntries();
-    const files = activeEntries.map(({ file }) => file);
     const { openPassword, confirmPassword, ownerPassword, currentPassword } =
       this.getPasswordInputs();
-    const fileCount = files.length;
-
-    if (fileCount === 0) {
-      return this.getSelectedFiles().length === 0
-        ? "Upload one or more PDFs to continue."
-        : "Select at least one PDF to continue.";
-    }
+    const totalFileCount = this.getSelectedFiles().length;
+    const selectedCount = activeEntries.length;
 
     if (this.mode === "protect") {
-      const openValue = openPassword?.value || "";
-      const confirmValue = confirmPassword?.value || "";
-      const ownerValue = ownerPassword?.value || "";
-
-      if (!openValue) return "Enter a password to protect the selected PDFs.";
-      if (openValue.length < 4) return "Use at least 4 characters for the open password.";
-      if (!confirmValue) return "Confirm the password to continue.";
-      if (openValue !== confirmValue) return "Passwords must match.";
-      if (ownerValue && ownerValue === openValue) {
-        return "Owner password must be different or left blank.";
-      }
-
-      const permissions = this.getPermissions();
-      const allowed = Object.values(permissions).filter(Boolean).length;
-      return allowed > 0
-        ? `Ready to protect ${this.getFileLabel(fileCount)} with ${allowed} viewer permission${allowed === 1 ? "" : "s"} enabled.`
-        : `Ready to protect ${this.getFileLabel(fileCount)} with all editing permissions disabled.`;
+      return getProtectValidationMessage({
+        openPassword: openPassword?.value || "",
+        confirmPassword: confirmPassword?.value || "",
+        ownerPassword: ownerPassword?.value || "",
+        totalFileCount,
+        selectedCount,
+        permissionsAllowedCount: Object.values(this.getPermissions()).filter(Boolean).length,
+      });
     }
 
-    const counts = this.getUnlockCounts(true);
-    if (counts.checking > 0) {
-      return fileCount > 1
-        ? "Checking selected PDFs for passwords and owner restrictions..."
-        : "Checking whether this PDF requires a known password...";
-    }
-
-    if (counts.passwordRequired === 0 && counts.restrictionOnly === 0) {
-      return fileCount > 1
-        ? "None of the selected PDFs currently have a password or owner restrictions."
-        : "This PDF does not currently have a password or owner restrictions.";
-    }
-
-    if (counts.passwordRequired > 0 && !currentPassword?.value) {
-      const passwordLabel =
-        counts.passwordRequired === fileCount
-          ? this.getFileLabel(fileCount)
-          : this.getFileLabel(counts.passwordRequired);
-      const extraDetails: string[] = [];
-
-      if (counts.restrictionOnly > 0) {
-        extraDetails.push(
-          `${this.getFileLabel(counts.restrictionOnly)} ${counts.restrictionOnly === 1 ? "will" : "will"} only have owner restrictions removed.`,
-        );
-      }
-
-      if (counts.unprotected > 0) {
-        extraDetails.push(
-          `${this.getFileLabel(counts.unprotected)} ${counts.unprotected === 1 ? "will be" : "will be"} skipped because ${counts.unprotected === 1 ? "it is" : "they are"} already unprotected.`,
-        );
-      }
-
-      return `Enter the current password to unlock ${passwordLabel}.${extraDetails.length > 0 ? ` ${extraDetails.join(" ")}` : ""}`;
-    }
-
-    if (fileCount === 1) {
-      const state = this.getUnlockState(activeEntries[0].index);
-      if (state === "restriction-only") {
-        return `Ready to remove owner restrictions from ${files[0].name}. No password required.`;
-      }
-
-      return `Ready to remove the known password from ${files[0].name}.`;
-    }
-
-    const readyParts: string[] = [];
-    if (counts.passwordRequired > 0) {
-      readyParts.push(
-        `${this.getFileLabel(counts.passwordRequired)} will have the known password removed.`,
-      );
-    }
-    if (counts.restrictionOnly > 0) {
-      readyParts.push(
-        `${this.getFileLabel(counts.restrictionOnly)} will have owner restrictions removed.`,
-      );
-    }
-    if (counts.unprotected > 0) {
-      readyParts.push(
-        `${this.getFileLabel(counts.unprotected)} will be skipped because ${counts.unprotected === 1 ? "it is" : "they are"} already unprotected.`,
-      );
-    }
-
-    return `Ready to process ${this.getFileLabel(fileCount)}. ${readyParts.join(" ")}`;
+    const [first] = activeEntries;
+    return getUnprotectValidationMessage({
+      totalFileCount,
+      selectedCount,
+      currentPassword: currentPassword?.value || "",
+      counts: this.getUnlockCounts(),
+      firstFileName: first?.file.name,
+      firstFileState: first ? this.getUnlockState(first.index) : undefined,
+    });
   }
 
   private updateActionState() {
@@ -986,11 +862,13 @@ export class PdfSecurity extends BaseComponent {
     const { openPassword, confirmPassword } = this.getPasswordInputs();
 
     const validationMessage = this.getValidationMessage();
-    const protectMismatch =
-      this.mode === "protect" &&
-      !!confirmPassword?.value &&
-      openPassword?.value !== confirmPassword?.value;
-    const isReady = validationMessage.startsWith("Ready");
+    const protectMismatch = shouldShowPasswordMismatch(
+      this.mode,
+      openPassword?.value || "",
+      confirmPassword?.value || "",
+    );
+    const hasActiveFiles = this.getActiveFileEntries().length > 0;
+    const isReady = isActionReady(validationMessage, hasActiveFiles);
     const isChecking = validationMessage.startsWith("Checking");
 
     mismatchWarning?.classList.toggle("hidden", !protectMismatch);
@@ -1004,7 +882,7 @@ export class PdfSecurity extends BaseComponent {
     }
 
     if (!actionBtn) return;
-    actionBtn.disabled = this.getActiveFileEntries().length === 0 || !isReady || protectMismatch;
+    actionBtn.disabled = this.isProcessing || !isReady || protectMismatch;
   }
 
   private async saveSession() {
@@ -1012,7 +890,7 @@ export class PdfSecurity extends BaseComponent {
       const files = this.getSelectedFiles();
       if (files.length === 0) return;
       await persistence.set(this.toolKey, files);
-      await persistence.delete(this.getToolKey(this.mode === "protect" ? "unprotect" : "protect"));
+      await persistence.delete(getOppositeToolKey(this.mode));
       await this.checkStorageUsage();
     } catch (error) {
       logger.error("Failed to save PDF security session", error);
@@ -1035,10 +913,28 @@ export class PdfSecurity extends BaseComponent {
       }
 
       resumeContainer.classList.remove("hidden");
-      resumeBtn.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
-        Resume ${savedFiles.length === 1 ? `${savedFiles[0].name} (${this.formatBytes(savedFiles[0].size)})` : this.getFileLabel(savedFiles.length)}
-      `;
+      resumeBtn.innerHTML = "";
+
+      // Static trusted icon
+      const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      icon.setAttribute("width", "14");
+      icon.setAttribute("height", "14");
+      icon.setAttribute("viewBox", "0 0 24 24");
+      icon.setAttribute("fill", "none");
+      icon.setAttribute("stroke", "currentColor");
+      icon.setAttribute("stroke-width", "2");
+      icon.setAttribute("stroke-linecap", "round");
+      icon.setAttribute("stroke-linejoin", "round");
+      icon.style.marginRight = "4px";
+      icon.innerHTML = `<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/>`;
+      resumeBtn.appendChild(icon);
+
+      // User-controlled text via textContent (safe)
+      const resumeLabel =
+        savedFiles.length === 1
+          ? `${savedFiles[0].name} (${this.formatBytes(savedFiles[0].size)})`
+          : getFileLabel(savedFiles.length);
+      resumeBtn.appendChild(document.createTextNode(`Resume ${resumeLabel}`));
     } catch (error) {
       logger.error("Failed to check for PDF security session", error);
     }
@@ -1062,9 +958,10 @@ export class PdfSecurity extends BaseComponent {
   }
 
   private removeFile(index: number) {
-    this.files.splice(index, 1);
-    this.unlockStates.splice(index, 1);
-    this.fileSelections.splice(index, 1);
+    if (this.isProcessing) return;
+    this.files = removeFileAtIndex(this.files, index);
+    this.unlockStates = removeFileAtIndex(this.unlockStates, index);
+    this.fileSelections = removeFileAtIndex(this.fileSelections, index);
     this.selectedFile = this.files[0] ?? null;
     this.hideSuccess();
 
@@ -1085,11 +982,12 @@ export class PdfSecurity extends BaseComponent {
   }
 
   private async clearSelectedFiles() {
-    if (this.getSelectedFiles().length === 0) return;
+    if (this.isProcessing || this.getSelectedFiles().length === 0) return;
 
     const confirmed = await this.showConfirmDialog("Clear the selected PDFs from this session?");
     if (!confirmed) return;
 
+    this.unlockRun += 1;
     this.files = [];
     this.selectedFile = null;
     this.unlockStates = [];
@@ -1103,7 +1001,7 @@ export class PdfSecurity extends BaseComponent {
     await this.checkExistingSession();
   }
 
-  private async downloadBatchFiles(results: BatchSuccessResult[]) {
+  private async downloadBatchFiles(results: BatchOutput[]) {
     await this.ensureEmailCollected();
 
     for (let index = 0; index < results.length; index += 1) {
@@ -1126,8 +1024,10 @@ export class PdfSecurity extends BaseComponent {
   }
 
   private toggleFileSelection(index: number) {
-    if (index < 0 || index >= this.fileSelections.length) return;
-    this.fileSelections[index] = !this.isFileSelected(index);
+    if (this.isProcessing) return;
+    const next = toggleFileSelection(this.fileSelections, index);
+    if (next === this.fileSelections) return;
+    this.fileSelections = next;
     this.hideSuccess();
     this.updateFileList();
     this.updateUnlockUi();
@@ -1135,8 +1035,8 @@ export class PdfSecurity extends BaseComponent {
   }
 
   private setAllFileSelections(selected: boolean) {
-    if (this.getSelectedFiles().length === 0) return;
-    this.fileSelections = this.getSelectedFiles().map(() => selected);
+    if (this.isProcessing || this.getSelectedFiles().length === 0) return;
+    this.fileSelections = setAllFileSelections(this.getSelectedFiles().length, selected);
     this.hideSuccess();
     this.updateFileList();
     this.updateUnlockUi();
@@ -1144,6 +1044,7 @@ export class PdfSecurity extends BaseComponent {
   }
 
   private setSingleSuccessState(
+    mode: SecurityMode,
     outputBytes: Uint8Array,
     outputName: string,
     state: PdfSecurityState,
@@ -1151,135 +1052,34 @@ export class PdfSecurity extends BaseComponent {
     const successTitle = this.querySelector("#successTitle") as HTMLElement | null;
     const successDetails = this.querySelector("#successDetails") as HTMLElement | null;
 
-    if (successTitle) {
-      successTitle.textContent =
-        this.mode === "protect"
-          ? "PDF Protected!"
-          : state === "restriction-only"
-            ? "Restrictions Removed!"
-            : "Password Removed!";
-    }
-
-    if (successDetails) {
-      successDetails.textContent =
-        this.mode === "protect"
-          ? "The exported copy now requires the password you set."
-          : state === "restriction-only"
-            ? "The exported copy opens normally and no longer carries owner restrictions."
-            : "The exported copy opens without asking for a password.";
-    }
+    if (successTitle) successTitle.textContent = getSingleSuccessTitle(mode, state);
+    if (successDetails) successDetails.textContent = getSingleSuccessDetail(mode, state);
 
     this.setDownloadButtonLabel("Download PDF");
     this.showSuccess(outputBytes, outputName, "", ".pdf");
   }
 
-  private buildBatchArchiveName(results: BatchSuccessResult[]) {
-    if (this.mode === "protect") {
-      return "protected_pdfs.zip";
-    }
-
-    return results.every((result) => result.resultType === "restrictions-removed")
-      ? "unrestricted_pdfs.zip"
-      : "unlocked_pdfs.zip";
-  }
-
-  private buildBatchSuccessDetails(
-    results: BatchSuccessResult[],
-    skipped: File[],
-    failures: BatchFailureResult[],
-  ) {
-    const passwordRemovedCount = results.filter(
-      (result) => result.resultType === "password-removed",
-    ).length;
-    const restrictionsRemovedCount = results.filter(
-      (result) => result.resultType === "restrictions-removed",
-    ).length;
-    const protectedCount = results.filter((result) => result.resultType === "protected").length;
-    const parts: string[] = [];
-    const deliveryText =
-      this.downloadMode === "individual"
-        ? `${this.getFileLabel(results.length)} ${results.length === 1 ? "was" : "were"} downloaded individually.`
-        : `${this.getFileLabel(results.length)} ${results.length === 1 ? "is" : "are"} ready in one ZIP archive.`;
-
-    if (this.mode === "protect") {
-      parts.push(
-        this.downloadMode === "individual"
-          ? `${this.getFileLabel(protectedCount)} ${protectedCount === 1 ? "was" : "were"} downloaded individually.`
-          : `${this.getFileLabel(protectedCount)} ${protectedCount === 1 ? "is" : "are"} ready in one ZIP archive.`,
-      );
-    } else {
-      parts.push(deliveryText);
-      if (passwordRemovedCount > 0) {
-        parts.push(`${this.getFileLabel(passwordRemovedCount)} had the known password removed.`);
-      }
-      if (restrictionsRemovedCount > 0) {
-        parts.push(
-          `${this.getFileLabel(restrictionsRemovedCount)} had owner restrictions removed.`,
-        );
-      }
-    }
-
-    if (skipped.length > 0) {
-      parts.push(
-        `${this.getFileLabel(skipped.length)} ${skipped.length === 1 ? "was" : "were"} skipped because ${skipped.length === 1 ? "it is" : "they are"} already unprotected.`,
-      );
-    }
-
-    if (failures.length > 0) {
-      parts.push(
-        `${this.getFileLabel(failures.length, "file", "files")} failed and ${failures.length === 1 ? "was" : "were"} left out of the archive.`,
-      );
-    }
-
-    return parts.join(" ");
-  }
-
-  private buildBatchCompletionMessage(
-    results: BatchSuccessResult[],
-    skipped: File[],
-    failures: BatchFailureResult[],
-  ) {
-    const summary = this.buildBatchSuccessDetails(results, skipped, failures);
-    if (failures.length === 0) return summary;
-
-    const failurePreview = failures
-      .slice(0, 3)
-      .map((failure) => `${failure.file.name}: ${failure.message}`)
-      .join("\n");
-
-    return `${summary}\n\n${failurePreview}${failures.length > 3 ? `\n+ ${failures.length - 3} more` : ""}`;
-  }
-
-  private areAllFailuresSameMessage(failures: BatchFailureResult[], message: string) {
-    return failures.length > 0 && failures.every((failure) => failure.message === message);
-  }
-
   private async showBatchResults(
-    results: BatchSuccessResult[],
-    skipped: File[],
+    mode: SecurityMode,
+    results: BatchOutput[],
+    skipped: string[],
+    invalid: string[],
     failures: BatchFailureResult[],
   ) {
     if (results.length === 0) {
-      if (this.areAllFailuresSameMessage(failures, INCORRECT_PASSWORD_ERROR)) {
+      if (areAllFailuresSameMessage(failures, INCORRECT_PASSWORD_ERROR)) {
         await this.showSecurityError(INCORRECT_PASSWORD_ERROR);
         return;
       }
 
-      if (this.areAllFailuresSameMessage(failures, KNOWN_PASSWORD_REQUIRED_ERROR)) {
+      if (areAllFailuresSameMessage(failures, KNOWN_PASSWORD_REQUIRED_ERROR)) {
         await this.showSecurityError(KNOWN_PASSWORD_REQUIRED_ERROR);
         return;
       }
 
-      if (failures.length === 1 && skipped.length === 0) {
+      if (failures.length === 1 && skipped.length === 0 && invalid.length === 0) {
         const failure = failures[0];
-        if (
-          [
-            ALREADY_PROTECTED_ERROR,
-            NOT_PROTECTED_ERROR,
-            INCORRECT_PASSWORD_ERROR,
-            KNOWN_PASSWORD_REQUIRED_ERROR,
-          ].includes(failure.message)
-        ) {
+        if (KNOWN_SECURITY_ERRORS.includes(failure.message)) {
           await this.showSecurityError(failure.message);
           return;
         }
@@ -1291,7 +1091,7 @@ export class PdfSecurity extends BaseComponent {
           failures.length > 0
             ? failures
                 .slice(0, 3)
-                .map((failure) => `${failure.file.name}: ${failure.message}`)
+                .map((failure) => `${failure.fileName}: ${failure.message}`)
                 .join("\n")
             : "No files were processed in this batch.",
         type: "error",
@@ -1299,49 +1099,71 @@ export class PdfSecurity extends BaseComponent {
       return;
     }
 
+    const completion = {
+      title:
+        failures.length > 0 || skipped.length > 0 || invalid.length > 0
+          ? "Batch complete"
+          : "Success!",
+      message: buildBatchCompletionMessage(
+        mode,
+        this.downloadMode,
+        results,
+        skipped,
+        invalid,
+        failures,
+      ),
+      type: (failures.length > 0 ? "warning" : "success") as "warning" | "success",
+    };
+
     if (this.downloadMode === "individual") {
       this.updateProgress(96, "Downloading files...");
       await this.downloadBatchFiles(results);
 
-      await persistence.delete(this.getToolKey("protect"));
-      await persistence.delete(this.getToolKey("unprotect"));
+      await persistence.delete(getToolKey("protect"));
+      await persistence.delete(getToolKey("unprotect"));
 
-      await this.showDialog({
-        title: failures.length > 0 || skipped.length > 0 ? "Batch complete" : "Success!",
-        message: this.buildBatchCompletionMessage(results, skipped, failures),
-        type: failures.length > 0 ? "warning" : "success",
-      });
+      await this.showDialog(completion);
       return;
     }
 
     this.updateProgress(96, "Packing batch download...");
     const zip = new JSZip();
-    results.forEach((result) => {
-      zip.file(result.outputName, result.outputBytes);
+    // Two inputs with the same name would give two outputs with the same
+    // name, and the archive would keep only the last.
+    const entryNames = makeUniqueArchiveNames(results.map((result) => result.outputName));
+    results.forEach((result, index) => {
+      zip.file(entryNames[index], result.outputBytes);
     });
 
     const archiveBytes = await zip.generateAsync({ type: "uint8array" });
-    const archiveName = this.buildBatchArchiveName(results);
+    const archiveName = buildBatchArchiveName(mode, results);
 
     const successTitle = this.querySelector("#successTitle") as HTMLElement | null;
     const successDetails = this.querySelector("#successDetails") as HTMLElement | null;
 
     if (successTitle) {
-      successTitle.textContent = this.mode === "protect" ? "Batch Protected!" : "Batch Ready!";
+      successTitle.textContent = mode === "protect" ? "Batch Protected!" : "Batch Ready!";
     }
 
     if (successDetails) {
-      successDetails.textContent = this.buildBatchSuccessDetails(results, skipped, failures);
+      successDetails.textContent = buildBatchSuccessDetails(
+        mode,
+        this.downloadMode,
+        results,
+        skipped,
+        invalid,
+        failures,
+      );
     }
 
     this.setDownloadButtonLabel("Download ZIP Archive");
     this.showSuccess(archiveBytes, archiveName, "", ".zip");
 
     await this.recordJob(
-      this.mode === "protect" ? "Protect Batch" : "Unprotect Batch",
+      mode === "protect" ? "Protect Batch" : "Unprotect Batch",
       archiveName,
       archiveBytes,
-      this.mode === "protect"
+      mode === "protect"
         ? {
             batch: true,
             fileCount: results.length,
@@ -1352,6 +1174,7 @@ export class PdfSecurity extends BaseComponent {
             batch: true,
             fileCount: results.length,
             skippedCount: skipped.length,
+            invalidCount: invalid.length,
             failedCount: failures.length,
             restrictionsRemoved: results.filter(
               (result) => result.resultType === "restrictions-removed",
@@ -1361,20 +1184,147 @@ export class PdfSecurity extends BaseComponent {
           },
     );
 
-    await persistence.delete(this.getToolKey("protect"));
-    await persistence.delete(this.getToolKey("unprotect"));
+    await persistence.delete(getToolKey("protect"));
+    await persistence.delete(getToolKey("unprotect"));
 
-    await this.showDialog({
-      title: failures.length > 0 || skipped.length > 0 ? "Batch complete" : "Success!",
-      message: this.buildBatchCompletionMessage(results, skipped, failures),
-      type: failures.length > 0 ? "warning" : "success",
-    });
+    await this.showDialog(completion);
+  }
+
+  private async processFile(mode: SecurityMode, entry: RunEntry, settings: RunSettings) {
+    if (mode === "protect") {
+      return await protectPdf(entry.file, {
+        userPassword: settings.userPassword,
+        ownerPassword: settings.ownerPassword,
+        permissions: settings.permissions,
+      });
+    }
+    return await unprotectPdf(
+      entry.file,
+      entry.state === "restriction-only" ? "" : settings.currentPassword,
+    );
+  }
+
+  private getOutputSuffix(mode: SecurityMode, state: UnlockInspectionState) {
+    if (mode === "protect") return "_protected";
+    return state === "restriction-only" ? "_unrestricted" : "_unprotected";
+  }
+
+  private async runSingle(mode: SecurityMode, entry: RunEntry, settings: RunSettings) {
+    const state: PdfSecurityState = entry.state === "checking" ? "password-required" : entry.state;
+
+    this.updateProgress(
+      15,
+      mode === "protect"
+        ? "Reading PDF..."
+        : state === "restriction-only"
+          ? "Removing owner restrictions..."
+          : "Verifying password...",
+    );
+
+    const outputBytes = await this.processFile(mode, { ...entry, state }, settings);
+
+    this.updateProgress(100, mode === "protect" ? "Protection applied." : "Password removed.");
+
+    const outputName = generateOutputFilename(entry.file.name, this.getOutputSuffix(mode, state));
+
+    this.setSingleSuccessState(mode, outputBytes, outputName, state);
+    await this.recordJob(
+      mode === "protect" ? "Protect" : "Unprotect",
+      outputName,
+      outputBytes,
+      mode === "protect"
+        ? {
+            permissionsRestricted: Object.values(settings.permissions).filter((value) => !value)
+              .length,
+          }
+        : {
+            restrictionsRemoved: state === "restriction-only",
+            passwordRemoved: state !== "restriction-only",
+          },
+    );
+
+    await persistence.delete(getToolKey("protect"));
+    await persistence.delete(getToolKey("unprotect"));
+
+    await this.showSuccessDialog(
+      mode === "protect"
+        ? "Your PDF is now password-protected."
+        : state === "restriction-only"
+          ? "Owner restrictions were removed from your PDF."
+          : "The password was removed from your PDF.",
+    );
+  }
+
+  private async runBatch(mode: SecurityMode, entries: RunEntry[], settings: RunSettings) {
+    const batchResults: BatchOutput[] = [];
+    const batchFailures: BatchFailureResult[] = [];
+    const skippedFiles: string[] = [];
+    const invalidFiles: string[] = [];
+    const totalFiles = entries.length;
+
+    for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+      const entry = entries[entryIndex];
+      const { file, state } = entry;
+      const currentPercent = Math.round((entryIndex / totalFiles) * 85);
+
+      if (mode === "unprotect" && state === "unprotected") {
+        skippedFiles.push(file.name);
+        this.updateProgress(
+          currentPercent,
+          `Skipping ${file.name} because it already opens without restrictions...`,
+        );
+        continue;
+      }
+
+      if (mode === "unprotect" && state === "invalid") {
+        // Announced as skipped before the run, so reported as skipped after it.
+        invalidFiles.push(file.name);
+        this.updateProgress(
+          currentPercent,
+          `Skipping ${file.name} — file is corrupted or invalid...`,
+        );
+        continue;
+      }
+
+      this.updateProgress(
+        Math.max(8, currentPercent),
+        mode === "protect"
+          ? `Protecting ${entryIndex + 1} of ${totalFiles}: ${file.name}`
+          : state === "restriction-only"
+            ? `Removing restrictions from ${entryIndex + 1} of ${totalFiles}: ${file.name}`
+            : `Unlocking ${entryIndex + 1} of ${totalFiles}: ${file.name}`,
+      );
+
+      try {
+        const outputBytes = await this.processFile(mode, entry, settings);
+        batchResults.push({
+          fileName: file.name,
+          outputName: generateOutputFilename(file.name, this.getOutputSuffix(mode, state)),
+          outputBytes,
+          resultType:
+            mode === "protect"
+              ? "protected"
+              : state === "restriction-only"
+                ? "restrictions-removed"
+                : "password-removed",
+        });
+      } catch (error) {
+        logger.error("PDF security batch item failed", { error, fileName: file.name, mode });
+        batchFailures.push({
+          fileName: file.name,
+          message: getSecurityErrorMessage(error) ?? mapError(error, ""),
+        });
+      }
+    }
+
+    this.updateProgress(100, "Batch processing complete.");
+    await this.showBatchResults(mode, batchResults, skippedFiles, invalidFiles, batchFailures);
   }
 
   private async runSecurityAction() {
+    if (this.isProcessing) return;
     const selectedEntries = this.getActiveFileEntries();
-    const files = selectedEntries.map(({ file }) => file);
-    if (files.length === 0) return;
+    if (selectedEntries.length === 0) return;
 
     const validationMessage = this.getValidationMessage();
     if (!validationMessage.startsWith("Ready")) {
@@ -1384,169 +1334,45 @@ export class PdfSecurity extends BaseComponent {
 
     const actionBtn = this.querySelector("#securityActionBtn") as HTMLButtonElement | null;
     const progressSection = this.querySelector("#progressSection") as HTMLElement | null;
+    if (!actionBtn) return;
+
+    // Read everything the run depends on once, so nothing that changes on the
+    // page while it runs can change what happens to the files already queued.
+    const mode = this.mode;
     const { openPassword, ownerPassword, currentPassword } = this.getPasswordInputs();
-    const isBatch = files.length > 1;
+    const settings: RunSettings = {
+      userPassword: openPassword?.value || "",
+      ownerPassword: ownerPassword?.value || "",
+      currentPassword: currentPassword?.value || "",
+      permissions: this.getPermissions(),
+    };
+    const entries: RunEntry[] = selectedEntries.map(({ file, index }) => ({
+      file,
+      state: mode === "unprotect" ? this.getUnlockState(index) : "unprotected",
+    }));
 
+    this.isProcessing = true;
     try {
-      if (!actionBtn) return;
-
       this.hideSuccess();
       actionBtn.disabled = true;
       progressSection?.classList.remove("hidden");
-      this.updateProgress(0, this.mode === "protect" ? "Securing PDF..." : "Unlocking PDF...");
+      this.updateProgress(0, mode === "protect" ? "Securing PDF..." : "Unlocking PDF...");
 
-      if (!isBatch) {
-        const [{ file, index: sourceIndex }] = selectedEntries;
-        const state = this.mode === "unprotect" ? this.getUnlockState(sourceIndex) : "unprotected";
-        const resolvedState: PdfSecurityState = state === "checking" ? "password-required" : state;
-
-        this.updateProgress(
-          15,
-          this.mode === "protect"
-            ? "Reading PDF..."
-            : resolvedState === "restriction-only"
-              ? "Removing owner restrictions..."
-              : "Verifying password...",
-        );
-
-        const outputBytes =
-          this.mode === "protect"
-            ? await protectPdf(file, {
-                userPassword: openPassword?.value || "",
-                ownerPassword: ownerPassword?.value || "",
-                permissions: this.getPermissions(),
-              })
-            : await unprotectPdf(
-                file,
-                resolvedState === "restriction-only" ? "" : currentPassword?.value || "",
-              );
-
-        this.updateProgress(
-          100,
-          this.mode === "protect" ? "Protection applied." : "Password removed.",
-        );
-
-        const outputName = generateOutputFilename(
-          file.name,
-          this.mode === "protect"
-            ? "_protected"
-            : resolvedState === "restriction-only"
-              ? "_unrestricted"
-              : "_unprotected",
-        );
-
-        this.setSingleSuccessState(outputBytes, outputName, resolvedState);
-        await this.recordJob(
-          this.mode === "protect" ? "Protect" : "Unprotect",
-          outputName,
-          outputBytes,
-          this.mode === "protect"
-            ? {
-                permissionsRestricted: Object.values(this.getPermissions()).filter(
-                  (value) => !value,
-                ).length,
-              }
-            : {
-                restrictionsRemoved: resolvedState === "restriction-only",
-                passwordRemoved: resolvedState !== "restriction-only",
-              },
-        );
-
-        await persistence.delete(this.getToolKey("protect"));
-        await persistence.delete(this.getToolKey("unprotect"));
-
-        await this.showSuccessDialog(
-          this.mode === "protect"
-            ? "Your PDF is now password-protected."
-            : resolvedState === "restriction-only"
-              ? "Owner restrictions were removed from your PDF."
-              : "The password was removed from your PDF.",
-        );
-
-        return;
+      if (entries.length === 1) {
+        await this.runSingle(mode, entries[0], settings);
+      } else {
+        await this.runBatch(mode, entries, settings);
       }
-
-      const batchResults: BatchSuccessResult[] = [];
-      const batchFailures: BatchFailureResult[] = [];
-      const skippedFiles: File[] = [];
-      const activePassword = currentPassword?.value || "";
-      const totalFiles = selectedEntries.length;
-
-      for (let entryIndex = 0; entryIndex < selectedEntries.length; entryIndex += 1) {
-        const { file, index: sourceIndex } = selectedEntries[entryIndex];
-        const state = this.mode === "unprotect" ? this.getUnlockState(sourceIndex) : "unprotected";
-        const currentPercent = Math.round((entryIndex / totalFiles) * 85);
-
-        if (this.mode === "unprotect" && state === "unprotected") {
-          skippedFiles.push(file);
-          this.updateProgress(
-            currentPercent,
-            `Skipping ${file.name} because it already opens without restrictions...`,
-          );
-          continue;
-        }
-
-        this.updateProgress(
-          Math.max(8, currentPercent),
-          this.mode === "protect"
-            ? `Protecting ${entryIndex + 1} of ${totalFiles}: ${file.name}`
-            : state === "restriction-only"
-              ? `Removing restrictions from ${entryIndex + 1} of ${totalFiles}: ${file.name}`
-              : `Unlocking ${entryIndex + 1} of ${totalFiles}: ${file.name}`,
-        );
-
-        try {
-          const outputBytes =
-            this.mode === "protect"
-              ? await protectPdf(file, {
-                  userPassword: openPassword?.value || "",
-                  ownerPassword: ownerPassword?.value || "",
-                  permissions: this.getPermissions(),
-                })
-              : await unprotectPdf(file, state === "restriction-only" ? "" : activePassword);
-
-          batchResults.push({
-            file,
-            outputName: generateOutputFilename(
-              file.name,
-              this.mode === "protect"
-                ? "_protected"
-                : state === "restriction-only"
-                  ? "_unrestricted"
-                  : "_unprotected",
-            ),
-            outputBytes,
-            resultType:
-              this.mode === "protect"
-                ? "protected"
-                : state === "restriction-only"
-                  ? "restrictions-removed"
-                  : "password-removed",
-          });
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          batchFailures.push({ file, message });
-        }
-      }
-
-      this.updateProgress(100, "Batch processing complete.");
-      await this.showBatchResults(batchResults, skippedFiles, batchFailures);
     } catch (error) {
-      logger.error("PDF security action failed", { error, mode: this.mode });
-      if (
-        error instanceof Error &&
-        [
-          ALREADY_PROTECTED_ERROR,
-          NOT_PROTECTED_ERROR,
-          INCORRECT_PASSWORD_ERROR,
-          KNOWN_PASSWORD_REQUIRED_ERROR,
-        ].includes(error.message)
-      ) {
-        await this.showSecurityError(error.message);
+      logger.error("PDF security action failed", { error, mode });
+      const message = getSecurityErrorMessage(error);
+      if (message) {
+        await this.showSecurityError(message);
       } else {
         await this.showErrorDialog(error);
       }
     } finally {
+      this.isProcessing = false;
       progressSection?.classList.add("hidden");
       this.updateActionState();
     }

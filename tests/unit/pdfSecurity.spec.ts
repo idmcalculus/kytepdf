@@ -16,8 +16,11 @@ import {
   ALREADY_PROTECTED_ERROR,
   getPdfSecurityState,
   INCORRECT_PASSWORD_ERROR,
+  INVALID_PDF_ERROR,
   isPdfEncrypted,
+  isPdfStructureError,
   KNOWN_PASSWORD_REQUIRED_ERROR,
+  loadProcessablePdf,
   loadProcessablePdfJsDocument,
   NOT_PROTECTED_ERROR,
   protectPdf,
@@ -208,11 +211,21 @@ describe("pdfSecurity", () => {
     await expect(isPdfEncrypted(new Uint8Array([1]))).rejects.toThrow("File corrupted");
   });
 
-  it("throws immediately on non-encrypted load errors during getPdfSecurityState", async () => {
+  it("returns 'invalid' for structural/corruption errors during getPdfSecurityState", async () => {
     pdfConfigMock.load.mockRejectedValueOnce(new Error("File corrupted"));
-    await expect(getPdfSecurityState(new Uint8Array([1]))).rejects.toThrow("File corrupted");
+    const result = await getPdfSecurityState(new Uint8Array([1]));
+    expect(result).toBe("invalid");
+  });
 
-    // Also test throwing from the second blank-password attempt
+  it("returns 'invalid' when blank-password attempt hits a structural error", async () => {
+    pdfConfigMock.load
+      .mockRejectedValueOnce(new Error("NEEDS PASSWORD"))
+      .mockRejectedValueOnce(new Error("Damaged PDF structure"));
+    const result = await getPdfSecurityState(new Uint8Array([1]));
+    expect(result).toBe("invalid");
+  });
+
+  it("still throws non-structural, non-encrypted errors during getPdfSecurityState", async () => {
     pdfConfigMock.load
       .mockRejectedValueOnce(new Error("NEEDS PASSWORD"))
       .mockRejectedValueOnce(new Error("Random inner failure"));
@@ -274,6 +287,11 @@ describe("pdfSecurity", () => {
     await expect(unprotectPdf(new Uint8Array([1]), "pass")).rejects.toThrow("System error");
   });
 
+  it("throws INVALID_PDF_ERROR when unprotectPdf encounters an invalid file", async () => {
+    pdfConfigMock.load.mockRejectedValueOnce(new Error("Bad xref table"));
+    await expect(unprotectPdf(new Uint8Array([1]), "pass")).rejects.toThrow(INVALID_PDF_ERROR);
+  });
+
   describe("loadProcessablePdfJsDocument", () => {
     const pdfDoc = { numPages: 1 };
 
@@ -304,6 +322,200 @@ describe("pdfSecurity", () => {
       const [{ data }] = pdfConfigMock.getDocument.mock.calls[0];
       expect(data).toEqual(bytes);
       expect(data).not.toBe(bytes);
+    });
+  });
+
+  describe("input sources and loader edge cases", () => {
+    it("reports an openable PDF as not encrypted and accepts ArrayBuffer and File sources", async () => {
+      pdfConfigMock.load.mockResolvedValueOnce({}).mockResolvedValueOnce({});
+
+      await expect(isPdfEncrypted(new Uint8Array([1, 2]).buffer)).resolves.toBe(false);
+      const file = new File([new Uint8Array([3, 4])], "plain.pdf", { type: "application/pdf" });
+      Object.defineProperty(file, "arrayBuffer", {
+        value: () => Promise.resolve(new Uint8Array([3, 4]).buffer),
+      });
+      await expect(isPdfEncrypted(file)).resolves.toBe(false);
+
+      expect(pdfConfigMock.load).toHaveBeenNthCalledWith(1, new Uint8Array([1, 2]));
+      expect(pdfConfigMock.load).toHaveBeenNthCalledWith(2, new Uint8Array([3, 4]));
+    });
+
+    it("recognises encryption errors thrown as plain strings", async () => {
+      pdfConfigMock.load
+        .mockRejectedValueOnce("Input document is encrypted")
+        .mockResolvedValueOnce({});
+
+      await expect(getPdfSecurityState(new Uint8Array([1]))).resolves.toBe("restriction-only");
+    });
+
+    it.each([
+      "Failed to parse PDF document (line:0 col:6 offset=6): Expected next byte to be 46 but it was actually 32",
+      "Parser stalled",
+    ])("reports pdf-lib's parse failure %j as an invalid file", async (message) => {
+      pdfConfigMock.load.mockRejectedValueOnce(new Error(message));
+      await expect(getPdfSecurityState(new Uint8Array([1]))).resolves.toBe("invalid");
+    });
+
+    it("reports an unsupported security handler as an invalid file, not a password", async () => {
+      pdfConfigMock.load
+        .mockRejectedValueOnce(new Error("Input document is encrypted"))
+        .mockRejectedValueOnce(new Error("unknown encryption method"));
+
+      await expect(getPdfSecurityState(new Uint8Array([1]))).resolves.toBe("invalid");
+    });
+
+    it("rethrows a first-load error that is neither structural nor about encryption", async () => {
+      pdfConfigMock.load.mockRejectedValueOnce(new Error("Out of memory"));
+
+      await expect(getPdfSecurityState(new Uint8Array([1]))).rejects.toThrow("Out of memory");
+      expect(pdfConfigMock.load).toHaveBeenCalledTimes(1);
+    });
+
+    it("reports password-required when the blank password is rejected as incorrect", async () => {
+      pdfConfigMock.load
+        .mockRejectedValueOnce(new Error("Input document is encrypted"))
+        .mockRejectedValueOnce(new Error("Password incorrect"));
+
+      await expect(getPdfSecurityState(new Uint8Array([1]))).resolves.toBe("password-required");
+    });
+
+    it("turns off printing and form filling when both are disallowed", async () => {
+      const encrypt = vi.fn().mockResolvedValue(undefined);
+      pdfConfigMock.load.mockResolvedValueOnce({
+        encrypt,
+        save: vi.fn().mockResolvedValue(new Uint8Array([1])),
+      });
+
+      await protectPdf(new Uint8Array([1]), {
+        userPassword: "secret",
+        ownerPassword: "owner-secret",
+        permissions: {
+          allowPrinting: false,
+          allowCopying: true,
+          allowModifying: false,
+          allowAnnotating: false,
+        },
+      });
+
+      expect(encrypt).toHaveBeenCalledWith({
+        userPassword: "secret",
+        ownerPassword: "owner-secret",
+        permissions: expect.objectContaining({
+          printing: false,
+          copying: true,
+          fillingForms: false,
+          documentAssembly: false,
+        }),
+      });
+    });
+  });
+
+  describe("loadProcessablePdf", () => {
+    it("loads an unprotected PDF directly", async () => {
+      const pdfDoc = { id: "plain" };
+      pdfConfigMock.load.mockResolvedValueOnce(pdfDoc);
+
+      await expect(loadProcessablePdf(new Uint8Array([1]))).resolves.toEqual({
+        pdfDoc,
+        restrictionOnly: false,
+      });
+    });
+
+    it("opens a restriction-only PDF with a blank password", async () => {
+      const pdfDoc = { id: "restricted" };
+      pdfConfigMock.load
+        .mockRejectedValueOnce(new Error("Input document is encrypted"))
+        .mockResolvedValueOnce(pdfDoc);
+
+      await expect(loadProcessablePdf(new Uint8Array([1]))).resolves.toEqual({
+        pdfDoc,
+        restrictionOnly: true,
+      });
+      expect(pdfConfigMock.load).toHaveBeenLastCalledWith(new Uint8Array([1]), { password: "" });
+    });
+
+    it("rethrows the original encryption error when the PDF needs a real password", async () => {
+      const original = new Error("Input document is encrypted");
+      pdfConfigMock.load
+        .mockRejectedValueOnce(original)
+        .mockRejectedValueOnce(new Error("Password incorrect"));
+
+      await expect(loadProcessablePdf(new Uint8Array([1]))).rejects.toBe(original);
+    });
+
+    it("surfaces other errors from either load attempt", async () => {
+      pdfConfigMock.load.mockRejectedValueOnce(new Error("Parser stalled"));
+      await expect(loadProcessablePdf(new Uint8Array([1]))).rejects.toThrow("Parser stalled");
+
+      pdfConfigMock.load
+        .mockRejectedValueOnce(new Error("Input document is encrypted"))
+        .mockRejectedValueOnce(new Error("Unsupported filter"));
+      await expect(loadProcessablePdf(new Uint8Array([1]))).rejects.toThrow("Unsupported filter");
+    });
+  });
+
+  describe("loadProcessablePdfJsDocument error handling", () => {
+    it("rethrows non-password errors without retrying", async () => {
+      pdfConfigMock.getDocument.mockReturnValueOnce({
+        promise: Promise.reject(new Error("Invalid PDF structure")),
+      });
+
+      await expect(loadProcessablePdfJsDocument(new Uint8Array([1]))).rejects.toThrow(
+        "Invalid PDF structure",
+      );
+      expect(pdfConfigMock.getDocument).toHaveBeenCalledTimes(1);
+    });
+
+    it("rethrows the first password error when the blank password is refused", async () => {
+      const original = new Error("No password given");
+      pdfConfigMock.getDocument
+        .mockReturnValueOnce({ promise: Promise.reject(original) })
+        .mockReturnValueOnce({ promise: Promise.reject(new Error("Incorrect Password")) });
+
+      await expect(loadProcessablePdfJsDocument(new Uint8Array([1]))).rejects.toBe(original);
+    });
+
+    it("surfaces a non-password failure from the blank-password retry", async () => {
+      pdfConfigMock.getDocument
+        .mockReturnValueOnce({ promise: Promise.reject(new Error("PasswordException")) })
+        .mockReturnValueOnce({ promise: Promise.reject(new Error("Worker crashed")) });
+
+      await expect(loadProcessablePdfJsDocument(new Uint8Array([1]))).rejects.toThrow(
+        "Worker crashed",
+      );
+    });
+  });
+
+  describe("isPdfStructureError", () => {
+    it.each([
+      "Invalid PDF structure",
+      "Not a valid PDF file",
+      "Corrupt stream data",
+      "Bad xref table",
+      "Stream error in object",
+      "No PDF header found",
+      "Unexpected EOF",
+      "Unexpected data after trailer",
+      "Malformed content stream",
+      "Invalid object number",
+      "Missing startxref",
+      "Missing eof marker",
+      "End-of-file marker not found",
+      "Invalid cross-reference table",
+      "Object stream parse failure",
+      "Attempt to repair PDF",
+      "Damaged file structure",
+    ])("detects structural error: %s", (message) => {
+      expect(isPdfStructureError(new Error(message))).toBe(true);
+    });
+
+    it.each([
+      "Input document is encrypted",
+      "NEEDS PASSWORD",
+      "Password incorrect",
+      "Some completely unknown error",
+    ])("rejects non-structural error: %s", (message) => {
+      expect(isPdfStructureError(new Error(message))).toBe(false);
     });
   });
 });

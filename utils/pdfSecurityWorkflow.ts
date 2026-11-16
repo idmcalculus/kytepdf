@@ -1,17 +1,16 @@
 /**
  * pdfSecurityWorkflow.ts
  *
- * Pure, DOM-free business logic extracted from components/PdfSecurity.ts.
- * All functions are deterministic and can be unit-tested without jsdom.
- *
- * The Web Component remains as the thin shell that renders HTML,
- * binds DOM events, and delegates decisions to functions here.
+ * Pure, DOM-free rules and messages for components/PdfSecurity.ts, which
+ * renders the HTML, binds DOM events and delegates its decisions here. Keep
+ * the user-facing copy in this file only, so the component and its tests
+ * cannot drift apart.
  */
 
 import type { PdfSecurityState } from "./pdfSecurity.ts";
 
 // ---------------------------------------------------------------------------
-// Types (mirrored from PdfSecurity component, kept local to avoid coupling)
+// Types
 // ---------------------------------------------------------------------------
 
 export type SecurityMode = "protect" | "unprotect";
@@ -24,6 +23,7 @@ export interface UnlockCounts {
   restrictionOnly: number;
   passwordRequired: number;
   unprotected: number;
+  invalid: number;
 }
 
 export interface BatchSuccessResult {
@@ -41,14 +41,17 @@ export interface ProtectValidationInput {
   openPassword: string;
   confirmPassword: string;
   ownerPassword: string;
-  fileCount: number;
+  /** Files loaded in the batch. */
+  totalFileCount: number;
+  /** Files ticked for processing. */
   selectedCount: number;
   permissionsAllowedCount: number;
 }
 
 export interface UnprotectValidationInput {
-  fileCount: number;
+  /** Files loaded in the batch. */
   totalFileCount: number;
+  /** Files ticked for processing. */
   selectedCount: number;
   currentPassword: string;
   counts: UnlockCounts;
@@ -95,9 +98,10 @@ export function countUnlockStates(states: UnlockInspectionState[]): UnlockCounts
       else if (state === "restriction-only") acc.restrictionOnly += 1;
       else if (state === "password-required") acc.passwordRequired += 1;
       else if (state === "unprotected") acc.unprotected += 1;
+      else if (state === "invalid") acc.invalid += 1;
       return acc;
     },
-    { checking: 0, restrictionOnly: 0, passwordRequired: 0, unprotected: 0 },
+    { checking: 0, restrictionOnly: 0, passwordRequired: 0, unprotected: 0, invalid: 0 },
   );
 }
 
@@ -161,6 +165,10 @@ export function getSelectionPanelMeta(
     );
   }
 
+  if (counts.invalid > 0) {
+    parts.push(`${getFileLabel(counts.invalid)} cannot be processed (invalid)`);
+  }
+
   if (parts.length === 0) {
     const baseMessage =
       selectedCount === 1
@@ -198,13 +206,13 @@ export function getProtectValidationMessage(input: ProtectValidationInput): stri
     openPassword,
     confirmPassword,
     ownerPassword,
-    fileCount,
+    totalFileCount,
     selectedCount,
     permissionsAllowedCount,
   } = input;
 
   if (selectedCount === 0) {
-    return fileCount === 0
+    return totalFileCount === 0
       ? "Upload one or more PDFs to continue."
       : "Select at least one PDF to continue.";
   }
@@ -218,8 +226,8 @@ export function getProtectValidationMessage(input: ProtectValidationInput): stri
   }
 
   return permissionsAllowedCount > 0
-    ? `Ready to protect ${getFileLabel(fileCount)} with ${permissionsAllowedCount} viewer permission${permissionsAllowedCount === 1 ? "" : "s"} enabled.`
-    : `Ready to protect ${getFileLabel(fileCount)} with all editing permissions disabled.`;
+    ? `Ready to protect ${getFileLabel(selectedCount)} with ${permissionsAllowedCount} viewer permission${permissionsAllowedCount === 1 ? "" : "s"} enabled.`
+    : `Ready to protect ${getFileLabel(selectedCount)} with all editing permissions disabled.`;
 }
 
 /**
@@ -227,15 +235,8 @@ export function getProtectValidationMessage(input: ProtectValidationInput): stri
  * Message starts with "Ready" when the action can proceed.
  */
 export function getUnprotectValidationMessage(input: UnprotectValidationInput): string {
-  const {
-    fileCount,
-    totalFileCount,
-    selectedCount,
-    currentPassword,
-    counts,
-    firstFileName,
-    firstFileState,
-  } = input;
+  const { totalFileCount, selectedCount, currentPassword, counts, firstFileName, firstFileState } =
+    input;
 
   if (selectedCount === 0) {
     return totalFileCount === 0
@@ -244,21 +245,26 @@ export function getUnprotectValidationMessage(input: UnprotectValidationInput): 
   }
 
   if (counts.checking > 0) {
-    return fileCount > 1
+    return selectedCount > 1
       ? "Checking selected PDFs for passwords and owner restrictions..."
       : "Checking whether this PDF requires a known password...";
   }
 
   if (counts.passwordRequired === 0 && counts.restrictionOnly === 0) {
-    return fileCount > 1
+    if (counts.invalid > 0 && counts.unprotected === 0) {
+      return selectedCount > 1
+        ? "None of the selected PDFs can be processed. They may be corrupted or contain non-standard security headers."
+        : "This PDF cannot be processed. It may be corrupted or contain non-standard security headers.";
+    }
+    return selectedCount > 1
       ? "None of the selected PDFs currently have a password or owner restrictions."
       : "This PDF does not currently have a password or owner restrictions.";
   }
 
   if (counts.passwordRequired > 0 && !currentPassword) {
     const passwordLabel =
-      counts.passwordRequired === fileCount
-        ? getFileLabel(fileCount)
+      counts.passwordRequired === selectedCount
+        ? getFileLabel(selectedCount)
         : getFileLabel(counts.passwordRequired);
     const extraDetails: string[] = [];
 
@@ -269,14 +275,14 @@ export function getUnprotectValidationMessage(input: UnprotectValidationInput): 
     }
     if (counts.unprotected > 0) {
       extraDetails.push(
-        `${getFileLabel(counts.unprotected)} ${counts.unprotected === 1 ? "will be" : "will be"} skipped because ${counts.unprotected === 1 ? "it is" : "they are"} already unprotected.`,
+        `${getFileLabel(counts.unprotected)} will be skipped because ${counts.unprotected === 1 ? "it is" : "they are"} already unprotected.`,
       );
     }
 
     return `Enter the current password to unlock ${passwordLabel}.${extraDetails.length > 0 ? ` ${extraDetails.join(" ")}` : ""}`;
   }
 
-  if (fileCount === 1 && firstFileName && firstFileState) {
+  if (selectedCount === 1 && firstFileName && firstFileState) {
     if (firstFileState === "restriction-only") {
       return `Ready to remove owner restrictions from ${firstFileName}. No password required.`;
     }
@@ -299,8 +305,13 @@ export function getUnprotectValidationMessage(input: UnprotectValidationInput): 
       `${getFileLabel(counts.unprotected)} will be skipped because ${counts.unprotected === 1 ? "it is" : "they are"} already unprotected.`,
     );
   }
+  if (counts.invalid > 0) {
+    readyParts.push(
+      `${getFileLabel(counts.invalid)} will be skipped because ${counts.invalid === 1 ? "it" : "they"} cannot be processed (corrupted or invalid).`,
+    );
+  }
 
-  return `Ready to process ${getFileLabel(fileCount)}. ${readyParts.join(" ")}`;
+  return `Ready to process ${getFileLabel(selectedCount)}. ${readyParts.join(" ")}`;
 }
 
 /**
@@ -340,6 +351,7 @@ export function getUnlockHelpText(
 
   const needsKnownPassword = counts.passwordRequired > 0;
   const hasRestrictionOnly = counts.restrictionOnly > 0;
+  const hasInvalid = counts.invalid > 0;
 
   if (counts.checking > 0) {
     return fileCount > 1
@@ -347,24 +359,34 @@ export function getUnlockHelpText(
       : "Kyte is checking whether this PDF only has owner restrictions or requires its current password.";
   }
 
+  if (!needsKnownPassword && !hasRestrictionOnly && hasInvalid && counts.unprotected === 0) {
+    return fileCount > 1
+      ? "These PDFs appear to be corrupted or contain non-standard security headers. Try re-exporting them with a standard PDF tool (e.g. your browser's Print to PDF, Adobe Acrobat, or macOS Preview)."
+      : "This PDF appears to be corrupted or contains non-standard security headers. Try re-exporting it with a standard PDF tool (e.g. your browser's Print to PDF, Adobe Acrobat, or macOS Preview).";
+  }
+
   if (needsKnownPassword && hasRestrictionOnly) {
-    return "Kyte will use the current password for files that need it, and it will also export unrestricted copies for files that already open without one.";
+    const extra = hasInvalid ? " Invalid files that cannot be processed will be skipped." : "";
+    return `Kyte will use the current password for files that need it, and it will also export unrestricted copies for files that already open without one.${extra}`;
   }
 
   if (needsKnownPassword) {
+    const extra = hasInvalid ? " Invalid files that cannot be processed will be skipped." : "";
     return fileCount > 1
-      ? "Use one current password to unlock all selected PDFs that share it."
+      ? `Use one current password to unlock all selected PDFs that share it.${extra}`
       : "Unlock removes a known password from the selected PDF.";
   }
 
   if (hasRestrictionOnly) {
+    const extra = hasInvalid ? " Invalid files that cannot be processed will be skipped." : "";
     return fileCount > 1
-      ? "These PDFs already open without a password but still have owner restrictions. Kyte can export unrestricted copies with no password entry."
+      ? `These PDFs already open without a password but still have owner restrictions. Kyte can export unrestricted copies with no password entry.${extra}`
       : "This PDF already opens without a password but still has owner restrictions. Kyte can export an unrestricted copy with no password entry.";
   }
 
+  const extra = hasInvalid ? " Invalid files that cannot be processed will be skipped." : "";
   return fileCount > 1
-    ? "Kyte will skip PDFs that already open normally and only process the files that still carry passwords or owner restrictions."
+    ? `Kyte will skip PDFs that already open normally and only process the files that still carry passwords or owner restrictions.${extra}`
     : "This PDF does not currently need a password or owner-restriction removal.";
 }
 
@@ -394,6 +416,7 @@ export function buildBatchSuccessDetails(
   downloadMode: DownloadMode,
   results: BatchSuccessResult[],
   skipped: string[],
+  invalid: string[],
   failures: BatchFailureResult[],
 ): string {
   const passwordRemovedCount = results.filter((r) => r.resultType === "password-removed").length;
@@ -430,9 +453,18 @@ export function buildBatchSuccessDetails(
     );
   }
 
-  if (failures.length > 0) {
+  if (invalid.length > 0) {
     parts.push(
-      `${getFileLabel(failures.length, "file", "files")} failed and ${failures.length === 1 ? "was" : "were"} left out of the archive.`,
+      `${getFileLabel(invalid.length)} ${invalid.length === 1 ? "was" : "were"} skipped because ${invalid.length === 1 ? "it" : "they"} cannot be processed (corrupted or invalid).`,
+    );
+  }
+
+  if (failures.length > 0) {
+    const was = failures.length === 1 ? "was" : "were";
+    parts.push(
+      `${getFileLabel(failures.length, "file", "files")} failed and ${
+        downloadMode === "individual" ? `${was} not downloaded.` : `${was} left out of the archive.`
+      }`,
     );
   }
 
@@ -457,9 +489,10 @@ export function buildBatchCompletionMessage(
   downloadMode: DownloadMode,
   results: BatchSuccessResult[],
   skipped: string[],
+  invalid: string[],
   failures: BatchFailureResult[],
 ): string {
-  const summary = buildBatchSuccessDetails(mode, downloadMode, results, skipped, failures);
+  const summary = buildBatchSuccessDetails(mode, downloadMode, results, skipped, invalid, failures);
   if (failures.length === 0) return summary;
 
   const failurePreview = failures
@@ -468,6 +501,26 @@ export function buildBatchCompletionMessage(
     .join("\n");
 
   return `${summary}\n\n${failurePreview}${failures.length > 3 ? `\n+ ${failures.length - 3} more` : ""}`;
+}
+
+/**
+ * Makes archive entry names unique, ignoring case, by adding " (2)", " (3)"
+ * and so on before the extension. A ZIP keeps only the last of two entries
+ * with the same name, so same-named inputs would otherwise lose a file.
+ */
+export function makeUniqueArchiveNames(names: string[]): string[] {
+  const used = new Set<string>();
+  return names.map((name) => {
+    const dot = name.lastIndexOf(".");
+    const stem = dot > 0 ? name.slice(0, dot) : name;
+    const extension = dot > 0 ? name.slice(dot) : "";
+    let candidate = name;
+    for (let copy = 2; used.has(candidate.toLowerCase()); copy += 1) {
+      candidate = `${stem} (${copy})${extension}`;
+    }
+    used.add(candidate.toLowerCase());
+    return candidate;
+  });
 }
 
 /**

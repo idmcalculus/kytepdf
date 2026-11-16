@@ -44,7 +44,39 @@ describe("errorMapper", () => {
   it("should map invalid PDF errors", () => {
     const error = new Error("Not a valid PDF file");
     const mapped = mapError(error);
-    expect(mapped).toBe("The file appears to be corrupted or is not a valid PDF document.");
+    expect(mapped).toContain("corrupted, damaged, or contains non-standard security headers");
+    expect(mapped).toContain("re-exporting");
+  });
+
+  it.each([
+    "Bad xref entry",
+    "Stream error in object",
+    "Malformed content stream",
+    "Damaged file structure",
+    "File has no pdf header",
+    "Invalid cross-reference table",
+    "Object stream parse error",
+    "Non-standard security header detected",
+    "Missing startxref pointer",
+    "File is corrupt",
+    "Malicious content detected in stream",
+    "Bad PDF header found",
+    "Unexpected data after trailer",
+    "Unexpected EOF while parsing",
+    "Missing eof marker in trailer",
+    // pdf-lib's own wording for unreadable files and encryption it can't handle
+    "Failed to parse PDF document (line:3 col:0 offset=17): No PDF header found",
+    "Parser stalled at offset 1024",
+    "Missing catalog (ref=1 0 R)",
+    "Unknown encryption method: AESV4",
+    "Unsupported encryption algorithm",
+    "Invalid key length",
+    "Invalid crypt filter",
+    "Unknown crypto method",
+  ])("should map structural error: %s", (message) => {
+    const mapped = mapError(new Error(message));
+    expect(mapped).toContain("corrupted, damaged, or contains non-standard security headers");
+    expect(mapped).toContain("re-exporting");
   });
 
   it("should map out of memory errors", () => {

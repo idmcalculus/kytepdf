@@ -21,6 +21,7 @@ import {
   initFileSelections,
   initUnlockStates,
   isActionReady,
+  makeUniqueArchiveNames,
   removeFileAtIndex,
   setAllFileSelections,
   shouldShowPasswordMismatch,
@@ -98,6 +99,7 @@ describe("countUnlockStates", () => {
       restrictionOnly: 0,
       passwordRequired: 0,
       unprotected: 0,
+      invalid: 0,
     });
   });
 
@@ -105,17 +107,37 @@ describe("countUnlockStates", () => {
     fc.assert(
       fc.property(
         fc.array(
-          fc.constantFrom("checking", "restriction-only", "password-required", "unprotected"),
+          fc.constantFrom(
+            "checking",
+            "restriction-only",
+            "password-required",
+            "unprotected",
+            "invalid",
+          ),
           { minLength: 0, maxLength: 20 },
         ),
         (states) => {
           const counts = countUnlockStates(states as any);
           const total =
-            counts.checking + counts.restrictionOnly + counts.passwordRequired + counts.unprotected;
+            counts.checking +
+            counts.restrictionOnly +
+            counts.passwordRequired +
+            counts.unprotected +
+            counts.invalid;
           expect(total).toBe(states.length);
         },
       ),
     );
+  });
+
+  it("counts invalid states correctly", () => {
+    const states = ["invalid", "password-required", "invalid", "unprotected"] as const;
+    const counts = countUnlockStates([...states]);
+    expect(counts.invalid).toBe(2);
+    expect(counts.passwordRequired).toBe(1);
+    expect(counts.unprotected).toBe(1);
+    expect(counts.checking).toBe(0);
+    expect(counts.restrictionOnly).toBe(0);
   });
 });
 
@@ -129,6 +151,7 @@ describe("getSelectionPanelMeta", () => {
     restrictionOnly: 0,
     passwordRequired: 0,
     unprotected: 0,
+    invalid: 0,
   };
 
   it("returns upload prompt when totalCount is 0", () => {
@@ -168,6 +191,7 @@ describe("getSelectionPanelMeta", () => {
       restrictionOnly: 1,
       passwordRequired: 1,
       unprotected: 0,
+      invalid: 0,
     };
     const text = getSelectionPanelMeta("unprotect", 2, 2, "zip", counts);
     expect(text).toContain("needs the shared password");
@@ -180,6 +204,7 @@ describe("getSelectionPanelMeta", () => {
       restrictionOnly: 0,
       passwordRequired: 0,
       unprotected: 2,
+      invalid: 0,
     };
     const text = getSelectionPanelMeta("unprotect", 2, 2, "zip", counts);
     expect(text).toContain("already open");
@@ -191,9 +216,36 @@ describe("getSelectionPanelMeta", () => {
       restrictionOnly: 0,
       passwordRequired: 1,
       unprotected: 0,
+      invalid: 0,
     };
     const text = getSelectionPanelMeta("unprotect", 3, 1, "zip", counts);
     expect(text).toContain("1 of 3 selected");
+  });
+
+  it("unprotect mode — invalid files surfaced in summary parts", () => {
+    const counts: UnlockCounts = {
+      checking: 0,
+      restrictionOnly: 0,
+      passwordRequired: 1,
+      unprotected: 0,
+      invalid: 2,
+    };
+    const text = getSelectionPanelMeta("unprotect", 3, 3, "zip", counts);
+    expect(text).toContain("cannot be processed");
+    expect(text).toContain("(invalid)");
+  });
+
+  it("unprotect mode — single invalid file uses singular phrasing", () => {
+    const counts: UnlockCounts = {
+      checking: 0,
+      restrictionOnly: 1,
+      passwordRequired: 0,
+      unprotected: 0,
+      invalid: 1,
+    };
+    const text = getSelectionPanelMeta("unprotect", 2, 2, "zip", counts);
+    expect(text).toContain("cannot be processed");
+    expect(text).toContain("(invalid)");
   });
 });
 
@@ -206,13 +258,13 @@ describe("getProtectValidationMessage", () => {
     openPassword: "",
     confirmPassword: "",
     ownerPassword: "",
-    fileCount: 1,
+    totalFileCount: 1,
     selectedCount: 1,
     permissionsAllowedCount: 2,
   };
 
-  it("prompts to upload when fileCount 0", () => {
-    const msg = getProtectValidationMessage({ ...base, fileCount: 0, selectedCount: 0 });
+  it("prompts to upload when no files are loaded", () => {
+    const msg = getProtectValidationMessage({ ...base, totalFileCount: 0, selectedCount: 0 });
     expect(msg).toContain("Upload");
   });
 
@@ -277,6 +329,17 @@ describe("getProtectValidationMessage", () => {
     expect(msg).toContain("all editing permissions disabled");
   });
 
+  it("counts only the selected files in the ready message", () => {
+    const msg = getProtectValidationMessage({
+      ...base,
+      openPassword: "abc123",
+      confirmPassword: "abc123",
+      totalFileCount: 3,
+      selectedCount: 2,
+    });
+    expect(msg).toBe("Ready to protect 2 PDFs with 2 viewer permissions enabled.");
+  });
+
   it("Ready uses singular for 1 permission", () => {
     const msg = getProtectValidationMessage({
       ...base,
@@ -299,11 +362,11 @@ describe("getUnprotectValidationMessage", () => {
     restrictionOnly: 0,
     passwordRequired: 1,
     unprotected: 0,
+    invalid: 0,
   };
 
   it("upload prompt when no files", () => {
     const msg = getUnprotectValidationMessage({
-      fileCount: 0,
       totalFileCount: 0,
       selectedCount: 0,
       currentPassword: "",
@@ -314,7 +377,6 @@ describe("getUnprotectValidationMessage", () => {
 
   it("select prompt when selected 0 but total > 0", () => {
     const msg = getUnprotectValidationMessage({
-      fileCount: 0,
       totalFileCount: 2,
       selectedCount: 0,
       currentPassword: "",
@@ -326,7 +388,6 @@ describe("getUnprotectValidationMessage", () => {
   it("checking message when counts.checking > 0", () => {
     const counts: UnlockCounts = { ...baseCounts, checking: 1, passwordRequired: 0 };
     const msg = getUnprotectValidationMessage({
-      fileCount: 1,
       totalFileCount: 1,
       selectedCount: 1,
       currentPassword: "",
@@ -341,9 +402,9 @@ describe("getUnprotectValidationMessage", () => {
       restrictionOnly: 0,
       passwordRequired: 0,
       unprotected: 1,
+      invalid: 0,
     };
     const msg = getUnprotectValidationMessage({
-      fileCount: 1,
       totalFileCount: 1,
       selectedCount: 1,
       currentPassword: "",
@@ -354,7 +415,6 @@ describe("getUnprotectValidationMessage", () => {
 
   it("prompts for password when passwordRequired > 0 and no password given", () => {
     const msg = getUnprotectValidationMessage({
-      fileCount: 1,
       totalFileCount: 1,
       selectedCount: 1,
       currentPassword: "",
@@ -369,9 +429,9 @@ describe("getUnprotectValidationMessage", () => {
       restrictionOnly: 1,
       passwordRequired: 0,
       unprotected: 0,
+      invalid: 0,
     };
     const msg = getUnprotectValidationMessage({
-      fileCount: 1,
       totalFileCount: 1,
       selectedCount: 1,
       currentPassword: "",
@@ -385,7 +445,6 @@ describe("getUnprotectValidationMessage", () => {
 
   it("Ready for single password-required file with password given", () => {
     const msg = getUnprotectValidationMessage({
-      fileCount: 1,
       totalFileCount: 1,
       selectedCount: 1,
       currentPassword: "secret",
@@ -403,9 +462,9 @@ describe("getUnprotectValidationMessage", () => {
       restrictionOnly: 1,
       passwordRequired: 1,
       unprotected: 0,
+      invalid: 0,
     };
     const msg = getUnprotectValidationMessage({
-      fileCount: 2,
       totalFileCount: 2,
       selectedCount: 2,
       currentPassword: "pass",
@@ -414,6 +473,41 @@ describe("getUnprotectValidationMessage", () => {
     expect(msg).toMatch(/^Ready/);
     expect(msg).toContain("known password removed");
     expect(msg).toContain("restrictions removed");
+  });
+
+  it("reports all-invalid when only invalid files are selected", () => {
+    const counts: UnlockCounts = {
+      checking: 0,
+      restrictionOnly: 0,
+      passwordRequired: 0,
+      unprotected: 0,
+      invalid: 2,
+    };
+    const msg = getUnprotectValidationMessage({
+      totalFileCount: 2,
+      selectedCount: 2,
+      currentPassword: "",
+      counts,
+    });
+    expect(msg).toContain("can be processed");
+  });
+
+  it("Ready for batch with some invalid files alongside processable ones", () => {
+    const counts: UnlockCounts = {
+      checking: 0,
+      restrictionOnly: 0,
+      passwordRequired: 1,
+      unprotected: 0,
+      invalid: 1,
+    };
+    const msg = getUnprotectValidationMessage({
+      totalFileCount: 2,
+      selectedCount: 2,
+      currentPassword: "pass",
+      counts,
+    });
+    expect(msg).toMatch(/^Ready/);
+    expect(msg).toContain("cannot be processed");
   });
 });
 
@@ -463,6 +557,7 @@ describe("getUnlockHelpText", () => {
     restrictionOnly: 0,
     passwordRequired: 0,
     unprotected: 0,
+    invalid: 0,
   };
 
   it("protect mode always returns the standard unlock note", () => {
@@ -487,6 +582,7 @@ describe("getUnlockHelpText", () => {
       restrictionOnly: 1,
       passwordRequired: 1,
       unprotected: 0,
+      invalid: 0,
     };
     const text = getUnlockHelpText("unprotect", 2, counts);
     expect(text).toContain("current password");
@@ -499,6 +595,7 @@ describe("getUnlockHelpText", () => {
       restrictionOnly: 0,
       passwordRequired: 1,
       unprotected: 0,
+      invalid: 0,
     };
     const text = getUnlockHelpText("unprotect", 1, counts);
     expect(text).toContain("known password");
@@ -510,6 +607,7 @@ describe("getUnlockHelpText", () => {
       restrictionOnly: 1,
       passwordRequired: 0,
       unprotected: 0,
+      invalid: 0,
     };
     const text = getUnlockHelpText("unprotect", 1, counts);
     expect(text).toContain("owner restrictions");
@@ -521,9 +619,76 @@ describe("getUnlockHelpText", () => {
       restrictionOnly: 0,
       passwordRequired: 0,
       unprotected: 2,
+      invalid: 0,
     };
     const text = getUnlockHelpText("unprotect", 2, counts);
     expect(text).toContain("skip PDFs");
+  });
+
+  it("only invalid files — recommends re-export (plural)", () => {
+    const counts: UnlockCounts = {
+      checking: 0,
+      restrictionOnly: 0,
+      passwordRequired: 0,
+      unprotected: 0,
+      invalid: 2,
+    };
+    const text = getUnlockHelpText("unprotect", 2, counts);
+    expect(text).toContain("corrupted");
+    expect(text).toContain("re-exporting");
+  });
+
+  it("only invalid files — recommends re-export (singular)", () => {
+    const counts: UnlockCounts = {
+      checking: 0,
+      restrictionOnly: 0,
+      passwordRequired: 0,
+      unprotected: 0,
+      invalid: 1,
+    };
+    const text = getUnlockHelpText("unprotect", 1, counts);
+    expect(text).toContain("corrupted");
+    expect(text).toContain("re-exporting");
+  });
+
+  it("needs password with some invalid — notes invalid files will be skipped", () => {
+    const counts: UnlockCounts = {
+      checking: 0,
+      restrictionOnly: 0,
+      passwordRequired: 1,
+      unprotected: 0,
+      invalid: 1,
+    };
+    const text = getUnlockHelpText("unprotect", 2, counts);
+    expect(text).toContain("current password");
+    expect(text).toContain("Invalid files that cannot be processed will be skipped");
+  });
+
+  it("needs password and restriction-only with some invalid — mixed message notes skipping", () => {
+    const counts: UnlockCounts = {
+      checking: 0,
+      restrictionOnly: 1,
+      passwordRequired: 1,
+      unprotected: 0,
+      invalid: 1,
+    };
+    const text = getUnlockHelpText("unprotect", 3, counts);
+    expect(text).toContain("current password");
+    expect(text).toContain("unrestricted copies");
+    expect(text).toContain("Invalid files that cannot be processed will be skipped");
+  });
+
+  it("restriction-only with some invalid — notes invalid files will be skipped", () => {
+    const counts: UnlockCounts = {
+      checking: 0,
+      restrictionOnly: 1,
+      passwordRequired: 0,
+      unprotected: 0,
+      invalid: 1,
+    };
+    const text = getUnlockHelpText("unprotect", 2, counts);
+    expect(text).toContain("owner restrictions");
+    expect(text).toContain("Invalid files that cannot be processed will be skipped");
   });
 });
 
@@ -537,6 +702,7 @@ describe("getUnlockActionLabel", () => {
     restrictionOnly: 0,
     passwordRequired: 0,
     unprotected: 0,
+    invalid: 0,
   };
 
   it("returns 'Unlock PDF' when no files", () => {
@@ -572,34 +738,34 @@ describe("buildBatchSuccessDetails", () => {
 
   it("protect mode — zip — reports file count", () => {
     const results = [makeResult("protected"), makeResult("protected")];
-    const text = buildBatchSuccessDetails("protect", "zip", results, [], []);
+    const text = buildBatchSuccessDetails("protect", "zip", results, [], [], []);
     expect(text).toContain("2 PDFs");
     expect(text).toContain("ZIP archive");
   });
 
   it("protect mode — individual — reports individual downloads", () => {
     const results = [makeResult("protected")];
-    const text = buildBatchSuccessDetails("protect", "individual", results, [], []);
+    const text = buildBatchSuccessDetails("protect", "individual", results, [], [], []);
     expect(text).toContain("downloaded individually");
   });
 
   it("unprotect mode — reports password-removed count", () => {
     const results = [makeResult("password-removed"), makeResult("restrictions-removed")];
-    const text = buildBatchSuccessDetails("unprotect", "zip", results, [], []);
+    const text = buildBatchSuccessDetails("unprotect", "zip", results, [], [], []);
     expect(text).toContain("had the known password removed");
     expect(text).toContain("had owner restrictions removed");
   });
 
   it("includes skipped count", () => {
     const results = [makeResult("password-removed")];
-    const text = buildBatchSuccessDetails("unprotect", "zip", results, ["skip.pdf"], []);
+    const text = buildBatchSuccessDetails("unprotect", "zip", results, ["skip.pdf"], [], []);
     expect(text).toContain("skipped");
   });
 
   it("includes failure count", () => {
     const results = [makeResult("password-removed")];
     const failures: BatchFailureResult[] = [{ fileName: "fail.pdf", message: "Error" }];
-    const text = buildBatchSuccessDetails("unprotect", "zip", results, [], failures);
+    const text = buildBatchSuccessDetails("unprotect", "zip", results, [], [], failures);
     expect(text).toContain("failed");
   });
 });
@@ -638,7 +804,7 @@ describe("buildBatchCompletionMessage", () => {
     const results: BatchSuccessResult[] = [
       { fileName: "a.pdf", outputName: "a_out.pdf", resultType: "protected" },
     ];
-    const msg = buildBatchCompletionMessage("protect", "zip", results, [], []);
+    const msg = buildBatchCompletionMessage("protect", "zip", results, [], [], []);
     expect(msg).not.toContain("\n\n");
   });
 
@@ -647,7 +813,7 @@ describe("buildBatchCompletionMessage", () => {
       { fileName: "a.pdf", outputName: "a_out.pdf", resultType: "protected" },
     ];
     const failures: BatchFailureResult[] = [{ fileName: "fail.pdf", message: "Wrong password" }];
-    const msg = buildBatchCompletionMessage("protect", "zip", results, [], failures);
+    const msg = buildBatchCompletionMessage("protect", "zip", results, [], [], failures);
     expect(msg).toContain("\n\n");
     expect(msg).toContain("fail.pdf: Wrong password");
   });
@@ -660,7 +826,7 @@ describe("buildBatchCompletionMessage", () => {
       fileName: `f${i}.pdf`,
       message: "Error",
     }));
-    const msg = buildBatchCompletionMessage("protect", "zip", results, [], failures);
+    const msg = buildBatchCompletionMessage("protect", "zip", results, [], [], failures);
     expect(msg).toContain("+ 2 more");
   });
 });
@@ -838,6 +1004,221 @@ describe("removeFileAtIndex", () => {
         const result = removeFileAtIndex(arr, idx);
         expect(result.length).toBe(arr.length - 1);
       }),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Exact copy for singular / plural and partial-selection variants
+// ---------------------------------------------------------------------------
+
+describe("security copy variants", () => {
+  const counts = (overrides: Partial<UnlockCounts>): UnlockCounts => ({
+    checking: 0,
+    restrictionOnly: 0,
+    passwordRequired: 0,
+    unprotected: 0,
+    invalid: 0,
+    ...overrides,
+  });
+
+  it.each([
+    [
+      "protect, partial selection",
+      ["protect", 3, 2, "zip", counts({})],
+      "2 of 3 selected. Each PDF will be protected individually and packaged together when the batch completes.",
+    ],
+    [
+      "plural counts with separate downloads",
+      [
+        "unprotect",
+        6,
+        6,
+        "individual",
+        counts({ passwordRequired: 2, restrictionOnly: 2, unprotected: 1, invalid: 1 }),
+      ],
+      "2 PDFs need the shared password • 2 PDFs are restriction-only • 1 PDF already opens • 1 PDF cannot be processed (invalid) • Separate downloads",
+    ],
+    [
+      "single selected file has no delivery suffix",
+      ["unprotect", 1, 1, "zip", counts({ restrictionOnly: 1 })],
+      "1 PDF is restriction-only",
+    ],
+    [
+      "nothing to report for one file",
+      ["unprotect", 1, 1, "zip", counts({})],
+      "This PDF does not currently need a password or restriction change.",
+    ],
+    [
+      "nothing to report for a partial batch",
+      ["unprotect", 3, 2, "zip", counts({})],
+      "2 of 3 selected. These PDFs do not currently need a password or restriction change.",
+    ],
+  ] as const)("getSelectionPanelMeta: %s", (_label, args, expected) => {
+    expect(getSelectionPanelMeta(...(args as Parameters<typeof getSelectionPanelMeta>))).toBe(
+      expected,
+    );
+  });
+
+  it.each([
+    [
+      "checking several files",
+      { selectedCount: 2, counts: counts({ checking: 2 }) },
+      "Checking selected PDFs for passwords and owner restrictions...",
+    ],
+    [
+      "one invalid file",
+      { selectedCount: 1, counts: counts({ invalid: 1 }) },
+      "This PDF cannot be processed. It may be corrupted or contain non-standard security headers.",
+    ],
+    [
+      "several files with nothing to unlock",
+      { selectedCount: 2, counts: counts({ unprotected: 1, invalid: 1 }) },
+      "None of the selected PDFs currently have a password or owner restrictions.",
+    ],
+    [
+      "password missing for part of a mixed batch",
+      {
+        selectedCount: 4,
+        counts: counts({ passwordRequired: 1, restrictionOnly: 1, unprotected: 2 }),
+      },
+      "Enter the current password to unlock 1 PDF. 1 PDF will only have owner restrictions removed. 2 PDFs will be skipped because they are already unprotected.",
+    ],
+    [
+      "password missing with one unprotected file",
+      { selectedCount: 2, counts: counts({ passwordRequired: 1, unprotected: 1 }) },
+      "Enter the current password to unlock 1 PDF. 1 PDF will be skipped because it is already unprotected.",
+    ],
+    [
+      "ready batch with skipped and invalid files",
+      {
+        selectedCount: 5,
+        currentPassword: "secret",
+        counts: counts({ passwordRequired: 1, unprotected: 2, invalid: 2 }),
+      },
+      "Ready to process 5 PDFs. 1 PDF will have the known password removed. 2 PDFs will be skipped because they are already unprotected. 2 PDFs will be skipped because they cannot be processed (corrupted or invalid).",
+    ],
+    [
+      "ready batch with one unprotected file",
+      {
+        selectedCount: 2,
+        counts: counts({ restrictionOnly: 1, unprotected: 1 }),
+      },
+      "Ready to process 2 PDFs. 1 PDF will have owner restrictions removed. 1 PDF will be skipped because it is already unprotected.",
+    ],
+  ])("getUnprotectValidationMessage: %s", (_label, input, expected) => {
+    expect(
+      getUnprotectValidationMessage({
+        totalFileCount: input.selectedCount,
+        currentPassword: "",
+        ...input,
+      }),
+    ).toBe(expected);
+  });
+
+  it.each([
+    [
+      "checking one file",
+      1,
+      counts({ checking: 1 }),
+      "Kyte is checking whether this PDF only has owner restrictions or requires its current password.",
+    ],
+    [
+      "one unprotected file",
+      1,
+      counts({ unprotected: 1 }),
+      "This PDF does not currently need a password or owner-restriction removal.",
+    ],
+    [
+      "one restriction-only file",
+      1,
+      counts({ restrictionOnly: 1 }),
+      "This PDF already opens without a password but still has owner restrictions. Kyte can export an unrestricted copy with no password entry.",
+    ],
+    [
+      "one password-protected file",
+      1,
+      counts({ passwordRequired: 1 }),
+      "Unlock removes a known password from the selected PDF.",
+    ],
+  ])("getUnlockHelpText: %s", (_label, fileCount, unlockCounts, expected) => {
+    expect(getUnlockHelpText("unprotect", fileCount, unlockCounts)).toBe(expected);
+  });
+
+  it("does not call already-open files corrupted when only some are invalid", () => {
+    expect(getUnlockHelpText("unprotect", 2, counts({ invalid: 1, unprotected: 1 }))).toBe(
+      "Kyte will skip PDFs that already open normally and only process the files that still carry passwords or owner restrictions. Invalid files that cannot be processed will be skipped.",
+    );
+  });
+
+  it("makes archive names unique without changing the first of each", () => {
+    expect(
+      makeUniqueArchiveNames([
+        "invoice_protected.pdf",
+        "Invoice_Protected.pdf",
+        "invoice_protected.pdf",
+        "invoice_protected (2).pdf",
+        "README",
+        "readme",
+      ]),
+    ).toEqual([
+      "invoice_protected.pdf",
+      "Invoice_Protected (2).pdf",
+      "invoice_protected (3).pdf",
+      "invoice_protected (2) (2).pdf",
+      "README",
+      "readme (2)",
+    ]);
+  });
+
+  it("describes single results and individual downloads in batch details", () => {
+    const result: BatchSuccessResult = {
+      fileName: "a.pdf",
+      outputName: "a_unprotected.pdf",
+      resultType: "password-removed",
+    };
+
+    expect(
+      buildBatchSuccessDetails(
+        "unprotect",
+        "individual",
+        [result],
+        ["b.pdf"],
+        ["d.pdf"],
+        [{ fileName: "c.pdf", message: "Broken" }],
+      ),
+    ).toBe(
+      "1 PDF was downloaded individually. 1 PDF had the known password removed. 1 PDF was skipped because it is already unprotected. 1 PDF was skipped because it cannot be processed (corrupted or invalid). 1 file failed and was not downloaded.",
+    );
+    expect(
+      buildBatchSuccessDetails(
+        "protect",
+        "individual",
+        [
+          { ...result, resultType: "protected" },
+          { ...result, resultType: "protected" },
+        ],
+        ["x.pdf", "y.pdf"],
+        [],
+        [],
+      ),
+    ).toBe(
+      "2 PDFs were downloaded individually. 2 PDFs were skipped because they are already unprotected.",
+    );
+    expect(
+      buildBatchSuccessDetails(
+        "protect",
+        "zip",
+        [{ ...result, resultType: "protected" }],
+        [],
+        ["a.pdf", "b.pdf"],
+        [
+          { fileName: "c.pdf", message: "x" },
+          { fileName: "e.pdf", message: "y" },
+        ],
+      ),
+    ).toBe(
+      "1 PDF is ready in one ZIP archive. 2 PDFs were skipped because they cannot be processed (corrupted or invalid). 2 files failed and were left out of the archive.",
     );
   });
 });

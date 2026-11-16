@@ -42,8 +42,10 @@ const ERROR_MAP: ErrorEntry[] = [
     userMessage: "This PDF is password-protected. Please remove the password and try again.",
   },
   {
-    pattern: /not a valid PDF|invalid PDF|corrupt/i,
-    userMessage: "The file appears to be corrupted or is not a valid PDF document.",
+    pattern:
+      /not a valid PDF|invalid PDF|corrupt|bad xref|bad pdf|stream error|malformed|damaged|no pdf header|unexpected eof|unexpected data|startxref|missing eof|invalid cross-reference|object stream|security header|malicious|failed to parse|parser stalled|missing catalog|unknown encryption method|unsupported encryption algorithm|invalid key length|invalid crypt filter|unknown crypto method/i,
+    userMessage:
+      "This file appears to be corrupted, damaged, or contains non-standard security headers that prevent processing. Try re-exporting it with a standard PDF tool (e.g. your browser's Print to PDF, Adobe Acrobat, or macOS Preview) and then try again.",
   },
   {
     // Browsers raise these when a selected file is moved, renamed or changed

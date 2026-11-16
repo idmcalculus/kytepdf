@@ -1,7 +1,7 @@
 import { PDFDocument, pdfjsLib } from "./pdfConfig.ts";
 
 type PdfSource = File | Uint8Array | ArrayBuffer;
-export type PdfSecurityState = "unprotected" | "restriction-only" | "password-required";
+export type PdfSecurityState = "unprotected" | "restriction-only" | "password-required" | "invalid";
 
 export interface PdfProtectionPermissions {
   allowPrinting: boolean;
@@ -23,6 +23,9 @@ export const INCORRECT_PASSWORD_ERROR =
   "The current password is incorrect. Enter the password that opens this PDF and try again.";
 export const KNOWN_PASSWORD_REQUIRED_ERROR =
   "This PDF requires its current password before Kyte can unlock it.";
+export const INVALID_PDF_ERROR =
+  "This file appears to be corrupted, damaged, or contains non-standard security headers that prevent processing. " +
+  "Try re-exporting or re-saving it with a standard PDF tool (e.g. your browser's Print to PDF, Adobe Acrobat, or macOS Preview) and then try again.";
 
 const toUint8Array = async (source: PdfSource): Promise<Uint8Array> => {
   if (source instanceof Uint8Array) return source;
@@ -45,6 +48,18 @@ const isIncorrectPasswordError = (error: unknown) =>
 
 const isPdfJsPasswordError = (error: unknown) =>
   /password|PasswordException/i.test(getErrorMessage(error));
+
+/**
+ * Detects structural / corruption errors that indicate the file is not a
+ * processable PDF — as opposed to password or encryption errors. Includes the
+ * messages pdf-lib-with-encrypt really throws: "Failed to parse ..." for any
+ * parsing failure, and the encryption-handler errors for security headers it
+ * does not support (certificate security, unknown algorithms).
+ */
+export const isPdfStructureError = (error: unknown): boolean =>
+  /invalid pdf|not a valid pdf|corrupt|bad xref|stream error|no pdf header|unexpected eof|unexpected data|malformed|invalid object|startxref|missing eof|end-of-file|invalid cross-reference|object stream|repair|damaged|failed to parse|parser stalled|missing catalog|unknown encryption method|unsupported encryption algorithm|invalid key length|invalid crypt filter|unknown crypto method/i.test(
+    getErrorMessage(error),
+  );
 
 const generateOwnerPassword = () => {
   const bytes = new Uint8Array(16);
@@ -81,6 +96,10 @@ export async function getPdfSecurityState(source: PdfSource): Promise<PdfSecurit
     await PDFDocument.load(bytes);
     return "unprotected";
   } catch (error) {
+    if (isPdfStructureError(error)) {
+      return "invalid";
+    }
+
     if (!isEncryptedPdfLoadError(error)) {
       throw error;
     }
@@ -89,6 +108,10 @@ export async function getPdfSecurityState(source: PdfSource): Promise<PdfSecurit
       await PDFDocument.load(bytes, { password: "" });
       return "restriction-only";
     } catch (blankPasswordError) {
+      if (isPdfStructureError(blankPasswordError)) {
+        return "invalid";
+      }
+
       if (
         isIncorrectPasswordError(blankPasswordError) ||
         isEncryptedPdfLoadError(blankPasswordError)
@@ -227,6 +250,10 @@ export async function protectPdf(
 export async function unprotectPdf(source: PdfSource, password: string): Promise<Uint8Array> {
   const bytes = await toUint8Array(source);
   const securityState = await getPdfSecurityState(bytes);
+
+  if (securityState === "invalid") {
+    throw new Error(INVALID_PDF_ERROR);
+  }
 
   if (securityState === "unprotected") {
     throw new Error(NOT_PROTECTED_ERROR);
