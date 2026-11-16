@@ -32,6 +32,8 @@ class AuthStore {
    * this before its network call and discards its result if it changed.
    */
   private stateRevision = 0;
+  /** The session check in flight, shared by overlapping init() calls. */
+  private initPromise: Promise<void> | null = null;
 
   constructor() {
     if (!authClient.isAvailable) {
@@ -75,16 +77,14 @@ class AuthStore {
     this.channel?.postMessage(msg);
   }
 
-  async init() {
-    if (this.initialized) return;
+  init(): Promise<void> {
+    if (this.initialized) return Promise.resolve();
+    // A second caller joins the pending check rather than starting another.
+    this.initPromise ??= this.checkSession();
+    return this.initPromise;
+  }
 
-    if (!authClient.isAvailable) {
-      this.state = { status: "unavailable", user: null, error: null };
-      this.initialized = true;
-      this.notify();
-      return;
-    }
-
+  private async checkSession() {
     this.state = { status: "loading", user: null, error: null };
     this.notify();
 
@@ -148,12 +148,24 @@ class AuthStore {
     this.broadcast({ type: "logout" });
   }
 
+  /** Sign out locally, without a server call, after the server has already ended the session (e.g. a password reset). */
+  markSignedOut() {
+    this.stateRevision++;
+    this.state = { status: "unauthenticated", user: null, error: null };
+    this.initialized = true;
+    this.notify();
+    this.broadcast({ type: "logout" });
+  }
+
   async verifyEmail(token: string) {
     const res = await authClient.verifyEmail(token);
     // Reload user to pick up the updated emailVerified flag.
     if (this.state.user) {
+      const revisionAtStart = this.stateRevision;
       try {
         const user = await authClient.getMe();
+        // A login, logout or cross-tab sync happened during the reload; keep that state.
+        if (this.stateRevision !== revisionAtStart) return res;
         this.stateRevision++;
         this.state = { status: "authenticated", user, error: null };
         this.notify();

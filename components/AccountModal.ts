@@ -55,6 +55,7 @@ export class AccountModal extends BaseComponent {
   disconnectedCallback() {
     this.unsubscribe?.();
     this.removeKeyboardListeners();
+    this.setBackgroundInert(false);
     this.restorePageScroll();
   }
 
@@ -105,8 +106,17 @@ export class AccountModal extends BaseComponent {
   // ─── Public API ───────────────────────────────────────────────────────────
 
   public show(options: AccountModalOptions = {}) {
-    this.openerElement = document.activeElement;
-    if (options.view) this.activeView = options.view;
+    // A repeat show() while open must not replace the real opener with a
+    // control inside the modal.
+    if (!this.classList.contains("is-open")) this.openerElement = document.activeElement;
+    if (options.view) {
+      this.activeView = options.view;
+    } else if (this.activeView === "verify-email" || this.activeView === "reset-password") {
+      // A plain open (the Account button) must not bring back a view left over
+      // from an earlier emailed link, which would hide the summary and Log out.
+      this.activeView = "login";
+      this.routeToken = "";
+    }
     if (options.token) this.routeToken = options.token;
     this.errorMsg = "";
     this.successMsg = "";
@@ -231,8 +241,8 @@ export class AccountModal extends BaseComponent {
     return null;
   }
 
-  private validateToken(token: string): string | null {
-    if (!token) return "The verification link is missing its token.";
+  private validateToken(token: string, missingMessage: string): string | null {
+    if (!token) return missingMessage;
     if (token.length > 256) return "The token is invalid.";
     if (AccountModal.hasControlChars(token)) return "The token is invalid.";
     return null;
@@ -256,11 +266,15 @@ export class AccountModal extends BaseComponent {
       const emailErr = this.validateEmail(email);
       if (emailErr) this.fieldErrors.email = emailErr;
     } else if (this.activeView === "reset-password") {
-      const tokenErr = this.validateToken(this.routeToken);
+      const tokenErr = this.validateToken(
+        this.routeToken,
+        "This password reset link is missing its token. Request a new link.",
+      );
       if (tokenErr) {
         // Token errors are not user-fixable via the form — show as a modal-level error.
+        // Re-render: the error alert only exists in the DOM once errorMsg is set.
         this.errorMsg = tokenErr;
-        this.updateWorkingState();
+        this.render();
         return false;
       }
       const pwErr = this.validatePassword(newPassword, "create");
@@ -338,6 +352,8 @@ export class AccountModal extends BaseComponent {
         this.successMsg = "If an account exists, password reset instructions have been sent.";
       } else if (this.activeView === "reset-password") {
         await authClient.resetPassword(this.routeToken, newPassword);
+        // The server ends every session for the account on reset.
+        authStore.markSignedOut();
         this.routeToken = "";
         this.activeView = "login";
         this.successMsg = "Password reset. You can now log in.";
@@ -348,11 +364,20 @@ export class AccountModal extends BaseComponent {
     } finally {
       this.isWorking = false;
       this.render();
+      // render() rebuilds the form; after a failure, give back the typed email
+      // so the user only re-enters the password.
+      if (this.errorMsg) {
+        const emailInput = this.querySelector<HTMLInputElement>('input[name="email"]');
+        if (emailInput) emailInput.value = email;
+      }
     }
   }
 
   private async handleVerifyEmail() {
-    const tokenErr = this.validateToken(this.routeToken);
+    const tokenErr = this.validateToken(
+      this.routeToken,
+      "The verification link is missing its token.",
+    );
     if (tokenErr) {
       this.errorMsg = tokenErr;
       this.render();
@@ -362,7 +387,8 @@ export class AccountModal extends BaseComponent {
     this.isWorking = true;
     this.errorMsg = "";
     this.successMsg = "";
-    this.updateWorkingState();
+    // Re-render (no typed values to keep here) so the button shows as busy and disabled.
+    this.render();
 
     try {
       await authStore.verifyEmail(this.routeToken);
@@ -381,7 +407,9 @@ export class AccountModal extends BaseComponent {
   private async handleLogout() {
     this.isWorking = true;
     this.errorMsg = "";
-    this.updateWorkingState();
+    this.successMsg = "";
+    // Re-render (no typed values to keep here) so the button shows as busy and disabled.
+    this.render();
 
     try {
       await authStore.logout();
@@ -475,6 +503,7 @@ export class AccountModal extends BaseComponent {
             ${this.isWorking ? "Verifying…" : "Verify email"}
           </button>
         </div>
+        <button id="backToLoginLink" class="account-text-button" type="button">Back to log in</button>
       `;
     }
 
@@ -559,9 +588,13 @@ export class AccountModal extends BaseComponent {
   }
 
   render() {
+    const focusToRestore = this.captureFocus();
     const state = authStore.getState();
-    const user = state.user;
     this.lastRenderedStatus = state.status;
+    // Emailed verify/reset links must work for signed-in users too (sign-up
+    // signs the user in), so those views take precedence over the summary.
+    const isLinkView = this.activeView === "verify-email" || this.activeView === "reset-password";
+    const user = isLinkView ? null : state.user;
 
     let bodyContent: string;
     if (state.status === "unavailable") {
@@ -622,6 +655,33 @@ export class AccountModal extends BaseComponent {
     if ((window as any).lucide) {
       (window as any).lucide.createIcons();
     }
+
+    this.restoreFocus(focusToRestore);
+  }
+
+  /**
+   * While open, notes the id of the focused control so a redraw can give focus
+   * back. Returns "" when focus has fallen to <body>, and null when focus is
+   * elsewhere on the page or the modal is closed (then nothing is moved).
+   */
+  private captureFocus(): string | null {
+    if (!this.classList.contains("is-open")) return null;
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && this.contains(active)) return active.id;
+    return active === document.body ? "" : null;
+  }
+
+  /** Refocuses the same control after a redraw, or the first field, or Close. */
+  private restoreFocus(id: string | null) {
+    if (id === null) return;
+    const same = id ? document.getElementById(id) : null;
+    const usable =
+      same && this.contains(same) && !(same as HTMLButtonElement).disabled ? same : null;
+    (
+      usable ??
+      this.querySelector<HTMLElement>("input:not([type='hidden']):not([disabled])") ??
+      this.querySelector<HTMLElement>("#closeBtn")
+    )?.focus();
   }
 }
 

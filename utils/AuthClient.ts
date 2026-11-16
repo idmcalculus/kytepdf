@@ -35,9 +35,19 @@ export class AuthClient {
         `Request failed with status ${response.status} (non-JSON response from server)`,
       );
     }
-    if (!response.ok || json.success === false) {
+    if (json === null || typeof json !== "object") {
       throw new Error(
-        json.details || json.error || `Request failed with status ${response.status}`,
+        `Request failed with status ${response.status} (unexpected response from server)`,
+      );
+    }
+    if (!response.ok || json.success === false) {
+      // Production fortress replies carry a readable `message` and no `details`;
+      // without it users would see bare codes such as "INVALID_CREDENTIALS".
+      throw new Error(
+        json.details ||
+          json.message ||
+          json.error ||
+          `Request failed with status ${response.status}`,
       );
     }
     return json.data as T;
@@ -95,7 +105,7 @@ export class AuthClient {
     } catch {
       return; // Non-JSON response — CSRF unavailable, proceed without it.
     }
-    if (response.ok && json.success && json.data?.csrfToken) {
+    if (response.ok && json?.success && json.data?.csrfToken) {
       this.csrfToken = json.data.csrfToken;
     }
   }
