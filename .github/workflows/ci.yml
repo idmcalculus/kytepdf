@@ -71,6 +71,16 @@ jobs:
       - name: End-to-end tests
         run: bun run test:e2e -- --project=ci-chrome
 
+      - name: Upload end-to-end report and traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4
