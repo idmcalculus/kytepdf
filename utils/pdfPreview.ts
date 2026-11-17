@@ -218,7 +218,14 @@ export class PdfPreviewController {
 
     this.pdfDoc = pdfDoc;
     this.pageNum = 1;
-    await this.render(this.pageNum);
+    try {
+      await this.render(this.pageNum);
+    } catch (error) {
+      // A newer load or destroy() freed this document while it was drawn,
+      // which cancels the draw. The canvas belongs to the newer load now.
+      if (loadId !== this.loadToken) return;
+      throw error;
+    }
   }
 
   render(pageNum: number): Promise<void> {

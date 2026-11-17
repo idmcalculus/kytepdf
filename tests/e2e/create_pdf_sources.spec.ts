@@ -28,7 +28,9 @@ async function createAndDownload(page: Page) {
   await createButton.click();
 
   await expect(page.locator("#kyteOverlay")).toBeVisible({ timeout: 60_000 });
-  await expect(page.locator("#kyteTitle")).toHaveText("Success!");
+  // Name the dialog's message on failure: "Error" alone says nothing.
+  const message = await page.locator("#kyteMessage").textContent();
+  await expect(page.locator("#kyteTitle"), `The dialog said: ${message}`).toHaveText("Success!");
   await page.locator("#kyteConfirmBtn").click();
   await expect(page.locator("#successDetails")).toContainText("Your own content created with");
 
@@ -49,15 +51,16 @@ test.describe("Create PDF from your own content", () => {
     // here so the tests below start with those dependencies ready. Production
     // builds have nothing to discover.
     testInfo.setTimeout(180_000);
-    const page = await browser.newPage({ baseURL: testInfo.project.use.baseURL });
-    try {
-      for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      // A fresh page each time, as each test gets. Reopening the same page
+      // restores the last attempt's draft, a state no test starts from.
+      const page = await browser.newPage({ baseURL: testInfo.project.use.baseURL });
+      try {
         await openOwnContent(page);
         let reloaded = false;
-        const onNavigate = () => {
+        page.on("framenavigated", () => {
           reloaded = true;
-        };
-        page.on("framenavigated", onNavigate);
+        });
         await page.locator("creator-sources-panel input[type=file]").setInputFiles(CSV_FILE);
         const built = await expect(page.locator("#previewMetaText"))
           .toHaveText(PREVIEW_READY, { timeout: 45_000 })
@@ -65,11 +68,10 @@ test.describe("Create PDF from your own content", () => {
           .catch(() => false);
         // Give a reload that was already on its way time to arrive.
         await page.waitForTimeout(1_000);
-        page.off("framenavigated", onNavigate);
         if (built && !reloaded) break;
+      } finally {
+        await page.close();
       }
-    } finally {
-      await page.close();
     }
   });
 

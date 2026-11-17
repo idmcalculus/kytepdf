@@ -2203,6 +2203,8 @@ export class PdfCreator extends BaseComponent {
     if (this.previewTimer !== null) {
       window.clearTimeout(this.previewTimer);
     }
+    // A newer preview is on its way, so a preview still loading is out of date.
+    this.previewToken++;
 
     const previewState = this.getPreviewRoot().querySelector("#previewState") as HTMLElement | null;
     if (previewState) {
@@ -2339,7 +2341,13 @@ export class PdfCreator extends BaseComponent {
       this.lastPreviewBytes = previewBytes.slice();
       this.lastPreviewOutputName = result.outputName;
       this.previewPageCount = result.pageCount;
-      await this.loadPreview(previewBytes);
+      try {
+        await this.loadPreview(previewBytes);
+      } catch (error) {
+        // The PDF is built and in history; a preview that fails to draw must
+        // not hide its download.
+        logger.warn("Could not show the created PDF in the preview", error);
+      }
       if (!this.isConnected) return;
       this.updateProgress(100, "Ready to download");
 
@@ -2605,9 +2613,12 @@ export class PdfCreator extends BaseComponent {
       return;
     }
 
+    // A preview queued since has newer content. Switching mode re-renders and
+    // then queues one, and the old mode's snapshot must not land on top of it.
+    const token = this.previewToken;
     try {
       await this.loadPreview(this.lastPreviewBytes.slice());
-      if (!this.isConnected) return;
+      if (token !== this.previewToken || !this.isConnected) return;
       const previewState = this.getPreviewRoot().querySelector(
         "#previewState",
       ) as HTMLElement | null;

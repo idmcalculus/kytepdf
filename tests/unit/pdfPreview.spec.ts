@@ -258,6 +258,52 @@ describe("PdfPreviewController", () => {
     expect(freshDoc.loadingTask.destroy).not.toHaveBeenCalled();
   });
 
+  it("lets a newer load cancel the page an older load is drawing, without an error", async () => {
+    // pdf.js rejects a draw whose document is freed part way through.
+    let cancelDraw: (error: Error) => void = () => {};
+    const drawing = new Promise<void>((_, reject) => {
+      cancelDraw = reject;
+    });
+    const olderDoc = {
+      numPages: 1,
+      getPage: vi.fn().mockResolvedValue({
+        getViewport: pdfMocks.getViewport,
+        render: vi.fn().mockReturnValue({ promise: drawing }),
+      }),
+      loadingTask: {
+        destroy: vi.fn(async () => {
+          cancelDraw(
+            Object.assign(new Error("Rendering cancelled"), {
+              name: "RenderingCancelledException",
+            }),
+          );
+        }),
+      },
+    };
+    const newerDoc = { ...pdfMocks.doc, loadingTask: { destroy: vi.fn() } };
+    pdfMocks.getDocument
+      .mockReturnValueOnce({ promise: Promise.resolve(olderDoc) })
+      .mockReturnValueOnce({ promise: Promise.resolve(newerDoc) });
+    const controller = new PdfPreviewController({ canvas: createCanvas() });
+
+    const older = controller.load(new Uint8Array([1]));
+    await vi.waitFor(() => expect(olderDoc.getPage).toHaveBeenCalled());
+    await flush();
+    const newer = controller.load(new Uint8Array([2]));
+
+    await expect(older).resolves.toBeUndefined();
+    await expect(newer).resolves.toBeUndefined();
+    expect(olderDoc.loadingTask.destroy).toHaveBeenCalled();
+    expect(controller.document).toBe(newerDoc);
+  });
+
+  it("still reports a page that fails to draw when nothing newer replaced it", async () => {
+    pdfMocks.getPage.mockRejectedValueOnce(new Error("bad page"));
+    const controller = new PdfPreviewController({ canvas: createCanvas() });
+
+    await expect(controller.load(new Uint8Array([1]))).rejects.toThrow("bad page");
+  });
+
   it("frees a document that finishes opening after destroy instead of keeping it", async () => {
     const lateDoc = { ...pdfMocks.doc, loadingTask: { destroy: vi.fn() } };
     let finishOpening: (doc: typeof lateDoc) => void = () => {};

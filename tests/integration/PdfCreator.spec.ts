@@ -59,6 +59,7 @@ vi.mock("../../utils/pdfFromSources", async () => {
 import { CreatorSourcesPanel } from "../../components/CreatorSourcesPanel";
 import { PdfCreator } from "../../components/PdfCreator";
 import { UserFacingError } from "../../utils/errorMapper";
+import { logger } from "../../utils/logger";
 import { persistence } from "../../utils/persistence";
 
 describe("PdfCreator", () => {
@@ -1833,6 +1834,55 @@ describe("PdfCreator", () => {
         orientation: "landscape",
         title: "Notes",
       });
+    });
+
+    it("does not bring back the template's preview label after switching to own content", async () => {
+      const component = await mountCreator();
+      await vi.waitFor(() =>
+        expect(query(component, "#previewMetaText").textContent).toBe("2 pages · draft.pdf"),
+      );
+      // Switching re-renders the editor, which draws the template's preview
+      // again. Let that finish only after the switch and the typing.
+      const restore = deferred<void>();
+      previewMock.load.mockImplementationOnce(() => restore.promise);
+
+      const panel = await useOwnContent(component);
+      typeIntoPanel(panel, "Notes");
+      restore.resolve();
+      await flush();
+
+      expect(query(component, "#previewMetaText").textContent).toBe("Rendering preview...");
+      await vi.waitFor(() =>
+        expect(query(component, "#previewMetaText").textContent).toBe("1 page · kyte-document.pdf"),
+      );
+    });
+
+    it("still offers the download when the created PDF cannot be drawn in the preview", async () => {
+      const dialog = document.getElementById("globalDialog") as any;
+      const component = await mountCreator();
+      const panel = await useOwnContent(component);
+      typeIntoPanel(panel, "Notes");
+      await vi.waitFor(() =>
+        expect(query(component, "#previewMetaText").textContent).toBe("1 page · kyte-document.pdf"),
+      );
+      const warn = vi.spyOn(logger, "warn");
+      previewMock.load.mockRejectedValueOnce(new Error("canvas lost"));
+
+      try {
+        createButton(component).click();
+
+        await vi.waitFor(() =>
+          expect(dialog.show).toHaveBeenCalledWith(expect.objectContaining({ title: "Success!" })),
+        );
+        expect(dialog.show).not.toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
+        expect(query(component, "#successMessage").classList.contains("hidden")).toBe(false);
+        expect(warn).toHaveBeenCalledWith(
+          "Could not show the created PDF in the preview",
+          expect.objectContaining({ message: "canvas lost" }),
+        );
+      } finally {
+        warn.mockRestore();
+      }
     });
 
     it("never lets an older build replace a newer preview or the empty state", async () => {
